@@ -105,3 +105,57 @@ Parents operate as proxy agents for their children:
 - Tests registration, child creation, learner mode, lesson generation, quiz completion
 - Runs against production (`sunschool.xyz`) or local server
 - Screenshots captured at each step for visual verification
+
+## Cursor Cloud specific instructions
+
+### Services overview
+
+SUNSCHOOL is a single full-stack application (Express.js backend + React frontend). The backend serves the built client as static files on port 5000.
+
+### Local PostgreSQL with Neon driver
+
+The app uses `@neondatabase/serverless` which connects via WebSocket, not TCP. For local development:
+
+1. **WebSocket proxy**: A small WS-to-TCP proxy at `.dev/ws-proxy.js` must run on port 80 (forwarding to PostgreSQL on port 5432). Start it with `node .dev/ws-proxy.js &`. Port 80 requires `sudo sysctl net.ipv4.ip_unprivileged_port_start=80`.
+
+2. **Neon patch**: The app hardcodes `neonConfig.pipelineConnect = "password"` (Neon cloud-only optimization). Use `NODE_OPTIONS="--require /workspace/.dev/neon-local-patch.js"` when starting the server to disable this for local PostgreSQL.
+
+3. **PostgreSQL auth**: Must use `password` (cleartext) or `scram-sha-256` in `pg_hba.conf` for host connections (not `peer`).
+
+4. **DATABASE_SSL**: Must be set to `false` in `.env` for local PostgreSQL.
+
+### Running the app locally
+
+```bash
+# 1. Start PostgreSQL
+sudo pg_ctlcluster 16 main start
+
+# 2. Start WebSocket proxy (background)
+node .dev/ws-proxy.js &
+
+# 3. Build the client (required for server to serve UI)
+cd client && npx vite build && cd ..
+
+# 4. Start the server
+NODE_ENV=development NODE_OPTIONS="--require /workspace/.dev/neon-local-patch.js" npx ts-node server/index.ts
+```
+
+The server runs on port 5000. Migrations run automatically on startup.
+
+### Key commands
+
+| Task | Command |
+|------|---------|
+| **Lint** | `ESLINT_USE_FLAT_CONFIG=false npx eslint --ext .ts,.tsx client/src/ server/ shared/` |
+| **Unit tests** | `NODE_ENV=development NODE_OPTIONS="--require /workspace/.dev/neon-local-patch.js" npx jest --testPathPattern='tests/unit'` |
+| **Build client** | `cd client && npx vite build` |
+| **Dev server** | See "Running the app locally" above |
+| **DB migrations** | Auto-run on server start; manual: `NODE_ENV=development NODE_OPTIONS="--require /workspace/.dev/neon-local-patch.js" npx ts-node scripts/migrate.ts` |
+
+### Gotchas
+
+- ESLint v9 is installed but config is `.eslintrc.js` (v8 format). Must set `ESLINT_USE_FLAT_CONFIG=false`.
+- The initial DB migration creates NOT NULL constraints on `email`, `password`, `name` in the `users` table, but the schema code expects them nullable. After first migration, run: `ALTER TABLE users ALTER COLUMN email DROP NOT NULL; ALTER TABLE users ALTER COLUMN password DROP NOT NULL; ALTER TABLE users ALTER COLUMN name DROP NOT NULL;`
+- Missing tables from migrations: `sessions`, `db_sync_configs`, `quiz_answers`, `concept_mastery` may need manual creation. Check `shared/schema.ts` for the full schema.
+- AI features require `OPENROUTER_API_KEY`. Set `USE_AI=0` in `.env` to disable AI for local testing (static fallback content is used).
+- The first registered user is auto-promoted to ADMIN role.

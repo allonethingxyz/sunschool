@@ -12,29 +12,38 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS "users" (
   "id" SERIAL PRIMARY KEY,
-  "email" TEXT NOT NULL UNIQUE,
-  "username" TEXT NOT NULL UNIQUE,
-  "name" TEXT NOT NULL,
-  "role" user_role NOT NULL,
-  "password" TEXT NOT NULL,
+  "email" VARCHAR UNIQUE,
+  "username" TEXT UNIQUE,
+  "name" TEXT,
+  "role" user_role DEFAULT 'LEARNER',
+  "password" TEXT,
   "parent_id" INTEGER REFERENCES "users"("id") ON DELETE CASCADE,
   "created_at" TIMESTAMP DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS "learner_profiles" (
-  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "id" TEXT PRIMARY KEY,
   "user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "grade_level" INTEGER NOT NULL,
-  "graph" JSONB,
+  "graph" JSON,
+  "subjects" JSON DEFAULT '["Math", "Science"]',
+  "subject_performance" JSON DEFAULT '{}',
+  "recommended_subjects" JSON DEFAULT '[]',
+  "struggling_areas" JSON DEFAULT '[]',
   "created_at" TIMESTAMP DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS "lessons" (
-  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "id" TEXT PRIMARY KEY,
   "learner_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "module_id" TEXT NOT NULL,
   "status" lesson_status NOT NULL DEFAULT 'QUEUED',
-  "spec" JSONB,
+  "subject" TEXT,
+  "category" TEXT,
+  "difficulty" TEXT DEFAULT 'beginner',
+  "image_paths" JSON,
+  "spec" JSON,
+  "enhanced_spec" JSON,
   "score" INTEGER,
   "created_at" TIMESTAMP DEFAULT now(),
   "completed_at" TIMESTAMP
@@ -42,8 +51,8 @@ CREATE TABLE IF NOT EXISTS "lessons" (
 
 CREATE TABLE IF NOT EXISTS "achievements" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "learner_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "learner_id" VARCHAR NOT NULL,
   "type" TEXT NOT NULL,
-  "payload" JSONB,
+  "payload" JSON,
   "awarded_at" TIMESTAMP DEFAULT now()
 );

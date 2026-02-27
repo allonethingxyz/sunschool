@@ -16,11 +16,11 @@ CREATE TABLE IF NOT EXISTS activities (
 -- Learner awards/redemptions (one row per redemption of an activity)
 CREATE TABLE IF NOT EXISTS awards (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  learner_id UUID NOT NULL REFERENCES learners(id) ON DELETE CASCADE,
+  learner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   activity_id INTEGER NOT NULL REFERENCES activities(id),
   tokens_spent INTEGER NOT NULL CHECK (tokens_spent > 0),
-  lesson_id UUID REFERENCES lessons(id), -- optional: lesson that earned the tokens
-  status TEXT NOT NULL DEFAULT 'UNREDEEMED', -- UNREDEEMED | CASHED_IN
+  lesson_id TEXT REFERENCES lessons(id),
+  status TEXT NOT NULL DEFAULT 'UNREDEEMED',
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   cashed_in_at TIMESTAMP WITH TIME ZONE
 );
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS awards (
 CREATE TABLE IF NOT EXISTS award_shares (
   id SERIAL PRIMARY KEY,
   award_id UUID NOT NULL REFERENCES awards(id) ON DELETE CASCADE,
-  parent_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  parent_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   share_hash VARCHAR(40) NOT NULL UNIQUE,
   title TEXT NOT NULL DEFAULT 'A Learner You Know Earned a Reward',
   description TEXT NOT NULL DEFAULT 'This learner completed a challenge and earned a reward!',

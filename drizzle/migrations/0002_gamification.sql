@@ -5,10 +5,11 @@ CREATE TABLE IF NOT EXISTS points_ledger (
   source_type TEXT NOT NULL,
   source_id TEXT,
   description TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW(),
-  CONSTRAINT idx_points_ledger_learner_created_at INDEX (learner_id, created_at),
-  CONSTRAINT idx_points_ledger_source INDEX (source_type, source_id)
+  created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_points_ledger_learner_created_at ON points_ledger (learner_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_points_ledger_source ON points_ledger (source_type, source_id);
 
 CREATE TABLE IF NOT EXISTS learner_points (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -31,10 +32,11 @@ CREATE TABLE IF NOT EXISTS rewards (
   max_redemptions INTEGER,
   current_redemptions INTEGER DEFAULT 0,
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  CONSTRAINT idx_rewards_parent_active INDEX (parent_id, is_active),
-  CONSTRAINT idx_rewards_category_active INDEX (category, is_active)
+  updated_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_rewards_parent_active ON rewards (parent_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_rewards_category_active ON rewards (category, is_active);
 
 CREATE TABLE IF NOT EXISTS reward_redemptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -45,10 +47,11 @@ CREATE TABLE IF NOT EXISTS reward_redemptions (
   requested_at TIMESTAMP DEFAULT NOW(),
   completed_at TIMESTAMP,
   parent_notes TEXT,
-  learner_notes TEXT,
-  CONSTRAINT idx_reward_redemptions_learner_status INDEX (learner_id, status),
-  CONSTRAINT idx_reward_redemptions_reward_status INDEX (reward_id, status)
+  learner_notes TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_reward_redemptions_learner_status ON reward_redemptions (learner_id, status);
+CREATE INDEX IF NOT EXISTS idx_reward_redemptions_reward_status ON reward_redemptions (reward_id, status);
 
 CREATE TABLE IF NOT EXISTS learning_goals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -64,10 +67,11 @@ CREATE TABLE IF NOT EXISTS learning_goals (
   deadline DATE,
   token_reward INTEGER DEFAULT 0,
   created_at TIMESTAMP DEFAULT NOW(),
-  completed_at TIMESTAMP,
-  CONSTRAINT idx_learning_goals_learner_completed INDEX (learner_id, is_completed),
-  CONSTRAINT idx_learning_goals_parent_completed INDEX (parent_id, is_completed)
+  completed_at TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_learning_goals_learner_completed ON learning_goals (learner_id, is_completed);
+CREATE INDEX IF NOT EXISTS idx_learning_goals_parent_completed ON learning_goals (parent_id, is_completed);
 
 -- Alter achievements table to support token rewards
 ALTER TABLE achievements

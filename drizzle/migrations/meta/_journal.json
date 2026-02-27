@@ -8,6 +8,55 @@
       "when": 1714577212739,
       "tag": "0000_initial_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1714577212740,
+      "tag": "0001_db_sync_configs",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1714577212741,
+      "tag": "0002_gamification",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1714577212742,
+      "tag": "0003_question_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1714577212743,
+      "tag": "0003_token_gamification",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1714577212744,
+      "tag": "0004_quiz_answers",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1714577212745,
+      "tag": "0005_concept_mastery",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1714577212746,
+      "tag": "0006_schema_alignment",
+      "breakpoints": true
     }
   ]
 }

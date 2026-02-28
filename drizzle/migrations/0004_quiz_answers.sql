@@ -18,9 +18,3 @@ CREATE TABLE IF NOT EXISTS quiz_answers (
 CREATE INDEX IF NOT EXISTS idx_learner_answers ON quiz_answers (learner_id, answered_at DESC);
 CREATE INDEX IF NOT EXISTS idx_lesson_answers ON quiz_answers (lesson_id);
 CREATE INDEX IF NOT EXISTS idx_question_hash ON quiz_answers (question_hash);
-
-COMMENT ON TABLE quiz_answers IS 'Stores individual quiz answer records for analytics and adaptive learning';
-COMMENT ON COLUMN quiz_answers.question_hash IS 'SHA-256 hash of question text used for deduplication';
-COMMENT ON COLUMN quiz_answers.concept_tags IS 'Array of concept keywords for mastery tracking';
-COMMENT ON COLUMN quiz_answers.user_answer IS 'Index (0-3) of option selected by learner';
-COMMENT ON COLUMN quiz_answers.correct_answer IS 'Index (0-3) of the correct option';

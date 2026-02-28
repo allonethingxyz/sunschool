@@ -12,14 +12,9 @@ CREATE TABLE IF NOT EXISTS concept_mastery (
   last_tested TIMESTAMP DEFAULT NOW(),
   needs_reinforcement BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT NOW(),
-
   UNIQUE (learner_id, concept_name, subject)
 );
 
 CREATE INDEX IF NOT EXISTS idx_learner_mastery ON concept_mastery (learner_id, subject);
 CREATE INDEX IF NOT EXISTS idx_needs_reinforcement ON concept_mastery (learner_id, needs_reinforcement);
 CREATE INDEX IF NOT EXISTS idx_mastery_level ON concept_mastery (learner_id, mastery_level);
-
-COMMENT ON TABLE concept_mastery IS 'Tracks learner mastery levels for individual concepts';
-COMMENT ON COLUMN concept_mastery.mastery_level IS 'Integer 0-100 representing mastery percentage';
-COMMENT ON COLUMN concept_mastery.needs_reinforcement IS 'TRUE if mastery < 70, indicating need for review';

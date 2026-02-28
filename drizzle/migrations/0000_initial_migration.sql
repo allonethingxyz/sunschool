@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS "learner_profiles" (
   "user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "grade_level" INTEGER NOT NULL,
   "graph" JSON,
-  "subjects" JSON DEFAULT '["Math","Science"]',
+  "subjects" JSON DEFAULT '["Math", "Science"]',
   "subject_performance" JSON DEFAULT '{}',
   "recommended_subjects" JSON DEFAULT '[]',
   "struggling_areas" JSON DEFAULT '[]',
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS "lessons" (
 
 CREATE TABLE IF NOT EXISTS "achievements" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  "learner_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+  "learner_id" VARCHAR NOT NULL,
   "type" TEXT NOT NULL,
   "payload" JSON,
   "awarded_at" TIMESTAMP DEFAULT now()

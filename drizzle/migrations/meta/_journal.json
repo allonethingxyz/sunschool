@@ -27,14 +27,14 @@
       "idx": 3,
       "version": "5",
       "when": 1714577212742,
-      "tag": "0003_token_gamification",
+      "tag": "0003_question_history",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "5",
       "when": 1714577212743,
-      "tag": "0003_question_history",
+      "tag": "0003_token_gamification",
       "breakpoints": true
     },
     {

@@ -13,10 +13,11 @@ CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON sessions (expire);
 
 -- Ensure users columns are nullable (learner accounts don't have email/password)
 ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN email TYPE VARCHAR USING email::VARCHAR;
 ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
 ALTER TABLE users ALTER COLUMN name DROP NOT NULL;
 ALTER TABLE users ALTER COLUMN username DROP NOT NULL;
-ALTER TABLE users ALTER COLUMN role DROP NOT NULL;
+ALTER TABLE users ALTER COLUMN role SET DEFAULT 'LEARNER';
 
 -- Add missing columns to lessons table
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS subject TEXT;

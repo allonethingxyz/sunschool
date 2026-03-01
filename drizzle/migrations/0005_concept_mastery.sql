@@ -17,3 +17,4 @@ CREATE TABLE IF NOT EXISTS concept_mastery (
 
 CREATE INDEX IF NOT EXISTS idx_learner_mastery ON concept_mastery (learner_id, subject);
 CREATE INDEX IF NOT EXISTS idx_needs_reinforcement ON concept_mastery (learner_id, needs_reinforcement);
+CREATE INDEX IF NOT EXISTS idx_mastery_level ON concept_mastery (learner_id, mastery_level);

@@ -22,26 +22,39 @@ const ActiveLessonPage = () => {
   const { selectedLearner } = useMode();
   const [isLoading, setIsLoading] = useState(true);
 
+  // Use context learnerId, falling back to localStorage if context hasn't hydrated yet
+  const learnerId = selectedLearner?.id ?? (() => {
+    if (typeof window !== 'undefined') {
+      const stored = window.localStorage.getItem('selectedLearnerId');
+      return stored ? parseInt(stored, 10) : undefined;
+    }
+    return undefined;
+  })();
+
   const {
     data: lesson,
     error,
     isLoading: queryLoading,
+    fetchStatus,
   } = useQuery({
-    queryKey: ['/api/lessons/active', selectedLearner?.id],
-    queryFn: () => apiRequest('GET', `/api/lessons/active?learnerId=${selectedLearner?.id}`).then(res => res.data),
-    enabled: !!selectedLearner?.id,
+    queryKey: ['/api/lessons/active', learnerId],
+    queryFn: () => apiRequest('GET', `/api/lessons/active?learnerId=${learnerId}`).then(res => res.data),
+    enabled: !!learnerId,
     retry: 1,
   });
 
   useEffect(() => {
-    // Simulate content loading delay
     if (!queryLoading && lesson) {
       const timer = setTimeout(() => {
         setIsLoading(false);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [queryLoading, lesson]);
+    // If query is disabled (no learnerId at all) and not fetching, stop showing spinner
+    if (!learnerId && fetchStatus === 'idle') {
+      setIsLoading(false);
+    }
+  }, [queryLoading, lesson, learnerId, fetchStatus]);
 
   const handleStartQuiz = () => {
     if (lesson) {

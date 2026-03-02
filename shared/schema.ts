@@ -115,11 +115,16 @@ export type EnhancedLessonSpec = {
   questions: {
     text: string;
     options: string[];
+    /** Parallel array of SVG markup strings for visual answer options (same length as options) */
+    optionSvgs?: string[];
     correctIndex: number;
     explanation: string;
     difficulty?: "easy" | "medium" | "hard";
     type?: "multiple_choice" | "true_false" | "image_based" | "sequence";
+    /** ID of a LessonImage to show above the question stem */
     imageId?: string;
+    /** Inline SVG to show above the question stem (alternative to imageId) */
+    imageSvg?: string;
   }[];
   graph?: {
     nodes: {

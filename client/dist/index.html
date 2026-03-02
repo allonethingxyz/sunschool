@@ -38,9 +38,14 @@
       100% { transform: rotate(360deg); }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-LFLoqjAI.js"></script>
+  <script type="module" crossorigin src="/assets/index-SuzyuL5d.js"></script>
 </head>
 <body>
+  <script>
+    // Polyfill for Node.js globals used by react-native-web and isomorphic libraries
+    if (typeof global === 'undefined') { window.global = window; }
+    if (typeof process === 'undefined') { window.process = { env: {} }; }
+  </script>
   <div id="root">
     <!-- Initial loader that shows before React loads -->
     <div class="initial-loader">

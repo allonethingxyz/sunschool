@@ -15,28 +15,30 @@ const PORT = Number(process.env.PORT || 5000);
 
 // Run database migrations on startup
 async function runMigrations() {
+  if (!process.env.DATABASE_URL) {
+    console.warn('DATABASE_URL not set, skipping migrations');
+    return;
+  }
+
+  const isLocal = !process.env.DATABASE_URL.includes('neon.tech') &&
+    (process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1'));
+
+  if (isLocal) {
+    console.log('Local database detected — skipping auto-migration (use psql directly)');
+    return;
+  }
+
   try {
     console.log('Running database migrations...');
-
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL is required');
-    }
-
-    // Configure Neon to use ws instead of browser WebSocket
     neonConfig.webSocketConstructor = ws;
-
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     const db = drizzle(pool, { schema });
-
     const migrationsFolder = path.resolve('drizzle', 'migrations');
     await migrate(db, { migrationsFolder });
-
     console.log('✓ Database migrations applied successfully!');
     await pool.end();
   } catch (error) {
     console.error('Error applying migrations:', error);
-    // Don't exit - allow server to start even if migrations fail
-    // This prevents deployment failures for already-applied migrations
   }
 }
 

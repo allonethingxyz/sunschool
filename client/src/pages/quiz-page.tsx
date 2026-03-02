@@ -5,18 +5,17 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   SafeAreaView,
-  FlatList,
 } from 'react-native';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { apiRequest, queryClient } from '../lib/queryClient';
 import { useTheme, colors, typography, commonStyles } from '../styles/theme';
-import QuizComponent from '../components/QuizComponent';
+import QuizComponent, { QuizQuestion } from '../components/QuizComponent';
 import Confetti from '../components/Confetti';
 import AchievementUnlock from '../components/AchievementUnlock';
 import FunLoader from '../components/FunLoader';
+import QuizProgressStepper from '../components/QuizProgressStepper';
 import { ArrowLeft, CheckCircle, AlertCircle } from 'react-feather';
 
 const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
@@ -102,19 +101,25 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     setSelectedAnswers(newAnswers);
   };
 
+  // Use enhancedSpec questions for richer rendering (with imageId, optionSvgs, etc.)
+  // but always score against spec.questions since that's what's persisted for scoring
+  const displayQuestions: QuizQuestion[] = (() => {
+    if (!lesson) return [];
+    if (lesson.enhancedSpec?.questions?.length) return lesson.enhancedSpec.questions;
+    return lesson.spec?.questions ?? [];
+  })();
+
+  const lessonImages = lesson?.enhancedSpec?.images ?? [];
+
   const handleSubmitQuiz = () => {
-    // Make sure all questions have answers
-    if (lesson && selectedAnswers.length === lesson.spec.questions.length) {
-      // Check that all questions have an answer (no undefined values)
+    if (lesson && selectedAnswers.length === displayQuestions.length) {
       const hasAllAnswers = selectedAnswers.every(ans => ans !== undefined);
       if (hasAllAnswers) {
         submitAnswersMutation.mutate(selectedAnswers);
       } else {
-        // Alert user to answer all questions
         alert('Please answer all questions before submitting.');
       }
     } else {
-      // Alert user to answer all questions
       alert('Please answer all questions before submitting.');
     }
   };
@@ -157,7 +162,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     );
   }
 
-  if (!lesson || !lesson.spec || !lesson.spec.questions) {
+  if (!lesson || (!lesson.spec?.questions && !lesson.enhancedSpec?.questions)) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
@@ -204,6 +209,17 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
         </Text>
         <View style={{ width: 24 }} />
       </View>
+
+      {/* Progress stepper shown while answering questions */}
+      {!quizSubmitted && displayQuestions.length > 0 && (
+        <QuizProgressStepper
+          totalQuestions={displayQuestions.length}
+          currentQuestion={selectedAnswers.length > 0
+            ? Math.min(selectedAnswers.filter(a => a !== undefined).length, displayQuestions.length - 1)
+            : 0}
+          answeredQuestions={selectedAnswers}
+        />
+      )}
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {quizSubmitted && quizScore ? (
@@ -252,13 +268,14 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
 
             <View style={styles.reviewSection}>
               <Text style={[styles.reviewTitle, { color: theme.colors.textPrimary }]}>Let's Review</Text>
-              {lesson.spec.questions.map((question, index) => (
+              {displayQuestions.map((question, index) => (
                 <QuizComponent
                   key={index}
                   question={question}
                   selectedAnswer={selectedAnswers[index]}
                   showAnswers={true}
                   onSelectAnswer={() => {}}
+                  lessonImages={lessonImages}
                 />
               ))}
             </View>
@@ -270,21 +287,24 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
         ) : (
           // Quiz Questions View
           <View>
-            <Text style={[styles.quizTitle, { color: theme.colors.textPrimary }]}>{lesson.spec.title} Challenge</Text>
+            <Text style={[styles.quizTitle, { color: theme.colors.textPrimary }]}>
+              {(lesson.enhancedSpec?.title ?? lesson.spec?.title ?? '')} Challenge
+            </Text>
             <Text style={[styles.quizDescription, { color: theme.colors.textSecondary }]}>
               Let's see what you learned! Answer each question below.
             </Text>
 
-            {lesson.spec.questions.map((question, index) => (
+            {displayQuestions.map((question, index) => (
               <View key={index} style={styles.questionContainer}>
                 <Text style={[styles.questionNumber, { color: theme.colors.textSecondary }]}>
-                  Question {index + 1} of {lesson.spec.questions.length}
+                  Question {index + 1} of {displayQuestions.length}
                 </Text>
                 <QuizComponent
                   question={question}
                   selectedAnswer={selectedAnswers[index]}
                   showAnswers={false}
                   onSelectAnswer={(answerIndex) => handleSelectAnswer(index, answerIndex)}
+                  lessonImages={lessonImages}
                 />
               </View>
             ))}
@@ -292,11 +312,11 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
             <TouchableOpacity
               style={[styles.submitButton, {
                 backgroundColor: theme.colors.primary,
-                opacity: selectedAnswers.length === lesson.spec.questions.length &&
+                opacity: selectedAnswers.length === displayQuestions.length &&
                          selectedAnswers.every(ans => ans !== undefined) ? 1 : 0.5
               }]}
               onPress={handleSubmitQuiz}
-              disabled={selectedAnswers.length !== lesson.spec.questions.length ||
+              disabled={selectedAnswers.length !== displayQuestions.length ||
                        !selectedAnswers.every(ans => ans !== undefined)}
             >
               <Text style={[styles.submitButtonText, { color: theme.colors.onPrimary }]}>I'm Done!</Text>

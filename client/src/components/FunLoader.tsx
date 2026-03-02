@@ -56,21 +56,25 @@ const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages }) => {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
+  const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
+  const bounceLoop = useRef<Animated.CompositeAnimation | null>(null);
 
   // Rotate the sun spinner
   useEffect(() => {
-    Animated.loop(
+    spinLoop.current = Animated.loop(
       Animated.timing(spinAnim, {
         toValue: 1,
         duration: 2000,
         useNativeDriver: false,
       })
-    ).start();
+    );
+    spinLoop.current.start();
+    return () => { spinLoop.current?.stop(); };
   }, []);
 
   // Gentle bounce
   useEffect(() => {
-    Animated.loop(
+    bounceLoop.current = Animated.loop(
       Animated.sequence([
         Animated.timing(bounceAnim, {
           toValue: -8,
@@ -83,7 +87,9 @@ const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages }) => {
           useNativeDriver: false,
         }),
       ])
-    ).start();
+    );
+    bounceLoop.current.start();
+    return () => { bounceLoop.current?.stop(); };
   }, []);
 
   // Rotate facts every 3 seconds

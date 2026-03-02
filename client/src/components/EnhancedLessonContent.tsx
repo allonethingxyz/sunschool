@@ -9,6 +9,7 @@ import {
 import DOMPurify from 'isomorphic-dompurify';
 import { colors, typography, useTheme } from '../styles/theme';
 import SimpleMarkdownRenderer from './SimpleMarkdownRenderer';
+import AccordionSection from './AccordionSection';
 
 interface LessonImage {
   id: string;
@@ -65,6 +66,21 @@ function getLevelEmoji(level: string): string {
   if (lower === 'medium' || lower === 'intermediate') return '\u2B50\u2B50 Medium';
   if (lower === 'hard' || lower === 'advanced') return '\u2B50\u2B50\u2B50 Hard';
   return `\u2B50 ${level}`;
+}
+
+/**
+ * Map section type to a display icon.
+ */
+function getSectionIcon(type: string): string {
+  switch (type) {
+    case 'introduction': return '👋';
+    case 'key_concepts': return '🔑';
+    case 'examples': return '💡';
+    case 'practice': return '✏️';
+    case 'summary': return '📝';
+    case 'fun_facts': return '🌟';
+    default: return '📖';
+  }
 }
 
 const EnhancedLessonContent: React.FC<EnhancedLessonContentProps> = ({ enhancedSpec }) => {
@@ -179,36 +195,27 @@ const EnhancedLessonContent: React.FC<EnhancedLessonContentProps> = ({ enhancedS
         </Text>
       </View>
 
-      {/* Content Sections */}
+      {/* Content Sections — rendered as accordion panels */}
       {enhancedSpec.sections.map((section, index) => (
-        <React.Fragment key={index}>
-          {index > 0 && renderSectionDivider()}
-          <View style={styles.section}>
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  color: theme.colors.primary,
-                  borderBottomColor: theme.colors.primary + '40',
-                },
-              ]}
-            >
-              {section.title}
-            </Text>
+        <AccordionSection
+          key={index}
+          title={section.title}
+          icon={getSectionIcon(section.type)}
+          defaultExpanded={index === 0}
+          accentColor={theme.colors.primary}
+        >
+          {/* Section Images */}
+          {section.imageIds && section.imageIds.map(imageId => {
+            const image = findImageById(imageId);
+            if (image) {
+              return <React.Fragment key={imageId}>{renderImage(image)}</React.Fragment>;
+            }
+            return null;
+          })}
 
-            {/* Section Images */}
-            {section.imageIds && section.imageIds.map(imageId => {
-              const image = findImageById(imageId);
-              if (image) {
-                return <React.Fragment key={imageId}>{renderImage(image)}</React.Fragment>;
-              }
-              return null;
-            })}
-
-            {/* Section Content */}
-            <SimpleMarkdownRenderer content={section.content} />
-          </View>
-        </React.Fragment>
+          {/* Section Content */}
+          <SimpleMarkdownRenderer content={section.content} />
+        </AccordionSection>
       ))}
 
       {/* Diagrams */}

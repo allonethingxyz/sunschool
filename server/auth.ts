@@ -105,6 +105,54 @@ export async function setupAuth(app: Express) {
     }
   }));
 
+  // Registration endpoint (mirrors /register from routes.ts for /api/ prefix consistency)
+  app.post("/api/register", asyncHandler(async (req: Request, res: Response) => {
+    try {
+      const { username, email, name, role, password } = req.body;
+
+      if (!username || !email || !name || !role || !password) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      if (!["ADMIN", "PARENT", "LEARNER"].includes(role)) {
+        return res.status(400).json({ error: "Invalid role" });
+      }
+
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(409).json({ error: "Username already exists" });
+      }
+
+      const userCountResult = await db.select({ count: count() }).from(users);
+      const isFirstUser = userCountResult[0].count === 0;
+      const effectiveRole = isFirstUser ? "ADMIN" : role;
+
+      const hashedPassword = await hashPassword(password);
+      const newUser = await storage.createUser({
+        username,
+        email,
+        name,
+        role: effectiveRole as any,
+        password: hashedPassword,
+      });
+
+      const token = generateToken({ id: newUser.id, role: newUser.role });
+      const { password: _, ...userWithoutPassword } = newUser;
+
+      return res.json({
+        token,
+        user: userWithoutPassword,
+        wasPromotedToAdmin: isFirstUser && role !== "ADMIN",
+      });
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      if (error.code === '23505') {
+        return res.status(409).json({ error: "Username or email already exists" });
+      }
+      return res.status(500).json({ error: 'Registration failed. Please try again.' });
+    }
+  }));
+
   // Enhanced user info endpoint with cross-domain support
   app.get("/api/user", authenticateJwt, asyncHandler(async (req: AuthRequest, res: Response) => {
     // Log the request info for debugging

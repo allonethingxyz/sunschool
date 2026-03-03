@@ -9,6 +9,49 @@ import {
 } from 'react-native';
 import DOMPurify from 'isomorphic-dompurify';
 import { colors, typography } from '../styles/theme';
+
+/** Pick an emoji icon from description keywords (mirrors server-side logic). */
+function pickIcon(desc: string): string {
+  const d = desc.toLowerCase();
+  if (d.includes('sun') || d.includes('solar')) return '☀️';
+  if (d.includes('water') || d.includes('ocean') || d.includes('rain') || d.includes('cloud') || d.includes('vapor')) return '🌊';
+  if (d.includes('plant') || d.includes('leaf') || d.includes('tree')) return '🌿';
+  if (d.includes('animal') || d.includes('bird') || d.includes('fish')) return '🦋';
+  if (d.includes('cell') || d.includes('atom') || d.includes('molecule')) return '🔬';
+  if (d.includes('planet') || d.includes('space') || d.includes('orbit')) return '🪐';
+  if (d.includes('volcano') || d.includes('mountain') || d.includes('earth')) return '🌋';
+  return '🖼️';
+}
+
+/** Generate a descriptive placeholder SVG when no image data is available. */
+function makePlaceholderSVG(description: string, color: string): string {
+  const icon = pickIcon(description);
+  const short = description.length > 75 ? description.substring(0, 72) + '...' : description;
+  const words = short.split(' ');
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    if ((cur + ' ' + w).trim().length > 38 && cur) { lines.push(cur.trim()); cur = w; }
+    else cur = (cur + ' ' + w).trim();
+  }
+  if (cur) lines.push(cur);
+  const lineEls = lines.slice(0, 3).map((l, i) =>
+    `<text x="200" y="${148 + i * 20}" font-family="Arial" font-size="11" text-anchor="middle" fill="#546E7A">${
+      l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    }</text>`
+  ).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" width="400" height="220">
+    <rect width="400" height="220" fill="#F8F9FA" rx="10"/>
+    <rect width="400" height="220" fill="${color}" opacity="0.07" rx="10"/>
+    <rect x="2" y="2" width="396" height="216" fill="none" stroke="${color}" stroke-width="1.5" rx="9" opacity="0.25" stroke-dasharray="5,4"/>
+    <circle cx="200" cy="80" r="42" fill="${color}" opacity="0.12"/>
+    <circle cx="200" cy="80" r="32" fill="${color}" opacity="0.18"/>
+    <text x="200" y="94" font-family="Arial" font-size="30" text-anchor="middle">${icon}</text>
+    ${lineEls}
+    <rect x="150" y="200" width="100" height="16" rx="8" fill="${color}" opacity="0.15"/>
+    <text x="200" y="212" font-family="Arial" font-size="9" text-anchor="middle" fill="${color}" font-weight="bold">ILLUSTRATION</text>
+  </svg>`;
+}
 import { CheckCircle, Circle } from 'react-feather';
 
 export interface LessonImageRef {
@@ -74,33 +117,48 @@ const QuizComponent: React.FC<QuizComponentProps> = ({
   const hasVisualOptions =
     question.optionSvgs && question.optionSvgs.length === question.options.length;
 
+  // Build stem image content — always show something when an imageId is referenced
+  const renderStemImage = () => {
+    if (!stemImage && !question.imageSvg) return null;
+    let content: React.ReactNode = null;
+    if (question.imageSvg) {
+      content = renderSVGInline(question.imageSvg, { width: '100%', maxHeight: 220 });
+    } else if (stemImage?.svgData) {
+      content = renderSVGInline(stemImage.svgData, { width: '100%', maxHeight: 220 });
+    } else if (stemImage?.base64Data) {
+      content = (
+        <Image
+          source={{ uri: `data:image/png;base64,${stemImage.base64Data}` }}
+          style={styles.stemImage}
+          resizeMode="contain"
+        />
+      );
+    } else if (stemImage?.path) {
+      content = (
+        <Image source={{ uri: stemImage.path }} style={styles.stemImage} resizeMode="contain" />
+      );
+    } else if (stemImage?.description) {
+      // No data but we have a description — show descriptive placeholder
+      content = renderSVGInline(
+        makePlaceholderSVG(stemImage.description, colors.primary),
+        { width: '100%', maxHeight: 220 }
+      );
+    }
+    if (!content) return null;
+    return (
+      <View style={styles.stemImageContainer}>
+        {content}
+        {stemImage?.description && (
+          <Text style={styles.stemImageCaption}>{stemImage.description}</Text>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      {/* Question stem image (imageId reference or inline SVG) */}
-      {(stemImage || question.imageSvg) && (
-        <View style={styles.stemImageContainer}>
-          {question.imageSvg ? (
-            renderSVGInline(question.imageSvg, { width: '100%', maxHeight: 220 })
-          ) : stemImage?.svgData ? (
-            renderSVGInline(stemImage.svgData, { width: '100%', maxHeight: 220 })
-          ) : stemImage?.base64Data ? (
-            <Image
-              source={{ uri: `data:image/png;base64,${stemImage.base64Data}` }}
-              style={styles.stemImage}
-              resizeMode="contain"
-            />
-          ) : stemImage?.path ? (
-            <Image
-              source={{ uri: stemImage.path }}
-              style={styles.stemImage}
-              resizeMode="contain"
-            />
-          ) : null}
-          {stemImage && (
-            <Text style={styles.stemImageCaption}>{stemImage.description}</Text>
-          )}
-        </View>
-      )}
+      {/* Question stem image */}
+      {renderStemImage()}
 
       <View style={styles.questionContainer}>
         <Text style={styles.questionText}>{question.text}</Text>

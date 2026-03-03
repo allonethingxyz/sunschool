@@ -4,6 +4,7 @@ import { generateEducationalImage as generateOpenRouterImage } from './openroute
 import { generateEducationalSVG, generateDiagramSVG } from './svg-llm-service';
 import { generateEducationalImage as generateStabilityImage, generateEducationalDiagram as generateStabilityDiagram } from './stability-service';
 import { getSubjectSVG } from '../content-generator';
+import { getProgrammaticSVG } from './programmatic-svg';
 
 export interface ImageResult {
   id: string;
@@ -77,6 +78,20 @@ export async function generateImage(
     console.log('[ImageRouter] Stability AI fallback also failed');
   }
 
+  // Final fallback: rich programmatic SVG illustration
+  const topic = options.subject || prompt;
+  const programmatic = getProgrammaticSVG(topic, description, options.subject);
+  if (programmatic.svgData) {
+    const id = Math.random().toString(36).substring(2, 12);
+    console.log('[ImageRouter] Using programmatic SVG illustration as final fallback');
+    return {
+      id,
+      svgData: programmatic.svgData,
+      promptUsed: prompt,
+      description: programmatic.description,
+    };
+  }
+
   return null;
 }
 
@@ -106,21 +121,34 @@ export async function generateDiagram(
     console.log('[ImageRouter] SVG LLM diagram generation failed, trying fallback...');
   }
 
-  // Fallback to programmatic SVG
+  // Fallback to subject-based programmatic SVG
   try {
-    const programmaticSVG = getSubjectSVG(topic, diagramType);
-    if (programmaticSVG) {
+    const subjectSVG = getSubjectSVG(topic, diagramType);
+    if (subjectSVG) {
       const id = Math.random().toString(36).substring(2, 12);
       return {
         id,
-        svgData: programmaticSVG,
+        svgData: subjectSVG,
         title: `${diagramType.charAt(0).toUpperCase() + diagramType.slice(1)} of ${topic}`,
-        description: description || `Programmatic ${diagramType} diagram about ${topic}`,
+        description: description || `${diagramType} diagram about ${topic}`,
         type: diagramType,
       };
     }
   } catch (error) {
-    console.error('[ImageRouter] Programmatic SVG fallback failed:', error);
+    console.error('[ImageRouter] Subject SVG fallback failed, trying topic-based:', error);
+  }
+
+  // Rich topic-based programmatic diagram
+  const topicSVG = getProgrammaticSVG(topic, description || topic, topic);
+  if (topicSVG.svgData) {
+    const id = Math.random().toString(36).substring(2, 12);
+    return {
+      id,
+      svgData: topicSVG.svgData,
+      title: `${topic} — Visual`,
+      description: topicSVG.description,
+      type: diagramType,
+    };
   }
 
   return null;

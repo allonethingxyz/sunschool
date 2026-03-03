@@ -61,7 +61,39 @@ export function validateAndSanitizeSVG(rawSvg: string): string | null {
 
   if (!clean || !clean.includes('<svg')) return null;
 
+  // Reject SVGs that have no meaningful visual content — only a background rect
+  // or empty groups. Require at least 2 visible drawing elements beyond a
+  // simple background fill.
+  if (!hasMeaningfulVisualContent(clean)) {
+    console.warn('SVG rejected: no meaningful visual content (truncated/empty generation)');
+    return null;
+  }
+
   return clean;
+}
+
+/**
+ * Returns true when the SVG contains enough visible drawing elements to
+ * be shown as an illustration rather than just a coloured rectangle.
+ */
+function hasMeaningfulVisualContent(svg: string): boolean {
+  // Tags that can carry visible content
+  const drawingRe = /<(path|circle|ellipse|polygon|polyline|line|text|tspan|image|use)\b/gi;
+  const drawingMatches = svg.match(drawingRe) || [];
+
+  // Count <rect> elements that are NOT simple full-canvas backgrounds
+  const rectRe = /<rect\b[^>]*>/gi;
+  const rects = [...svg.matchAll(rectRe)];
+  const nonBgRects = rects.filter(m => {
+    const r = m[0];
+    // Treat as "background" if it covers the whole canvas (width/height = 100% or
+    // the declared viewBox dimensions) and has no meaningful stroke
+    const fullWidth = /width=["'](?:100%|\d{3,})/i.test(r);
+    const fullHeight = /height=["'](?:100%|\d{3,})/i.test(r);
+    return !(fullWidth && fullHeight);
+  });
+
+  return drawingMatches.length + nonBgRects.length >= 3;
 }
 
 export interface SVGResult {

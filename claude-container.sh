@@ -11,9 +11,10 @@ ENV_FILE="$PROJECT_DIR/.env.claude"
 CLAUDE_DIR="$HOME/.claude"
 SSH_DIR="$HOME/.ssh"
 
-# Replit SSH connection
-REPLIT_SSH_HOST="<REPLIT_SSH_HOST>"
-REPLIT_SSH_USER="<REPLIT_USER_ID>"
+# Replit SSH connection — set REPLIT_SSH_HOST and REPLIT_SSH_USER in .env.claude
+# (never hardcode these values in source control)
+REPLIT_SSH_HOST="${REPLIT_SSH_HOST:-}"
+REPLIT_SSH_USER="${REPLIT_SSH_USER:-}"
 REPLIT_SSH_KEY="~/.ssh/replit"
 
 # Colors

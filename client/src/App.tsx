@@ -21,6 +21,8 @@ import ProgressPage from './pages/progress-page';
 import DatabaseSyncPage from './pages/database-sync-page';
 import LessonsPage from './pages/lessons-page';
 import SelectLearnerPage from './pages/select-learner-page';
+import ParentRewardsPage from './pages/parent-rewards-page';
+import LearnerGoalsPage from './pages/learner-goals-page';
 import { ProtectedRoute } from './lib/protected-route';
 import { AdminRoute } from './lib/admin-route';
 import { LearnerRoute } from './lib/learner-route';
@@ -102,6 +104,7 @@ export default function App() {
             <ProtectedRoute path="/change-learner-subjects/:id" component={ChangeLearnerSubjectsPage} />
             <ProtectedRoute path="/reports" component={ReportsPage} />
             <ProtectedRoute path="/database-sync" component={DatabaseSyncPage} />
+            <ProtectedRoute path="/rewards" component={ParentRewardsPage} />
             
             {/* Learner specific routes */}
             <LearnerRoute path="/learner" component={LearnerHome} />
@@ -110,6 +113,7 @@ export default function App() {
             <LearnerRoute path="/lesson" component={ActiveLessonPage} />
             <LearnerRoute path="/quiz/:lessonId" component={QuizPage} />
             <LearnerRoute path="/progress" component={ProgressPage} />
+            <LearnerRoute path="/goals" component={LearnerGoalsPage} />
             
             {/* Root path - redirect authenticated users to their home, others to welcome */}
             <Route path="/">

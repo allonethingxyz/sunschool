@@ -2,6 +2,7 @@ import { askOpenRouter } from '../openrouter';
 import { generateImage, generateDiagram, MAX_IMAGES_PER_LESSON } from './image-generation-router';
 import { EnhancedLessonSpec, LessonSection, LessonImage, LessonDiagram } from '../../shared/schema';
 import { saveBase64Image } from './image-storage';
+import { generateEducationalSVG, validateAndSanitizeSVG } from './svg-llm-service';
 
 // Create a simple ID generator since nanoid is causing ESM issues
 function generateId(length: number = 10): string {
@@ -142,59 +143,38 @@ export async function generateEnhancedLesson(
 ): Promise<EnhancedLessonSpec | null> {
   try {
     // 1. Generate the lesson content structure with OpenRouter
+    // We ask for JSON explicitly in the prompt and strip any fences from the response
+    // rather than relying on response_format (which has inconsistent support across models).
     const structureResponse = await askOpenRouter({
       messages: [
         {
           role: 'system',
-          content: baseEnhancedLessonPrompt
+          content: baseEnhancedLessonPrompt +
+            '\n\nIMPORTANT: Respond with ONLY valid JSON — no markdown, no code fences, no explanations.'
         },
         {
           role: 'user',
-          content: `Create an educational lesson about "${topic}" for grade ${gradeLevel} students.`
+          content: `Create an educational lesson about "${topic}" for grade ${gradeLevel} students. Return only a JSON object.`
         }
       ],
-      model: 'google/gemini-3.1-pro-preview',
+      model: 'google/gemini-2.0-flash-001',
       temperature: 0.7,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            subtitle: { type: 'string' },
-            summary: { type: 'string' },
-            targetGradeLevel: { type: 'number' },
-            difficultyLevel: { type: 'string' },
-            estimatedDuration: { type: 'number' },
-            sections: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string' },
-                  type: { type: 'string' },
-                  content: { type: 'string' },
-                  imageDescription: { type: 'string' }
-                }
-              }
-            },
-            keywords: { 
-              type: 'array',
-              items: { type: 'string' }
-            },
-            relatedTopics: {
-              type: 'array',
-              items: { type: 'string' }
-            }
-          }
-        }
-      }
     });
     
     console.log('Generated lesson structure from OpenRouter');
     
-    // Parse the response
-    const content = JSON.parse(structureResponse.choices[0].message.content);
+    // Validate we have a response
+    if (!structureResponse.choices || !structureResponse.choices[0]?.message?.content) {
+      throw new Error('Empty response from OpenRouter for lesson structure');
+    }
+
+    // Parse the response — strip any markdown code fences the model may add
+    const rawContent = structureResponse.choices[0].message.content;
+    const jsonText = rawContent
+      .replace(/^```(?:json)?\s*\n?/i, '')
+      .replace(/\n?```\s*$/i, '')
+      .trim();
+    const content = JSON.parse(jsonText);
     
     // Initialize our enhanced lesson spec
     const enhancedLesson: EnhancedLessonSpec = {
@@ -376,54 +356,116 @@ export async function generateEnhancedLesson(
 }
 
 /**
- * Generate quiz questions for an enhanced lesson
+ * Generate quiz questions for an enhanced lesson.
+ * - Text-based questions use lesson image references when available.
+ * - One visual question per lesson gets SVG answer options generated in parallel.
  */
 export async function generateEnhancedQuestions(
   enhancedLesson: EnhancedLessonSpec,
   questionCount: number = 5
 ): Promise<any[]> {
   try {
-    // Combine all content for context
+    // Combine all section content for context
     const lessonContent = enhancedLesson.sections.map(s => `${s.title}:\n${s.content}`).join('\n\n');
-    
-    // Generate questions with OpenRouter
+
+    // Build image context hint so the LLM knows which image IDs are available
+    const imageHint = enhancedLesson.images && enhancedLesson.images.length > 0
+      ? `\n\nAvailable lesson image IDs you can reference (use ONE imageId per question if the question can be illustrated): ${enhancedLesson.images.map(i => `"${i.id}" (${i.description})`).join(', ')}`
+      : '';
+
     const response = await askOpenRouter({
       messages: [
         {
           role: 'system',
-          content: `You are an educational assessment expert. Create ${questionCount} multiple-choice questions based on the lesson content provided. Each question should have 4 options with only one correct answer. Format as a JSON array.`
+          content: `You are an educational assessment expert. Create ${questionCount} multiple-choice questions based on the lesson content. Each question must have exactly 4 answer options with one correct answer. When a question can be enriched by referring to one of the available lesson images, include the image ID in the "imageId" field. Mark one question as type "image_based" if an image reference is included. Respond with ONLY a valid JSON array — no markdown, no code fences.`
         },
         {
           role: 'user',
-          content: `Create ${questionCount} multiple-choice questions for a grade ${enhancedLesson.targetGradeLevel} lesson titled "${enhancedLesson.title}". Here's the lesson content:\n\n${lessonContent}\n\nFormat each question as a JSON object with "text" (the question), "options" (array of 4 choices), "correctIndex" (index of correct option, 0-3), and "explanation" fields.`
+          content: `Create ${questionCount} multiple-choice questions for a grade ${enhancedLesson.targetGradeLevel} lesson titled "${enhancedLesson.title}".${imageHint}\n\nLesson content:\n${lessonContent}\n\nReturn ONLY a JSON array. Format each question as: {"text":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"...","type":"multiple_choice","imageId":"<optional>"}`
         }
       ],
-      model: 'google/gemini-3.1-pro-preview',
+      model: 'google/gemini-2.0-flash-001',
       temperature: 0.7,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              text: { type: 'string' },
-              options: {
-                type: 'array',
-                items: { type: 'string' }
-              },
-              correctIndex: { type: 'number' },
-              explanation: { type: 'string' }
-            }
+    });
+
+    const rawQText = response.choices[0].message.content
+      .replace(/^```(?:json)?\s*\n?/i, '')
+      .replace(/\n?```\s*$/i, '')
+      .trim();
+    const rawQuestions: any[] = JSON.parse(rawQText);
+
+    // For up to 1 question, generate SVG answer options to make the quiz visually engaging
+    const visualQuestionIndex = rawQuestions.findIndex(
+      (q, i) => i < rawQuestions.length && q.options && q.options.length === 4
+    );
+
+    const questions = await Promise.all(rawQuestions.map(async (q, idx) => {
+      // Clean up imageId: only keep it if it actually references an existing image
+      const validImageId = q.imageId && enhancedLesson.images?.some(img => img.id === q.imageId)
+        ? q.imageId
+        : undefined;
+
+      // For the first eligible question, try to generate SVG answer options
+      if (idx === visualQuestionIndex && q.options && q.options.length === 4) {
+        try {
+          const svgPromises = q.options.map((opt: string) =>
+            generateVisualOptionSVG(opt, enhancedLesson.title, enhancedLesson.targetGradeLevel)
+          );
+          const svgResults = await Promise.all(svgPromises);
+          // Only attach optionSvgs if ALL 4 generated successfully
+          const allGenerated = svgResults.every(s => !!s);
+          if (allGenerated) {
+            return { ...q, imageId: validImageId, optionSvgs: svgResults };
           }
+        } catch (svgErr) {
+          console.warn('Visual option SVG generation failed, using text-only options:', svgErr);
         }
       }
-    });
-    
-    const questions = JSON.parse(response.choices[0].message.content);
+
+      return { ...q, imageId: validImageId };
+    }));
+
     return questions;
   } catch (error) {
     console.error('Error generating enhanced questions:', error);
     return [];
+  }
+}
+
+/**
+ * Generate a compact SVG illustration for a single answer option label.
+ * Returns the sanitized SVG string, or null on failure.
+ * Uses a configurable timeout to avoid blocking quiz generation.
+ */
+async function generateVisualOptionSVG(
+  optionText: string,
+  lessonTopic: string,
+  gradeLevel: number
+): Promise<string | null> {
+  const VISUAL_OPTION_TIMEOUT_MS = 15000;
+  try {
+    const timeoutPromise = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('Visual option SVG timeout')), VISUAL_OPTION_TIMEOUT_MS)
+    );
+    const svgPromise = askOpenRouter({
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert SVG illustrator for educational content. Output ONLY valid SVG markup — no markdown, no explanation, no code fences. The SVG must be a compact 200×200 illustration with viewBox="0 0 200 200", white background, and minimal text so it works as a visual answer option for a quiz.`
+        },
+        {
+          role: 'user',
+          content: `Create a simple 200×200 SVG illustration representing "${optionText}" in the context of a "${lessonTopic}" lesson for grade ${gradeLevel}. Output raw SVG only.`
+        }
+      ],
+      // Use the configured SVG model for consistency
+      model: process.env.OPENROUTER_SVG_MODEL || 'google/gemini-2.0-flash-001',
+      temperature: 0.4,
+      max_tokens: 1500,
+    }).then(r => validateAndSanitizeSVG(r.choices[0]?.message?.content ?? ''));
+
+    return await Promise.race([svgPromise, timeoutPromise]);
+  } catch {
+    return null;
   }
 }

@@ -154,7 +154,7 @@ export async function authenticateJwt(req: AuthRequest, res: Response, next: Nex
   try {
     const parsedOrigin = new URL(origin);
     isSunschool = parsedOrigin.hostname === 'sunschool.xyz' || parsedOrigin.hostname.endsWith('.sunschool.xyz');
-  } catch {}
+  } catch (_e) { /* ignore invalid origin URL */ }
   
   // No token found in any location
   if (!token) {

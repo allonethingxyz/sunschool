@@ -5,19 +5,20 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   SafeAreaView,
-  FlatList,
+  Switch,
 } from 'react-native';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { apiRequest, queryClient } from '../lib/queryClient';
 import { useTheme, colors, typography, commonStyles } from '../styles/theme';
-import QuizComponent from '../components/QuizComponent';
+import QuizComponent, { QuizQuestion } from '../components/QuizComponent';
 import Confetti from '../components/Confetti';
 import AchievementUnlock from '../components/AchievementUnlock';
 import FunLoader from '../components/FunLoader';
-import { ArrowLeft, CheckCircle, AlertCircle } from 'react-feather';
+import QuizProgressStepper from '../components/QuizProgressStepper';
+import { ArrowLeft, CheckCircle, AlertCircle, Zap } from 'react-feather';
+import { useMode } from '../context/ModeContext';
 
 const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
   const lessonId = params?.lessonId;
@@ -42,16 +43,27 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
   }
   const [, setLocation] = useLocation();
   const theme = useTheme();
+  const { selectedLearner } = useMode();
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
+  const [quizStarted, setQuizStarted] = useState(false);
+  const [doubleOrLoss, setDoubleOrLoss] = useState(false);
+  const [showDelegation, setShowDelegation] = useState(false);
   const [quizScore, setQuizScore] = useState<{
     score: number;
     correctCount: number;
     totalQuestions: number;
+    wrongCount: number;
+    pointsAwarded: number;
+    pointsDeducted: number;
+    doubleOrLoss: boolean;
+    newBalance: number;
     newAchievements: any[];
   } | null>(null);
+
+  const learnerId = selectedLearner?.id;
 
   // Fetch the specific lesson
   const {
@@ -64,32 +76,45 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     retry: 1,
   });
 
+  // Fetch learner's double-or-loss setting from parent
+  const { data: learnerSettings } = useQuery({
+    queryKey: [`/api/learner-settings/${learnerId}`],
+    queryFn: () => apiRequest('GET', `/api/learner-settings/${learnerId}`).then(r => r.data),
+    enabled: !!learnerId,
+  });
+  const dolAllowedByParent = learnerSettings?.doubleOrLossEnabled ?? false;
+
+  // Fetch available reward goals for delegation
+  const { data: rewardGoals = [] } = useQuery<any[]>({
+    queryKey: ['/api/rewards', learnerId],
+    queryFn: () => apiRequest('GET', `/api/rewards?learnerId=${learnerId}`).then(r => r.data),
+    enabled: !!learnerId,
+  });
+
   // Submit answers mutation
   const submitAnswersMutation = useMutation({
     mutationFn: (answers: number[]) => {
-      return apiRequest('POST', `/api/lessons/${lessonId}/answer`, { answers }).then(res => res.data);
+      return apiRequest('POST', `/api/lessons/${lessonId}/answer`, { answers, doubleOrLoss }).then(res => res.data);
     },
     onSuccess: (data) => {
       setQuizSubmitted(true);
       setQuizScore(data);
-      // Celebrate good scores
-      if (data.score >= 70) {
-        setShowConfetti(true);
-      }
-      // Show achievement unlock if any
+      if (data.score >= 70) setShowConfetti(true);
       if (data.newAchievements && data.newAchievements.length > 0) {
         setTimeout(() => setShowAchievements(true), 1500);
       }
-      // Invalidate related queries to refresh data
+      // Show delegation screen if points were earned and goals exist
+      if (data.pointsAwarded > 0 && rewardGoals.length > 0) {
+        setTimeout(() => setShowDelegation(true), 2500);
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/lessons/active'] });
       queryClient.invalidateQueries({ queryKey: ['/api/achievements'] });
       queryClient.invalidateQueries({ queryKey: ['/api/lessons/history'] });
       queryClient.invalidateQueries({ queryKey: ['/api/points'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/points/balance'] });
       queryClient.invalidateQueries({ queryKey: ['/api/mastery'] });
       if (lesson?.learnerId) {
-        queryClient.invalidateQueries({
-          queryKey: ['/api/learner-profile', lesson.learnerId],
-        });
+        queryClient.invalidateQueries({ queryKey: ['/api/learner-profile', lesson.learnerId] });
       }
     },
   });
@@ -102,19 +127,27 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     setSelectedAnswers(newAnswers);
   };
 
+  // Use enhancedSpec questions for richer rendering (with imageId, optionSvgs, etc.)
+  // but always score against spec.questions since that's what's persisted for scoring
+  const displayQuestions: QuizQuestion[] = (() => {
+    if (!lesson) return [];
+    if (lesson.enhancedSpec?.questions?.length) return lesson.enhancedSpec.questions;
+    return lesson.spec?.questions ?? [];
+  })();
+
+  const lessonImages = lesson?.enhancedSpec?.images ?? [];
+
+  const handleStartQuiz = () => setQuizStarted(true);
+
   const handleSubmitQuiz = () => {
-    // Make sure all questions have answers
-    if (lesson && selectedAnswers.length === lesson.spec.questions.length) {
-      // Check that all questions have an answer (no undefined values)
+    if (lesson && selectedAnswers.length === displayQuestions.length) {
       const hasAllAnswers = selectedAnswers.every(ans => ans !== undefined);
       if (hasAllAnswers) {
         submitAnswersMutation.mutate(selectedAnswers);
       } else {
-        // Alert user to answer all questions
         alert('Please answer all questions before submitting.');
       }
     } else {
-      // Alert user to answer all questions
       alert('Please answer all questions before submitting.');
     }
   };
@@ -157,7 +190,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     );
   }
 
-  if (!lesson || !lesson.spec || !lesson.spec.questions) {
+  if (!lesson || (!lesson.spec?.questions && !lesson.enhancedSpec?.questions)) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
@@ -174,6 +207,17 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
       </SafeAreaView>
     );
   }
+
+  // ── Point delegation save helper ──
+  const saveDelegation = (rewardId: string, pts: number) => {
+    if (pts <= 0 || !learnerId) return;
+    apiRequest('POST', `/api/rewards/${rewardId}/save?learnerId=${learnerId}`, { points: pts })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['/api/rewards', learnerId] });
+        queryClient.invalidateQueries({ queryKey: ['/api/points/balance'] });
+      })
+      .catch(e => console.error('Delegation error:', e));
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -193,6 +237,42 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
         />
       )}
 
+      {/* ── Point delegation overlay ── */}
+      {showDelegation && quizScore && rewardGoals.length > 0 && (
+        <View style={styles.delegationOverlay}>
+          <View style={[styles.delegationBox, { backgroundColor: theme.colors.surfaceColor }]}>
+            <Text style={[styles.delegationTitle, { color: theme.colors.textPrimary }]}>
+              🎉 You earned {quizScore.pointsAwarded} pts!
+            </Text>
+            <Text style={[styles.delegationSub, { color: theme.colors.textSecondary }]}>
+              Save them toward a reward goal:
+            </Text>
+            <ScrollView style={{ maxHeight: 240 }}>
+              {rewardGoals.filter((g: any) => g.isActive).map((g: any) => {
+                const pct = Math.min(100, Math.round(((g.savedPoints ?? 0) / g.tokenCost) * 100));
+                return (
+                  <TouchableOpacity key={g.id} style={[styles.delegationGoalRow, { borderColor: g.color }]}
+                    onPress={() => { saveDelegation(g.id, quizScore.pointsAwarded); setShowDelegation(false); }}>
+                    <Text style={{ fontSize: 24 }}>{g.imageEmoji}</Text>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={[styles.delegationGoalTitle, { color: theme.colors.textPrimary }]}>{g.title}</Text>
+                      <View style={[styles.delegationTrack, { backgroundColor: theme.colors.divider }]}>
+                        <View style={[styles.delegationFill, { width: `${pct}%` as any, backgroundColor: g.color }]} />
+                      </View>
+                      <Text style={[{ fontSize: 11, color: theme.colors.textSecondary }]}>{g.savedPoints}/{g.tokenCost}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={[styles.skipDelegation, { borderColor: theme.colors.divider }]}
+              onPress={() => setShowDelegation(false)}>
+              <Text style={[{ color: theme.colors.textSecondary, fontWeight: '600' }]}>Keep in Balance</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <View style={[styles.subheader, { backgroundColor: theme.colors.surfaceColor, borderBottomColor: theme.colors.divider }]}>
         {!quizSubmitted && (
           <TouchableOpacity style={styles.backButtonSmall} onPress={() => setLocation('/lesson')}>
@@ -200,12 +280,60 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
           </TouchableOpacity>
         )}
         <Text style={[styles.subheaderTitle, { color: theme.colors.textPrimary }]}>
-          {quizSubmitted ? 'Your Results' : 'Quick Challenge'}
+          {quizSubmitted ? 'Your Results' : !quizStarted ? 'Get Ready!' : 'Quick Challenge'}
         </Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      {/* ── Pre-quiz screen (double-or-loss toggle) ── */}
+      {!quizStarted && !quizSubmitted && (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={[styles.preQuizCard, { backgroundColor: theme.colors.surfaceColor }]}>
+            <Text style={[styles.preQuizTitle, { color: theme.colors.textPrimary }]}>
+              Ready for your challenge?
+            </Text>
+            <Text style={[styles.preQuizSub, { color: theme.colors.textSecondary }]}>
+              {displayQuestions.length} question{displayQuestions.length !== 1 ? 's' : ''} · take your time!
+            </Text>
+
+            {dolAllowedByParent && (
+              <View style={[styles.dolCard, { borderColor: doubleOrLoss ? '#FF8F00' : theme.colors.divider }]}>
+                <View style={styles.dolHeader}>
+                  <Zap size={20} color="#FF8F00" />
+                  <Text style={[styles.dolTitle, { color: theme.colors.textPrimary }]}>Double-or-Loss Mode</Text>
+                  <Switch value={doubleOrLoss} onValueChange={setDoubleOrLoss} trackColor={{ true: '#FF8F00' }} />
+                </View>
+                <Text style={[styles.dolDesc, { color: theme.colors.textSecondary }]}>
+                  {doubleOrLoss
+                    ? '⚡ ON — 2× points for correct, −1 point for wrong!'
+                    : 'OFF — Standard scoring (1 point per correct answer)'}
+                </Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.startBtn, { backgroundColor: doubleOrLoss ? '#FF8F00' : theme.colors.primary }]}
+              onPress={handleStartQuiz}>
+              <Text style={styles.startBtnText}>
+                {doubleOrLoss ? '⚡ Start Double-or-Loss!' : 'Start Quiz →'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      )}
+
+      {/* Progress stepper shown while answering questions */}
+      {quizStarted && !quizSubmitted && displayQuestions.length > 0 && (
+        <QuizProgressStepper
+          totalQuestions={displayQuestions.length}
+          currentQuestion={selectedAnswers.length > 0
+            ? Math.min(selectedAnswers.filter(a => a !== undefined).length, displayQuestions.length - 1)
+            : 0}
+          answeredQuestions={selectedAnswers}
+        />
+      )}
+
+      {quizStarted && <ScrollView contentContainerStyle={styles.scrollContent}>
         {quizSubmitted && quizScore ? (
           // Quiz Results View
           <View>
@@ -234,6 +362,40 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
               <Text style={[styles.scorePercentage, { color: quizScore.score >= 70 ? theme.colors.success : theme.colors.warning }]}>
                 {quizScore.score}%
               </Text>
+
+              {/* Points summary */}
+              <View style={[styles.pointsSummary, { backgroundColor: theme.colors.background }]}>
+                {quizScore.pointsAwarded > 0 && (
+                  <View style={styles.pointsRow}>
+                    <Text style={styles.pointsEmoji}>⭐</Text>
+                    <Text style={[styles.pointsLabel, { color: theme.colors.textPrimary }]}>
+                      +{quizScore.pointsAwarded} pts earned{quizScore.doubleOrLoss ? ' (×2!)' : ''}
+                    </Text>
+                  </View>
+                )}
+                {quizScore.pointsDeducted > 0 && (
+                  <View style={styles.pointsRow}>
+                    <Text style={styles.pointsEmoji}>⚡</Text>
+                    <Text style={[styles.pointsLabel, { color: '#EF5350' }]}>
+                      -{quizScore.pointsDeducted} pts (double-or-loss penalty)
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.pointsRow}>
+                  <Text style={styles.pointsEmoji}>💰</Text>
+                  <Text style={[styles.pointsLabel, { color: theme.colors.textSecondary }]}>
+                    Balance: {quizScore.newBalance} pts
+                  </Text>
+                </View>
+                {rewardGoals.length > 0 && quizScore.pointsAwarded > 0 && (
+                  <TouchableOpacity style={[styles.goToGoalsBtn, { borderColor: theme.colors.primary }]}
+                    onPress={() => setShowDelegation(true)}>
+                    <Text style={[styles.goToGoalsBtnText, { color: theme.colors.primary }]}>
+                      🎯 Save points to a goal
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
             {quizScore.newAchievements && quizScore.newAchievements.length > 0 && (
@@ -252,13 +414,14 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
 
             <View style={styles.reviewSection}>
               <Text style={[styles.reviewTitle, { color: theme.colors.textPrimary }]}>Let's Review</Text>
-              {lesson.spec.questions.map((question, index) => (
+              {displayQuestions.map((question, index) => (
                 <QuizComponent
                   key={index}
                   question={question}
                   selectedAnswer={selectedAnswers[index]}
                   showAnswers={true}
                   onSelectAnswer={() => {}}
+                  lessonImages={lessonImages}
                 />
               ))}
             </View>
@@ -270,21 +433,24 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
         ) : (
           // Quiz Questions View
           <View>
-            <Text style={[styles.quizTitle, { color: theme.colors.textPrimary }]}>{lesson.spec.title} Challenge</Text>
+            <Text style={[styles.quizTitle, { color: theme.colors.textPrimary }]}>
+              {(lesson.enhancedSpec?.title ?? lesson.spec?.title ?? '')} Challenge
+            </Text>
             <Text style={[styles.quizDescription, { color: theme.colors.textSecondary }]}>
               Let's see what you learned! Answer each question below.
             </Text>
 
-            {lesson.spec.questions.map((question, index) => (
+            {displayQuestions.map((question, index) => (
               <View key={index} style={styles.questionContainer}>
                 <Text style={[styles.questionNumber, { color: theme.colors.textSecondary }]}>
-                  Question {index + 1} of {lesson.spec.questions.length}
+                  Question {index + 1} of {displayQuestions.length}
                 </Text>
                 <QuizComponent
                   question={question}
                   selectedAnswer={selectedAnswers[index]}
                   showAnswers={false}
                   onSelectAnswer={(answerIndex) => handleSelectAnswer(index, answerIndex)}
+                  lessonImages={lessonImages}
                 />
               </View>
             ))}
@@ -292,18 +458,18 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
             <TouchableOpacity
               style={[styles.submitButton, {
                 backgroundColor: theme.colors.primary,
-                opacity: selectedAnswers.length === lesson.spec.questions.length &&
+                opacity: selectedAnswers.length === displayQuestions.length &&
                          selectedAnswers.every(ans => ans !== undefined) ? 1 : 0.5
               }]}
               onPress={handleSubmitQuiz}
-              disabled={selectedAnswers.length !== lesson.spec.questions.length ||
+              disabled={selectedAnswers.length !== displayQuestions.length ||
                        !selectedAnswers.every(ans => ans !== undefined)}
             >
               <Text style={[styles.submitButtonText, { color: theme.colors.onPrimary }]}>I'm Done!</Text>
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
+      </ScrollView>}
     </SafeAreaView>
   );
 };
@@ -474,6 +640,55 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     ...commonStyles.buttonText,
+  },
+  // Pre-quiz screen
+  preQuizCard: {
+    margin: 16,
+    borderRadius: 16,
+    padding: 24,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+  preQuizTitle: { fontSize: 22, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
+  preQuizSub: { fontSize: 14, textAlign: 'center', marginBottom: 20 },
+  dolCard: {
+    borderWidth: 2, borderRadius: 12, padding: 14, marginBottom: 20,
+  },
+  dolHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 },
+  dolTitle: { flex: 1, fontWeight: '700', fontSize: 15 },
+  dolDesc: { fontSize: 13, lineHeight: 18 },
+  startBtn: {
+    paddingVertical: 16, borderRadius: 12, alignItems: 'center',
+  },
+  startBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  // Points summary
+  pointsSummary: { borderRadius: 12, padding: 14, marginTop: 12 },
+  pointsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 },
+  pointsEmoji: { fontSize: 18 },
+  pointsLabel: { fontSize: 14, fontWeight: '600' },
+  goToGoalsBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 8 },
+  goToGoalsBtnText: { fontWeight: '700', fontSize: 14 },
+  // Delegation overlay
+  delegationOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center',
+    padding: 20, zIndex: 9999,
+  },
+  delegationBox: { width: '100%', maxWidth: 420, borderRadius: 20, padding: 20 },
+  delegationTitle: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
+  delegationSub: { fontSize: 13, marginBottom: 14 },
+  delegationGoalRow: {
+    flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderRadius: 12,
+    padding: 12, marginBottom: 10,
+  },
+  delegationGoalTitle: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  delegationTrack: { height: 8, borderRadius: 4, overflow: 'hidden', marginBottom: 2 },
+  delegationFill: { height: '100%', borderRadius: 4 },
+  skipDelegation: {
+    borderWidth: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 8,
   },
 });
 

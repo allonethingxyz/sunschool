@@ -1,34 +1,52 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
 import * as schema from "../shared/schema";
 import * as env from './config/env';
 
-// Environment variables are accessed through the central config module
+// Detect whether we're connecting to a local Postgres (no SSL/Neon)
+// vs a remote Neon serverless instance.
+const isLocalDb = !env.DATABASE_URL.includes('neon.tech') &&
+  !env.DATABASE_URL.includes('neonhost') &&
+  (env.DATABASE_URL.includes('localhost') || env.DATABASE_URL.includes('127.0.0.1'));
 
-// Enhanced Neon configuration for better reliability and production readiness
-neonConfig.webSocketConstructor = ws;
-neonConfig.fetchConnectionCache = true;
-neonConfig.useSecureWebSocket = env.DATABASE_SSL;
-neonConfig.pipelineConnect = "password";
-neonConfig.pipelineTLS = env.DATABASE_SSL;
-
-// Add more logging for connection debugging
 console.log('Initializing database connection for environment:', process.env.NODE_ENV || 'development');
 console.log('Database connection string exists:', !!process.env.DATABASE_URL);
+console.log('Using local pg driver:', isLocalDb);
 
-// Add exponential backoff to our retry logic in our custom withRetry function
-// (We'll handle retries ourselves since connectionRetryLimit is not available)
+let pool: any;
+let db: any;
 
-// Configure the connection pool with more conservative settings and proper SSL for production
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 10, // Reduce max clients in pool to avoid connection issues
-  idleTimeoutMillis: 60000, // Give idle clients more time (1 minute)
-  connectionTimeoutMillis: 10000, // Allow more time for connection establishment
-  maxUses: 5000, // Close connections after fewer uses
-  ssl: env.DATABASE_SSL ? { rejectUnauthorized: env.NODE_ENV === 'production' } : false,
-});
+if (isLocalDb) {
+  // Local development: use standard node-postgres driver
+  const { Pool: PgPool } = require('pg');
+  const { drizzle: drizzlePg } = require('drizzle-orm/node-postgres');
+  pool = new PgPool({
+    connectionString: env.DATABASE_URL,
+    max: 10,
+    idleTimeoutMillis: 60000,
+    connectionTimeoutMillis: 10000,
+  });
+  db = drizzlePg(pool, { schema });
+} else {
+  // Production / Neon serverless
+  const { Pool: NeonPool, neonConfig } = require('@neondatabase/serverless');
+  const { drizzle: drizzleNeon } = require('drizzle-orm/neon-serverless');
+  const ws = require('ws');
+  neonConfig.webSocketConstructor = ws;
+  neonConfig.fetchConnectionCache = true;
+  neonConfig.useSecureWebSocket = env.DATABASE_SSL;
+  neonConfig.pipelineConnect = 'password';
+  neonConfig.pipelineTLS = env.DATABASE_SSL;
+  pool = new NeonPool({
+    connectionString: env.DATABASE_URL,
+    max: 10,
+    idleTimeoutMillis: 60000,
+    connectionTimeoutMillis: 10000,
+    maxUses: 5000,
+    ssl: env.DATABASE_SSL ? { rejectUnauthorized: env.NODE_ENV === 'production' } : false,
+  });
+  db = drizzleNeon(pool, { schema });
+}
+
+export { pool, db };
 
 // Add event listeners to the pool for better error tracking
 pool.on('error', (err, client) => {
@@ -51,52 +69,24 @@ export async function checkDatabaseConnection() {
   }
 }
 
-// Set up a global keep-alive ping with better error handling
-const KEEP_ALIVE_INTERVAL = 120000; // 2 minutes - reduce frequency to prevent connection issues
-let keepAliveTimer: NodeJS.Timeout;
-
-const runKeepAlivePing = async () => {
-  try {
-    // Use a client from the pool directly with a short timeout
-    const client = await pool.connect();
+// Keep-alive ping — only for production (Neon) connections
+if (!isLocalDb) {
+  const KEEP_ALIVE_INTERVAL = 120000;
+  const runKeepAlivePing = async () => {
     try {
-      await client.query('SELECT 1');
-      // Only log in development mode to reduce log noise in production
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Keep-alive ping successful');
-      }
-    } finally {
-      // Make sure we always release the client back to the pool
-      client.release();
-    }
-  } catch (error) {
-    console.error('Keep-alive ping failed:', error);
-    
-    // If we have a connection error, try to recover gracefully
-    if (error.message && (
-      error.message.includes('Connection terminated') || 
-      error.message.includes('Connection ended') ||
-      error.message.includes('Cannot read properties of null')
-    )) {
-      console.warn('Detected connection termination, attempting to recreate pool');
+      const client = await pool.connect();
       try {
-        // Wait a moment before trying to recreate the pool
-        await new Promise(resolve => setTimeout(resolve, 5000));
-      } catch (e) {
-        console.error('Error in keep-alive recovery timer:', e);
+        await client.query('SELECT 1');
+      } finally {
+        client.release();
       }
+    } catch (error) {
+      console.error('Keep-alive ping failed:', error);
     }
-  }
-  
-  // Schedule the next ping (even if this one failed)
-  keepAliveTimer = setTimeout(runKeepAlivePing, KEEP_ALIVE_INTERVAL);
-};
-
-// Start the keep-alive process
-keepAliveTimer = setTimeout(runKeepAlivePing, KEEP_ALIVE_INTERVAL);
-
-// Initialize the Drizzle ORM with the pool
-export const db = drizzle(pool, { schema });
+    setTimeout(runKeepAlivePing, KEEP_ALIVE_INTERVAL);
+  };
+  setTimeout(runKeepAlivePing, KEEP_ALIVE_INTERVAL);
+}
 
 // Expose a function to retry database operations with exponential backoff
 export async function withRetry<T>(

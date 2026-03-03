@@ -420,6 +420,9 @@ const DashboardPage: React.FC = () => {
                   <Link href="/database-sync">
                     <Text style={styles.linkText}>Database Synchronization</Text>
                   </Link>
+                  <Link href="/rewards">
+                    <Text style={styles.linkText}>🎁 Rewards Center</Text>
+                  </Link>
                 </View>
 
                 <View style={styles.modeToggleSection}>

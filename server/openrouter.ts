@@ -1,6 +1,15 @@
 import axios from 'axios';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
+/** Strip markdown code fences that some models add around JSON responses. */
+function parseJsonResponse(raw: string): any {
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*\n?/i, '')
+    .replace(/\n?```\s*$/i, '')
+    .trim();
+  return JSON.parse(cleaned);
+}
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 export interface Message {
@@ -238,7 +247,7 @@ export async function generateQuizQuestions(
 
     try {
       // Parse the JSON content
-      const questions = JSON.parse(response.choices[0].message.content);
+      const questions = parseJsonResponse(response.choices[0].message.content);
       lastQuestions = questions;
 
       // Validate quiz questions for age-appropriateness
@@ -379,7 +388,7 @@ export async function generateKnowledgeGraph(topic: string, gradeLevel: number):
   
   try {
     // Parse the JSON content
-    return JSON.parse(response.choices[0].message.content);
+    return parseJsonResponse(response.choices[0].message.content);
   } catch (error) {
     console.error('Failed to parse knowledge graph JSON:', error);
     throw new Error('Failed to generate knowledge graph');

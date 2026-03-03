@@ -1,0 +1,26 @@
+// Minimal React Native mock for unit test environment
+module.exports = {
+  View: () => null,
+  Text: () => null,
+  StyleSheet: { create: (s) => s },
+  TouchableOpacity: () => null,
+  ScrollView: () => null,
+  ActivityIndicator: () => null,
+  Image: () => null,
+  Modal: () => null,
+  Switch: () => null,
+  TextInput: () => null,
+  SafeAreaView: () => null,
+  Platform: { OS: 'web', select: (o) => o.web || o.default },
+  Animated: {
+    Value: class { constructor(v) { this._v = v; } },
+    loop: () => ({ start: () => {}, stop: () => {} }),
+    timing: () => ({ start: (cb) => { if (cb) cb(); } }),
+    sequence: () => ({ start: (cb) => { if (cb) cb(); } }),
+    View: () => null,
+    Text: () => null,
+  },
+  FlatList: () => null,
+  LayoutAnimation: { configureNext: () => {}, Presets: { easeInEaseOut: {} } },
+  UIManager: { setLayoutAnimationEnabledExperimental: () => {} },
+};

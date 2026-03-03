@@ -46,7 +46,7 @@ export async function setupAuth(app: Express) {
       try {
         const parsedOrigin = new URL(origin);
         isSunschool = parsedOrigin.hostname === 'sunschool.xyz' || parsedOrigin.hostname.endsWith('.sunschool.xyz');
-      } catch {}
+      } catch (_e) { /* ignore invalid origin URL */ }
       console.log(`Login attempt for username: ${username} from origin: ${origin}`);
 
       // For sunschool.xyz domain, add special CORS headers for authentication
@@ -161,7 +161,7 @@ export async function setupAuth(app: Express) {
     try {
       const parsedOrigin = new URL(origin);
       isSunschool = parsedOrigin.hostname === 'sunschool.xyz' || parsedOrigin.hostname.endsWith('.sunschool.xyz');
-    } catch {}
+    } catch (_e) { /* ignore invalid origin URL */ }
 
     if (isSunschool) {
       // Add special CORS headers for sunschool.xyz domain

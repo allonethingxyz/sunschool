@@ -40,6 +40,11 @@
   </style>
 </head>
 <body>
+  <script>
+    // Polyfill for Node.js globals used by react-native-web and isomorphic libraries
+    if (typeof global === 'undefined') { window.global = window; }
+    if (typeof process === 'undefined') { window.process = { env: {} }; }
+  </script>
   <div id="root">
     <!-- Initial loader that shows before React loads -->
     <div class="initial-loader">

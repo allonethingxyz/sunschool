@@ -19,7 +19,7 @@ import { colors as parentColors, typography as parentTypography, commonStyles as
 import LessonCard from '../components/LessonCard';
 import KnowledgeGraph from '../components/KnowledgeGraph';
 import SubjectSelector from '../components/SubjectSelector';
-import { Book, Award, BarChart2, User, Compass, Zap, Plus, X } from 'react-feather';
+import { Book, Award, BarChart2, User, Compass, Zap, Plus, X, Gift } from 'react-feather';
 import { useMode } from '../context/ModeContext';
 import FunLoader from '../components/FunLoader';
 
@@ -28,6 +28,54 @@ import FunLoader from '../components/FunLoader';
 const colors = parentColors;
 const typography = parentTypography;
 const commonStyles = parentCommonStyles;
+
+// ─── Goals progress strip (inline, so we don't add a separate import) ────────
+import { useQuery as _useQuery } from '@tanstack/react-query';
+
+const GoalsStrip: React.FC<{ learnerId?: number; onPress: () => void; theme: any }> = ({ learnerId, onPress, theme }) => {
+  const { data: goals = [] } = _useQuery<any[]>({
+    queryKey: ['/api/rewards-summary', learnerId],
+    queryFn: () => apiRequest('GET', `/api/rewards-summary?learnerId=${learnerId}`).then(r => r.data),
+    enabled: !!learnerId,
+  });
+  if (!goals.length) return null;
+  const topGoal = goals[0];
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        backgroundColor: theme.colors.surfaceColor, borderRadius: 12,
+        padding: 14, marginBottom: 16,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2,
+      }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+        <Gift size={16} color={theme.colors.primary} />
+        <Text style={{ marginLeft: 6, fontWeight: '700', color: theme.colors.textPrimary, fontSize: 14 }}>My Goals</Text>
+        <View style={{ flex: 1 }} />
+        <Text style={{ fontSize: 12, color: theme.colors.primary, fontWeight: '600' }}>See all →</Text>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, marginRight: 8 }}>{topGoal.imageEmoji}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 }}>
+            {topGoal.title}
+          </Text>
+          <View style={{ height: 8, backgroundColor: theme.colors.divider, borderRadius: 4, overflow: 'hidden' }}>
+            <View style={{ height: '100%', width: `${topGoal.progressPct}%`, backgroundColor: topGoal.color, borderRadius: 4 }} />
+          </View>
+          <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 3 }}>
+            {topGoal.savedPoints}/{topGoal.tokenCost} pts · {topGoal.progressPct}%
+          </Text>
+        </View>
+      </View>
+      {goals.length > 1 && (
+        <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 6, textAlign: 'right' }}>
+          +{goals.length - 1} more goal{goals.length > 2 ? 's' : ''}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+};
 
 const LearnerHome = () => {
   const { user } = useAuth();
@@ -279,6 +327,9 @@ const LearnerHome = () => {
                 </View>
               </View>
             )}
+
+            {/* Goals card */}
+            <GoalsStrip learnerId={selectedLearner?.id} onPress={() => setLocation('/goals')} theme={theme} />
 
             {/* Learning Journey Card */}
             <TouchableOpacity 

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { colors, typography, commonStyles } from '../styles/theme';
 import { BookOpen, Check, Clock, Play } from 'react-feather';
+import MediaLessonCard from './MediaLessonCard';
 
 interface LessonCardProps {
   lesson: any;
@@ -25,6 +26,24 @@ const LessonCard: React.FC<LessonCardProps> = ({
   const isActive = lesson.status === 'ACTIVE';
   const isDone = lesson.status === 'DONE';
   const isQueued = lesson.status === 'QUEUED';
+
+  // Use rich MediaLessonCard when the lesson has an enhanced spec with media
+  if (lesson.enhancedSpec && (lesson.enhancedSpec.images?.length > 0 || lesson.enhancedSpec.diagrams?.length > 0)) {
+    return (
+      <MediaLessonCard
+        title={lesson.enhancedSpec.title ?? lesson.spec?.title ?? ''}
+        subtitle={lesson.enhancedSpec.subtitle}
+        subject={lesson.subject}
+        gradeLevel={lesson.enhancedSpec.targetGradeLevel}
+        estimatedDuration={lesson.enhancedSpec.estimatedDuration}
+        difficultyLevel={lesson.enhancedSpec.difficultyLevel ?? lesson.difficulty}
+        featuredImage={lesson.enhancedSpec.featuredImage}
+        images={lesson.enhancedSpec.images ?? []}
+        onPress={onPress}
+        status={lesson.status}
+      />
+    );
+  }
   
   // Format date
   const formatDate = (dateString: string) => {

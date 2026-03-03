@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "migrate": "TS_NODE_TRANSPILE_ONLY=true ts-node scripts/migrate.ts",
+    "test": "jest --testPathPattern='tests/unit' --passWithNoTests",
+    "migrate": "ts-node --transpile-only scripts/migrate.ts",
     "deploy": "TS_NODE_TRANSPILE_ONLY=true TS_NODE_PROJECT=tsconfig.deploy.json ts-node server/index.ts"
   },
   "keywords": [],

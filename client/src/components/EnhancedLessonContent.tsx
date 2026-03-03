@@ -9,6 +9,7 @@ import {
 import DOMPurify from 'isomorphic-dompurify';
 import { colors, typography, useTheme } from '../styles/theme';
 import SimpleMarkdownRenderer from './SimpleMarkdownRenderer';
+import AccordionSection from './AccordionSection';
 
 interface LessonImage {
   id: string;
@@ -67,6 +68,86 @@ function getLevelEmoji(level: string): string {
   return `\u2B50 ${level}`;
 }
 
+/**
+ * Map section type to a display icon.
+ */
+function getSectionIcon(type: string): string {
+  switch (type) {
+    case 'introduction': return '👋';
+    case 'key_concepts': return '🔑';
+    case 'examples': return '💡';
+    case 'practice': return '✏️';
+    case 'summary': return '📝';
+    case 'fun_facts': return '🌟';
+    default: return '📖';
+  }
+}
+
+/**
+ * Pick a relevant emoji icon from the image description text.
+ */
+function pickIconForDescription(description: string): string {
+  const d = description.toLowerCase();
+  if (d.includes('sun') || d.includes('solar') || d.includes('star')) return '☀️';
+  if (d.includes('water') || d.includes('ocean') || d.includes('rain') || d.includes('cloud')) return '🌊';
+  if (d.includes('plant') || d.includes('leaf') || d.includes('tree') || d.includes('forest')) return '🌿';
+  if (d.includes('animal') || d.includes('bird') || d.includes('fish') || d.includes('insect')) return '🦋';
+  if (d.includes('cell') || d.includes('molecule') || d.includes('atom') || d.includes('dna')) return '🔬';
+  if (d.includes('volcano') || d.includes('mountain') || d.includes('rock') || d.includes('earth')) return '🌋';
+  if (d.includes('planet') || d.includes('space') || d.includes('galaxy') || d.includes('orbit')) return '🪐';
+  if (d.includes('math') || d.includes('number') || d.includes('equation') || d.includes('fraction')) return '🔢';
+  if (d.includes('map') || d.includes('country') || d.includes('geography') || d.includes('continent')) return '🗺️';
+  if (d.includes('history') || d.includes('ancient') || d.includes('timeline') || d.includes('civilization')) return '🏛️';
+  if (d.includes('book') || d.includes('story') || d.includes('read') || d.includes('write')) return '📖';
+  if (d.includes('experiment') || d.includes('lab') || d.includes('chemical') || d.includes('reaction')) return '⚗️';
+  if (d.includes('food') || d.includes('eat') || d.includes('nutrition') || d.includes('chain')) return '🥦';
+  if (d.includes('body') || d.includes('human') || d.includes('heart') || d.includes('lung')) return '🫁';
+  if (d.includes('light') || d.includes('color') || d.includes('rainbow') || d.includes('prism')) return '🌈';
+  return '🖼️';
+}
+
+/**
+ * Generate a descriptive, styled SVG placeholder card when no image data is available.
+ * Shows the concept icon + truncated description so the lesson still makes sense.
+ */
+function generatePlaceholderSVG(description: string, primaryColor: string): string {
+  const icon = pickIconForDescription(description);
+  const shortDesc = description.length > 90 ? description.substring(0, 87) + '...' : description;
+  // Wrap text into two lines of ~45 chars each
+  const words = shortDesc.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    if ((current + ' ' + word).trim().length > 45 && current) {
+      lines.push(current.trim());
+      current = word;
+    } else {
+      current = (current + ' ' + word).trim();
+    }
+  }
+  if (current) lines.push(current);
+  const lineEls = lines.slice(0, 3).map((line, i) =>
+    `<text x="250" y="${185 + i * 22}" font-family="Arial" font-size="13" text-anchor="middle" fill="#546E7A">${
+      line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    }</text>`
+  ).join('');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 280" width="100%" height="280">
+    <rect width="500" height="280" fill="#F8F9FA" rx="12"/>
+    <rect width="500" height="280" fill="${primaryColor}" opacity="0.06" rx="12"/>
+    <rect x="2" y="2" width="496" height="276" fill="none" stroke="${primaryColor}" stroke-width="2" rx="11" opacity="0.3" stroke-dasharray="6,4"/>
+    <!-- Icon circle -->
+    <circle cx="250" cy="105" r="52" fill="${primaryColor}" opacity="0.12"/>
+    <circle cx="250" cy="105" r="40" fill="${primaryColor}" opacity="0.18"/>
+    <text x="250" y="120" font-family="Arial" font-size="36" text-anchor="middle">${icon}</text>
+    <!-- Description lines -->
+    ${lineEls}
+    <!-- "Illustration" label -->
+    <rect x="185" y="248" width="130" height="20" rx="10" fill="${primaryColor}" opacity="0.15"/>
+    <text x="250" y="262" font-family="Arial" font-size="10" text-anchor="middle" fill="${primaryColor}" font-weight="bold">ILLUSTRATION</text>
+  </svg>`;
+}
+
 const EnhancedLessonContent: React.FC<EnhancedLessonContentProps> = ({ enhancedSpec }) => {
   const theme = useTheme();
 
@@ -75,11 +156,13 @@ const EnhancedLessonContent: React.FC<EnhancedLessonContentProps> = ({ enhancedS
     return enhancedSpec.images.find(img => img.id === id);
   };
 
-  // Helper function to render an image
+  // Helper function to render an image — always shows something meaningful
   const renderImage = (image: LessonImage) => {
+    const containerStyle = [styles.imageContainer, { borderColor: theme.colors.primary + '30' }];
+
     if (image.base64Data) {
       return (
-        <View style={[styles.imageContainer, { borderColor: theme.colors.primary + '30' }]}>
+        <View style={containerStyle}>
           <Image
             source={{ uri: `data:image/png;base64,${image.base64Data}` }}
             style={styles.image}
@@ -90,18 +173,26 @@ const EnhancedLessonContent: React.FC<EnhancedLessonContentProps> = ({ enhancedS
           </Text>
         </View>
       );
-    } else if (image.svgData) {
+    }
+
+    if (image.svgData) {
+      const cleanSvg = DOMPurify.sanitize(image.svgData, { USE_PROFILES: { svg: true, svgFilters: true } });
       return (
-        <View style={[styles.imageContainer, { borderColor: theme.colors.primary + '30' }]}>
-          <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(image.svgData, { USE_PROFILES: { svg: true, svgFilters: true } }) }} />
+        <View style={containerStyle}>
+          <div
+            style={{ width: '100%', maxWidth: 500, overflow: 'hidden' }}
+            dangerouslySetInnerHTML={{ __html: cleanSvg }}
+          />
           <Text style={[styles.imageCaption, { color: theme.colors.textSecondary }]}>
             {image.description}
           </Text>
         </View>
       );
-    } else if (image.path) {
+    }
+
+    if (image.path) {
       return (
-        <View style={[styles.imageContainer, { borderColor: theme.colors.primary + '30' }]}>
+        <View style={containerStyle}>
           <Image
             source={{ uri: image.path }}
             style={styles.image}
@@ -113,6 +204,20 @@ const EnhancedLessonContent: React.FC<EnhancedLessonContentProps> = ({ enhancedS
         </View>
       );
     }
+
+    // Fallback: descriptive placeholder SVG so the lesson never shows a blank box
+    if (image.description) {
+      const placeholderSvg = generatePlaceholderSVG(image.description, theme.colors.primary);
+      return (
+        <View style={[containerStyle, { marginVertical: 10 }]}>
+          <div
+            style={{ width: '100%', maxWidth: 500, overflow: 'hidden' }}
+            dangerouslySetInnerHTML={{ __html: placeholderSvg }}
+          />
+        </View>
+      );
+    }
+
     return null;
   };
 
@@ -179,36 +284,27 @@ const EnhancedLessonContent: React.FC<EnhancedLessonContentProps> = ({ enhancedS
         </Text>
       </View>
 
-      {/* Content Sections */}
+      {/* Content Sections — rendered as accordion panels */}
       {enhancedSpec.sections.map((section, index) => (
-        <React.Fragment key={index}>
-          {index > 0 && renderSectionDivider()}
-          <View style={styles.section}>
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  color: theme.colors.primary,
-                  borderBottomColor: theme.colors.primary + '40',
-                },
-              ]}
-            >
-              {section.title}
-            </Text>
+        <AccordionSection
+          key={index}
+          title={section.title}
+          icon={getSectionIcon(section.type)}
+          defaultExpanded={index === 0}
+          accentColor={theme.colors.primary}
+        >
+          {/* Section Images */}
+          {section.imageIds && section.imageIds.map(imageId => {
+            const image = findImageById(imageId);
+            if (image) {
+              return <React.Fragment key={imageId}>{renderImage(image)}</React.Fragment>;
+            }
+            return null;
+          })}
 
-            {/* Section Images */}
-            {section.imageIds && section.imageIds.map(imageId => {
-              const image = findImageById(imageId);
-              if (image) {
-                return <React.Fragment key={imageId}>{renderImage(image)}</React.Fragment>;
-              }
-              return null;
-            })}
-
-            {/* Section Content */}
-            <SimpleMarkdownRenderer content={section.content} />
-          </View>
-        </React.Fragment>
+          {/* Section Content */}
+          <SimpleMarkdownRenderer content={section.content} />
+        </AccordionSection>
       ))}
 
       {/* Diagrams */}

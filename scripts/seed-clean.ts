@@ -1,13 +1,7 @@
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import { Pool, neonConfig } from '@neondatabase/serverless';
 import * as schema from '../shared/schema';
 import { hashPassword } from '../server/middleware/auth';
 import crypto from 'crypto';
 const { randomBytes } = crypto;
-import ws from 'ws';
-
-// Configure Neon to use ws instead of browser WebSocket
-neonConfig.webSocketConstructor = ws;
 
 // Use crypto.randomBytes instead of nanoid
 function generateId(size: number = 6): string {
@@ -15,14 +9,26 @@ function generateId(size: number = 6): string {
 }
 
 async function main() {
-  if (!process.env.DATABASE_URL) {
+  const DATABASE_URL = process.env.DATABASE_URL;
+  if (!DATABASE_URL) {
     throw new Error('DATABASE_URL is required');
   }
 
+  const isNeonDb = DATABASE_URL.includes('neon.tech') || DATABASE_URL.includes('neonhost');
+
+  // Auto-select driver: pg for local/CI, Neon serverless for Neon cloud
+  let pool: any;
+  if (isNeonDb) {
+    const { Pool: NeonPool, neonConfig } = await import('@neondatabase/serverless');
+    const ws = await import('ws');
+    neonConfig.webSocketConstructor = ws.default;
+    pool = new NeonPool({ connectionString: DATABASE_URL });
+  } else {
+    const { Pool: PgPool } = await import('pg');
+    pool = new PgPool({ connectionString: DATABASE_URL });
+  }
+
   console.log('Seeding database with demo data...');
-  
-  // First, let's clear any existing data to avoid unique constraint violations
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   
   try {
     // Check if admin user already exists

@@ -1,3 +1,5 @@
+providers = ["node"]
+
 [phases.setup]
 nixPkgs = ["nodejs_22"]
 
@@ -8,7 +10,10 @@ cmds = [
 ]
 
 [phases.build]
-cmds = ["cd client && npm run build"]
+cmds = [
+  "cd client && npm run build",
+  "npx tsc --skipLibCheck --project tsconfig.deploy.json"
+]
 
 [start]
-cmd = "npm run deploy"
+cmd = "NODE_ENV=production node dist/server/index.js"

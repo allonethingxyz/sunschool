@@ -309,3 +309,86 @@ export type InsertQuizAnswer = typeof quizAnswers.$inferInsert;
 
 export type ConceptMastery = typeof conceptMastery.$inferSelect;
 export type InsertConceptMastery = typeof conceptMastery.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rewards system TypeScript types (tables managed via raw SQL migrations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type Reward = {
+  id: string;
+  parentId: number;
+  title: string;
+  description: string | null;
+  tokenCost: number;
+  category: string;
+  isActive: boolean;
+  maxRedemptions: number | null;
+  currentRedemptions: number;
+  imageEmoji: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type InsertReward = Omit<Reward, 'id' | 'currentRedemptions' | 'createdAt' | 'updatedAt'>;
+
+export type RewardGoalSavings = {
+  id: string;
+  learnerId: number;
+  rewardId: string;
+  savedPoints: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RewardRedemption = {
+  id: string;
+  learnerId: number;
+  rewardId: string;
+  tokensSpent: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  timesRedeemed: number;
+  requestedAt: string;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  completedAt: string | null;
+  parentNotes: string | null;
+  learnerNotes: string | null;
+};
+
+export type LearningGoal = {
+  id: string;
+  learnerId: number;
+  parentId: number;
+  title: string;
+  description: string | null;
+  subject: string | null;
+  targetType: string;
+  targetValue: number;
+  currentValue: number;
+  isCompleted: boolean;
+  deadline: string | null;
+  tokenReward: number;
+  createdAt: string;
+  completedAt: string | null;
+};
+
+/** Points ledger source types including new ones */
+export type PointsSourceType =
+  | 'QUIZ_CORRECT'
+  | 'LESSON_COMPLETE'
+  | 'ACHIEVEMENT'
+  | 'REDEMPTION'
+  | 'ADMIN_ADJUST'
+  | 'DOUBLE_OR_LOSS_DEDUCTION'
+  | 'GOAL_DELEGATION';
+
+export type PointsLedgerEntry = {
+  id: string;
+  learnerId: number;
+  amount: number;
+  sourceType: PointsSourceType;
+  sourceId: string | null;
+  description: string;
+  createdAt: string;
+};

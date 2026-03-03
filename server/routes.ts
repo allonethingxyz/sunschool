@@ -1122,7 +1122,7 @@ export function registerRoutes(app: Express): Server {
     }
 
     const lessonId = req.params.lessonId;
-    const { answers } = req.body;
+    const { answers, doubleOrLoss: doubleOrLossFlag } = req.body;
 
     console.log(`Answers received:`, answers);
 
@@ -1232,18 +1232,37 @@ export function registerRoutes(app: Express): Server {
       });
     }
 
-    // After score calculation, before generating new lesson
-    // Award 1 token for every correct answer
-    const pointsAwarded = correctCount;
-    console.log(`Awarding ${pointsAwarded} points for quiz completion`);
-    const { newBalance } = await pointsService.awardPoints({
-      learnerId: req.user.id,
-      amount: pointsAwarded,
-      sourceType: "QUIZ_CORRECT",
-      sourceId: lessonId,
-      description: `Quiz score ${score}%`
-    });
-    console.log(`Points awarded successfully, new balance: ${newBalance}`);
+    // After score calculation — award points with optional Double-or-Loss multiplier
+    const wrongCount = questions.length - correctCount;
+    const isDoubleOrLoss = doubleOrLossFlag === true;
+    const pointsPerCorrect = isDoubleOrLoss ? 2 : 1;
+    const pointsAwarded = correctCount * pointsPerCorrect;
+
+    console.log(`Awarding ${pointsAwarded} points (doubleOrLoss=${isDoubleOrLoss}, correct=${correctCount}, wrong=${wrongCount})`);
+
+    if (pointsAwarded > 0) {
+      const { newBalance } = await pointsService.awardPoints({
+        learnerId: req.user.id,
+        amount: pointsAwarded,
+        sourceType: "QUIZ_CORRECT",
+        sourceId: lessonId,
+        description: `Quiz ${score}%${isDoubleOrLoss ? ' [Double-or-Loss ×2]' : ''}`
+      });
+      console.log(`Points awarded successfully, new balance: ${newBalance}`);
+    }
+
+    // Double-or-Loss deduction for wrong answers
+    if (isDoubleOrLoss && wrongCount > 0) {
+      try {
+        const { applyDoubleOrLossDeduction } = await import('./services/rewards-service');
+        await applyDoubleOrLossDeduction(Number(learnerId), wrongCount);
+        console.log(`Double-or-loss: deducted ${wrongCount} points for wrong answers`);
+      } catch (dolErr) {
+        console.error('Double-or-loss deduction error:', dolErr);
+      }
+    }
+
+    const newBalance = await pointsService.getBalance(req.user.id);
 
     // DISABLED: Automatic lesson generation after quiz completion
     // TODO: Re-enable once migrations are stable
@@ -1356,7 +1375,10 @@ export function registerRoutes(app: Express): Server {
       score,
       correctCount,
       totalQuestions: questions.length,
+      wrongCount,
       pointsAwarded,
+      pointsDeducted: isDoubleOrLoss ? wrongCount : 0,
+      doubleOrLoss: isDoubleOrLoss,
       newBalance,
       newAchievements: newAchievements.map(a => a.payload)
     });
@@ -1830,6 +1852,141 @@ export function registerRoutes(app: Express): Server {
     const share = await activityService.getShareByHash(username, hash);
     if (!share) return res.status(404).json({ error: "Not found" });
     res.json(share);
+  }));
+
+  // ─────────────────────────────────────────────────────────────────────
+  // REWARDS SYSTEM
+  // ─────────────────────────────────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const rewardsService = require('./services/rewards-service');
+
+  // ── Parent: Reward CRUD ───────────────────────────────────────────────
+
+  app.get('/api/rewards', isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const user = authReq.user!;
+    const learnerId = req.query.learnerId ? Number(req.query.learnerId) : null;
+
+    // If a learnerId is provided (parent viewing for a specific learner) use that
+    if (learnerId) {
+      const rewards = await rewardsService.getRewardsForLearner(learnerId);
+      return res.json(rewards);
+    }
+    if (user.role === 'LEARNER') {
+      // Learners see their parent's rewards with their own savings progress
+      const rewards = await rewardsService.getRewardsForLearner(Number(user.id));
+      return res.json(rewards);
+    }
+    // Parents/admins see their own rewards catalog
+    const rewards = await rewardsService.getRewardsForParent(Number(user.id));
+    res.json(rewards);
+  }));
+
+  app.post('/api/rewards', hasRole(['PARENT', 'ADMIN']), asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const { title, description, tokenCost, category, maxRedemptions, imageEmoji, color } = req.body;
+    if (!title || !tokenCost) return res.status(400).json({ error: 'title and tokenCost are required' });
+    const reward = await rewardsService.createReward(Number(authReq.user!.id), {
+      title, description, tokenCost: Number(tokenCost), category, maxRedemptions, imageEmoji, color,
+    });
+    res.status(201).json(reward);
+  }));
+
+  app.put('/api/rewards/:rewardId', hasRole(['PARENT', 'ADMIN']), asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const { rewardId } = req.params;
+    const reward = await rewardsService.updateReward(rewardId, Number(authReq.user!.id), req.body);
+    res.json(reward);
+  }));
+
+  app.delete('/api/rewards/:rewardId', hasRole(['PARENT', 'ADMIN']), asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    await rewardsService.deleteReward(req.params.rewardId, Number(authReq.user!.id));
+    res.json({ success: true });
+  }));
+
+  // ── Learner: Goal savings & redemption requests ───────────────────────
+
+  app.post('/api/rewards/:rewardId/save', isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const { points } = req.body;
+    if (!points || Number(points) <= 0) return res.status(400).json({ error: 'points must be positive' });
+    const learnerId = req.query.learnerId
+      ? Number(req.query.learnerId)
+      : Number(authReq.user!.id);
+    await rewardsService.delegatePointsToGoal(learnerId, req.params.rewardId, Number(points));
+    res.json({ success: true, pointsDelegated: Number(points) });
+  }));
+
+  app.post('/api/rewards/:rewardId/redeem', isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const learnerId = req.query.learnerId
+      ? Number(req.query.learnerId)
+      : Number(authReq.user!.id);
+    const redemption = await rewardsService.requestRedemption(learnerId, req.params.rewardId);
+    res.status(201).json(redemption);
+  }));
+
+  // ── Parent: Redemption management ────────────────────────────────────
+
+  app.get('/api/redemptions', hasRole(['PARENT', 'ADMIN']), asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const status = req.query.status as string | undefined;
+    const redemptions = await rewardsService.getRedemptionsForParent(Number(authReq.user!.id), status);
+    res.json(redemptions);
+  }));
+
+  app.get('/api/redemptions/my', isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const learnerId = req.query.learnerId
+      ? Number(req.query.learnerId)
+      : Number(authReq.user!.id);
+    const redemptions = await rewardsService.getRedemptionsForLearner(learnerId);
+    res.json(redemptions);
+  }));
+
+  app.put('/api/redemptions/:redemptionId/approve', hasRole(['PARENT', 'ADMIN']), asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const result = await rewardsService.approveRedemption(
+      req.params.redemptionId,
+      Number(authReq.user!.id),
+      req.body.notes
+    );
+    res.json(result);
+  }));
+
+  app.put('/api/redemptions/:redemptionId/reject', hasRole(['PARENT', 'ADMIN']), asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const result = await rewardsService.rejectRedemption(
+      req.params.redemptionId,
+      Number(authReq.user!.id),
+      req.body.notes
+    );
+    res.json(result);
+  }));
+
+  // ── Double-or-loss mode ───────────────────────────────────────────────
+
+  app.get('/api/learner-settings/:learnerId', isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
+    const doubleOrLoss = await rewardsService.getDoubleOrLoss(Number(req.params.learnerId));
+    res.json({ doubleOrLossEnabled: doubleOrLoss });
+  }));
+
+  app.put('/api/learner-settings/:learnerId/double-or-loss', hasRole(['PARENT', 'ADMIN']), asyncHandler(async (req: Request, res: Response) => {
+    const { enabled } = req.body;
+    const result = await rewardsService.setDoubleOrLoss(Number(req.params.learnerId), Boolean(enabled));
+    res.json(result);
+  }));
+
+  // ── Rewards summary for learner dashboard ─────────────────────────────
+
+  app.get('/api/rewards-summary', isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+    const learnerId = req.query.learnerId
+      ? Number(req.query.learnerId)
+      : Number(authReq.user!.id);
+    const summary = await rewardsService.getRewardSummaryForLearner(learnerId);
+    res.json(summary);
   }));
 
   // Error handling middleware

@@ -143,59 +143,38 @@ export async function generateEnhancedLesson(
 ): Promise<EnhancedLessonSpec | null> {
   try {
     // 1. Generate the lesson content structure with OpenRouter
+    // We ask for JSON explicitly in the prompt and strip any fences from the response
+    // rather than relying on response_format (which has inconsistent support across models).
     const structureResponse = await askOpenRouter({
       messages: [
         {
           role: 'system',
-          content: baseEnhancedLessonPrompt
+          content: baseEnhancedLessonPrompt +
+            '\n\nIMPORTANT: Respond with ONLY valid JSON — no markdown, no code fences, no explanations.'
         },
         {
           role: 'user',
-          content: `Create an educational lesson about "${topic}" for grade ${gradeLevel} students.`
+          content: `Create an educational lesson about "${topic}" for grade ${gradeLevel} students. Return only a JSON object.`
         }
       ],
-      model: 'google/gemini-3.1-pro-preview',
+      model: 'google/gemini-2.0-flash-001',
       temperature: 0.7,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            subtitle: { type: 'string' },
-            summary: { type: 'string' },
-            targetGradeLevel: { type: 'number' },
-            difficultyLevel: { type: 'string' },
-            estimatedDuration: { type: 'number' },
-            sections: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string' },
-                  type: { type: 'string' },
-                  content: { type: 'string' },
-                  imageDescription: { type: 'string' }
-                }
-              }
-            },
-            keywords: { 
-              type: 'array',
-              items: { type: 'string' }
-            },
-            relatedTopics: {
-              type: 'array',
-              items: { type: 'string' }
-            }
-          }
-        }
-      }
     });
     
     console.log('Generated lesson structure from OpenRouter');
     
-    // Parse the response
-    const content = JSON.parse(structureResponse.choices[0].message.content);
+    // Validate we have a response
+    if (!structureResponse.choices || !structureResponse.choices[0]?.message?.content) {
+      throw new Error('Empty response from OpenRouter for lesson structure');
+    }
+
+    // Parse the response — strip any markdown code fences the model may add
+    const rawContent = structureResponse.choices[0].message.content;
+    const jsonText = rawContent
+      .replace(/^```(?:json)?\s*\n?/i, '')
+      .replace(/\n?```\s*$/i, '')
+      .trim();
+    const content = JSON.parse(jsonText);
     
     // Initialize our enhanced lesson spec
     const enhancedLesson: EnhancedLessonSpec = {
@@ -398,36 +377,22 @@ export async function generateEnhancedQuestions(
       messages: [
         {
           role: 'system',
-          content: `You are an educational assessment expert. Create ${questionCount} multiple-choice questions based on the lesson content. Each question must have exactly 4 answer options with one correct answer. When a question can be enriched by referring to one of the available lesson images, include the image ID in the "imageId" field. Mark one question as type "image_based" if an image reference is included. Format as a JSON array.`
+          content: `You are an educational assessment expert. Create ${questionCount} multiple-choice questions based on the lesson content. Each question must have exactly 4 answer options with one correct answer. When a question can be enriched by referring to one of the available lesson images, include the image ID in the "imageId" field. Mark one question as type "image_based" if an image reference is included. Respond with ONLY a valid JSON array — no markdown, no code fences.`
         },
         {
           role: 'user',
-          content: `Create ${questionCount} multiple-choice questions for a grade ${enhancedLesson.targetGradeLevel} lesson titled "${enhancedLesson.title}".${imageHint}\n\nLesson content:\n${lessonContent}\n\nFormat each question as: {"text","options":["A","B","C","D"],"correctIndex":0,"explanation","type":"multiple_choice|image_based","imageId":"<optional id from list above>"}`
+          content: `Create ${questionCount} multiple-choice questions for a grade ${enhancedLesson.targetGradeLevel} lesson titled "${enhancedLesson.title}".${imageHint}\n\nLesson content:\n${lessonContent}\n\nReturn ONLY a JSON array. Format each question as: {"text":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"...","type":"multiple_choice","imageId":"<optional>"}`
         }
       ],
-      model: 'google/gemini-3.1-pro-preview',
+      model: 'google/gemini-2.0-flash-001',
       temperature: 0.7,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              text: { type: 'string' },
-              options: { type: 'array', items: { type: 'string' } },
-              correctIndex: { type: 'number' },
-              explanation: { type: 'string' },
-              type: { type: 'string' },
-              imageId: { type: 'string' }
-            },
-            required: ['text', 'options', 'correctIndex', 'explanation']
-          }
-        }
-      }
     });
 
-    const rawQuestions: any[] = JSON.parse(response.choices[0].message.content);
+    const rawQText = response.choices[0].message.content
+      .replace(/^```(?:json)?\s*\n?/i, '')
+      .replace(/\n?```\s*$/i, '')
+      .trim();
+    const rawQuestions: any[] = JSON.parse(rawQText);
 
     // For up to 1 question, generate SVG answer options to make the quiz visually engaging
     const visualQuestionIndex = rawQuestions.findIndex(

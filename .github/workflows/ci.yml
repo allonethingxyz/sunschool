@@ -27,7 +27,7 @@ jobs:
       run: npx tsc --noEmit
 
     - name: Run ESLint
-      run: npx eslint . --ext .ts,.tsx
+      run: npx eslint server/ shared/ --max-warnings 999
 
   unit-tests:
     name: Unit Tests

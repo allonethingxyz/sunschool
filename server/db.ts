@@ -1,32 +1,22 @@
 import * as schema from "../shared/schema";
 import * as env from './config/env';
 
-// Detect whether we're connecting to a local Postgres (no SSL/Neon)
-// vs a remote Neon serverless instance.
-const isLocalDb = !env.DATABASE_URL.includes('neon.tech') &&
-  !env.DATABASE_URL.includes('neonhost') &&
-  (env.DATABASE_URL.includes('localhost') || env.DATABASE_URL.includes('127.0.0.1'));
+// Detect whether we're connecting to a Neon serverless instance
+// (requires WebSocket driver) vs any standard Postgres (local, Railway, etc.)
+const isNeonDb = env.DATABASE_URL.includes('neon.tech') ||
+  env.DATABASE_URL.includes('neonhost');
+const isLocalDb = env.DATABASE_URL.includes('localhost') || env.DATABASE_URL.includes('127.0.0.1');
 
 console.log('Initializing database connection for environment:', process.env.NODE_ENV || 'development');
 console.log('Database connection string exists:', !!process.env.DATABASE_URL);
-console.log('Using local pg driver:', isLocalDb);
+console.log('Using Neon driver:', isNeonDb);
+console.log('Is local DB:', isLocalDb);
 
 let pool: any;
 let db: any;
 
-if (isLocalDb) {
-  // Local development: use standard node-postgres driver
-  const { Pool: PgPool } = require('pg');
-  const { drizzle: drizzlePg } = require('drizzle-orm/node-postgres');
-  pool = new PgPool({
-    connectionString: env.DATABASE_URL,
-    max: 10,
-    idleTimeoutMillis: 60000,
-    connectionTimeoutMillis: 10000,
-  });
-  db = drizzlePg(pool, { schema });
-} else {
-  // Production / Neon serverless
+if (isNeonDb) {
+  // Neon serverless — requires WebSocket driver
   const { Pool: NeonPool, neonConfig } = require('@neondatabase/serverless');
   const { drizzle: drizzleNeon } = require('drizzle-orm/neon-serverless');
   const ws = require('ws');
@@ -44,6 +34,20 @@ if (isLocalDb) {
     ssl: env.DATABASE_SSL ? { rejectUnauthorized: env.NODE_ENV === 'production' } : false,
   });
   db = drizzleNeon(pool, { schema });
+} else {
+  // Standard Postgres (local dev, Railway, or any non-Neon host)
+  const { Pool: PgPool } = require('pg');
+  const { drizzle: drizzlePg } = require('drizzle-orm/node-postgres');
+  const sslConfig = isLocalDb ? false :
+    (env.DATABASE_SSL ? { rejectUnauthorized: false } : false);
+  pool = new PgPool({
+    connectionString: env.DATABASE_URL,
+    max: 10,
+    idleTimeoutMillis: 60000,
+    connectionTimeoutMillis: 10000,
+    ssl: sslConfig,
+  });
+  db = drizzlePg(pool, { schema });
 }
 
 export { pool, db };
@@ -69,8 +73,8 @@ export async function checkDatabaseConnection() {
   }
 }
 
-// Keep-alive ping — only for production (Neon) connections
-if (!isLocalDb) {
+// Keep-alive ping — only for Neon serverless connections
+if (isNeonDb) {
   const KEEP_ALIVE_INTERVAL = 120000;
   const runKeepAlivePing = async () => {
     try {

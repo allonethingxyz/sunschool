@@ -20,8 +20,9 @@ async function runMigrations() {
     return;
   }
 
-  const isLocal = !process.env.DATABASE_URL.includes('neon.tech') &&
-    (process.env.DATABASE_URL.includes('localhost') || process.env.DATABASE_URL.includes('127.0.0.1'));
+  const dbUrl = process.env.DATABASE_URL;
+  const isLocal = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+  const isNeon = dbUrl.includes('neon.tech') || dbUrl.includes('neonhost');
 
   if (isLocal) {
     console.log('Local database detected — skipping auto-migration (use psql directly)');
@@ -30,13 +31,30 @@ async function runMigrations() {
 
   try {
     console.log('Running database migrations...');
-    neonConfig.webSocketConstructor = ws;
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    const db = drizzle(pool, { schema });
     const migrationsFolder = path.resolve('drizzle', 'migrations');
-    await migrate(db, { migrationsFolder });
+
+    if (isNeon) {
+      // Neon serverless — use WebSocket driver
+      neonConfig.webSocketConstructor = ws;
+      const neonPool = new Pool({ connectionString: dbUrl });
+      const neonDb = drizzle(neonPool, { schema });
+      await migrate(neonDb, { migrationsFolder });
+      await neonPool.end();
+    } else {
+      // Standard Postgres (Railway, etc.) — use pg driver
+      const { Pool: PgPool } = require('pg');
+      const { drizzle: drizzlePg } = require('drizzle-orm/node-postgres');
+      const { migrate: migratePg } = require('drizzle-orm/node-postgres/migrator');
+      const pgPool = new PgPool({
+        connectionString: dbUrl,
+        ssl: { rejectUnauthorized: false },
+      });
+      const pgDb = drizzlePg(pgPool, { schema });
+      await migratePg(pgDb, { migrationsFolder });
+      await pgPool.end();
+    }
+
     console.log('✓ Database migrations applied successfully!');
-    await pool.end();
   } catch (error) {
     console.error('Error applying migrations:', error);
   }

@@ -19,4 +19,4 @@ cmds = [
 ]
 
 [start]
-cmd = "NODE_ENV=production node dist/server/index.js"
+cmd = "echo '=== SERVER START ===' && echo 'Node:' $(node -v) && echo 'CWD:' $(pwd) && ls -la dist/server/index.js 2>&1 && echo 'PORT:' $PORT && NODE_ENV=production node dist/server/index.js 2>&1"

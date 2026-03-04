@@ -2,7 +2,7 @@ import { askOpenRouter } from '../openrouter';
 import { generateImage, generateDiagram, MAX_IMAGES_PER_LESSON } from './image-generation-router';
 import { EnhancedLessonSpec, LessonSection, LessonImage, LessonDiagram } from '../../shared/schema';
 import { saveBase64Image } from './image-storage';
-import { generateEducationalSVG, validateAndSanitizeSVG } from './svg-llm-service';
+import { generateEducationalSVG } from './svg-llm-service';
 
 // Create a simple ID generator since nanoid is causing ESM issues
 function generateId(length: number = 10): string {
@@ -357,8 +357,7 @@ export async function generateEnhancedLesson(
 
 /**
  * Generate quiz questions for an enhanced lesson.
- * - Text-based questions use lesson image references when available.
- * - One visual question per lesson gets SVG answer options generated in parallel.
+ * Text-based questions use lesson image references when available.
  */
 export async function generateEnhancedQuestions(
   enhancedLesson: EnhancedLessonSpec,
@@ -394,78 +393,16 @@ export async function generateEnhancedQuestions(
       .trim();
     const rawQuestions: any[] = JSON.parse(rawQText);
 
-    // For up to 1 question, generate SVG answer options to make the quiz visually engaging
-    const visualQuestionIndex = rawQuestions.findIndex(
-      (q, i) => i < rawQuestions.length && q.options && q.options.length === 4
-    );
-
-    const questions = await Promise.all(rawQuestions.map(async (q, idx) => {
+    return rawQuestions.map(q => {
       // Clean up imageId: only keep it if it actually references an existing image
       const validImageId = q.imageId && enhancedLesson.images?.some(img => img.id === q.imageId)
         ? q.imageId
         : undefined;
-
-      // For the first eligible question, try to generate SVG answer options
-      if (idx === visualQuestionIndex && q.options && q.options.length === 4) {
-        try {
-          const svgPromises = q.options.map((opt: string) =>
-            generateVisualOptionSVG(opt, enhancedLesson.title, enhancedLesson.targetGradeLevel)
-          );
-          const svgResults = await Promise.all(svgPromises);
-          // Only attach optionSvgs if ALL 4 generated successfully
-          const allGenerated = svgResults.every(s => !!s);
-          if (allGenerated) {
-            return { ...q, imageId: validImageId, optionSvgs: svgResults };
-          }
-        } catch (svgErr) {
-          console.warn('Visual option SVG generation failed, using text-only options:', svgErr);
-        }
-      }
-
       return { ...q, imageId: validImageId };
-    }));
-
-    return questions;
+    });
   } catch (error) {
     console.error('Error generating enhanced questions:', error);
     return [];
   }
 }
 
-/**
- * Generate a compact SVG illustration for a single answer option label.
- * Returns the sanitized SVG string, or null on failure.
- * Uses a configurable timeout to avoid blocking quiz generation.
- */
-async function generateVisualOptionSVG(
-  optionText: string,
-  lessonTopic: string,
-  gradeLevel: number
-): Promise<string | null> {
-  const VISUAL_OPTION_TIMEOUT_MS = 15000;
-  try {
-    const timeoutPromise = new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error('Visual option SVG timeout')), VISUAL_OPTION_TIMEOUT_MS)
-    );
-    const svgPromise = askOpenRouter({
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert SVG illustrator for educational content. Output ONLY valid SVG markup — no markdown, no explanation, no code fences. The SVG must be a compact 200×200 illustration with viewBox="0 0 200 200", white background, and minimal text so it works as a visual answer option for a quiz.`
-        },
-        {
-          role: 'user',
-          content: `Create a simple 200×200 SVG illustration representing "${optionText}" in the context of a "${lessonTopic}" lesson for grade ${gradeLevel}. Output raw SVG only.`
-        }
-      ],
-      // Use the configured SVG model for consistency
-      model: process.env.OPENROUTER_SVG_MODEL || 'google/gemini-2.0-flash-001',
-      temperature: 0.4,
-      max_tokens: 1500,
-    }).then(r => validateAndSanitizeSVG(r.choices[0]?.message?.content ?? ''));
-
-    return await Promise.race([svgPromise, timeoutPromise]);
-  } catch {
-    return null;
-  }
-}

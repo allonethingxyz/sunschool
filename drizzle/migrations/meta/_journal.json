@@ -57,6 +57,13 @@
       "when": 1714577212746,
       "tag": "0006_schema_alignment",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1714577212747,
+      "tag": "0007_rewards_system",
+      "breakpoints": true
     }
   ]
 }

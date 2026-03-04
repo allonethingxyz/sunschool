@@ -1,4 +1,4 @@
-import { LearnerProfile, Lesson } from '@shared/schema';
+import { LearnerProfile, Lesson } from '../../shared/schema';
 
 // Common education subjects by grade level
 export const gradeSubjects: Record<number, string[]> = {

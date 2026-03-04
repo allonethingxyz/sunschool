@@ -1,7 +1,33 @@
-import DOMPurify from 'isomorphic-dompurify';
 import { askOpenRouter } from '../openrouter';
 import { OPENROUTER_SVG_MODEL, IMAGE_GENERATION_TIMEOUT } from '../config/env';
 import { SVG_PROMPTS } from '../prompts';
+
+/**
+ * Lightweight SVG sanitizer — removes dangerous tags, attributes, and external
+ * references.  This replaces isomorphic-dompurify (which pulls in jsdom →
+ * ESM-only @exodus/bytes, breaking CJS require() on Railway/Node 22).
+ *
+ * Safe here because the input is our own LLM-generated SVG, not arbitrary
+ * user HTML.
+ */
+function sanitizeSVG(raw: string): string {
+  // Remove forbidden tags entirely (including content)
+  const forbiddenTags = ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'link', 'meta'];
+  let svg = raw;
+  for (const tag of forbiddenTags) {
+    // Self-closing and paired variants
+    svg = svg.replace(new RegExp(`<${tag}\\b[^>]*\\/?>`, 'gi'), '');
+    svg = svg.replace(new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi'), '');
+  }
+
+  // Remove event-handler attributes (on*)
+  svg = svg.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+
+  // Remove javascript: and data: URIs in href/xlink:href/src attributes
+  svg = svg.replace(/(href|src)\s*=\s*["']?\s*(?:javascript|data):[^"'\s>]*/gi, '');
+
+  return svg;
+}
 
 function generateId(length: number = 10): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -48,16 +74,8 @@ export function validateAndSanitizeSVG(rawSvg: string): string | null {
     }
   }
 
-  // Sanitize with DOMPurify using SVG-specific config
-  const clean = DOMPurify.sanitize(svg, {
-    USE_PROFILES: { svg: true, svgFilters: true },
-    ADD_TAGS: ['svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon',
-               'text', 'tspan', 'g', 'defs', 'clipPath', 'use', 'marker',
-               'linearGradient', 'radialGradient', 'stop', 'ellipse'],
-    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input'],
-    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout',
-                  'onfocus', 'onblur', 'onsubmit', 'onreset'],
-  });
+  // Sanitize — strip dangerous tags / attributes
+  const clean = sanitizeSVG(svg);
 
   if (!clean || !clean.includes('<svg')) return null;
 

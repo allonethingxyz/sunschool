@@ -1,5 +1,8 @@
 providers = ["node"]
 
+[variables]
+NIXPACKS_SPA_CADDY = "false"
+
 [phases.setup]
 nixPkgs = ["nodejs_22"]
 

@@ -127,15 +127,12 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     setSelectedAnswers(newAnswers);
   };
 
-  // Use enhancedSpec questions for richer rendering (with imageId, optionSvgs, etc.)
-  // but always score against spec.questions since that's what's persisted for scoring
+  // Use enhancedSpec questions when available, fall back to spec.questions
   const displayQuestions: QuizQuestion[] = (() => {
     if (!lesson) return [];
     if (lesson.enhancedSpec?.questions?.length) return lesson.enhancedSpec.questions;
     return lesson.spec?.questions ?? [];
   })();
-
-  const lessonImages = lesson?.enhancedSpec?.images ?? [];
 
   const handleStartQuiz = () => setQuizStarted(true);
 
@@ -421,7 +418,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
                   selectedAnswer={selectedAnswers[index]}
                   showAnswers={true}
                   onSelectAnswer={() => {}}
-                  lessonImages={lessonImages}
+
                 />
               ))}
             </View>
@@ -450,7 +447,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
                   selectedAnswer={selectedAnswers[index]}
                   showAnswers={false}
                   onSelectAnswer={(answerIndex) => handleSelectAnswer(index, answerIndex)}
-                  lessonImages={lessonImages}
+
                 />
               </View>
             ))}

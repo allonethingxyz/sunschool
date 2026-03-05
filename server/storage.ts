@@ -90,8 +90,6 @@ export class DatabaseStorage implements IStorage {
   async getUserByUsername(username: string): Promise<User | undefined> {
     try {
       return await withRetry(async () => {
-        // Log the SQL query being executed for debugging
-        console.log(`Looking for user with username: ${username}`);
         // Use specific fields that exist in the database
         const result = await db
           .select({
@@ -211,7 +209,6 @@ export class DatabaseStorage implements IStorage {
         return [];
       }
 
-      console.log(`Querying for learners with parentId: ${parentIdNum} (original value: ${parentId})`);
       const result = await db.select().from(users).where(eq(users.parentId, parentIdNum));
       return Array.isArray(result) ? result.map(user => user as User) : [result as User];
     } catch (error) {
@@ -247,8 +244,6 @@ export class DatabaseStorage implements IStorage {
         console.error(`Invalid user ID: ${userId}`);
         return undefined;
       }
-
-      console.log(`Searching for learner profile with userId: ${userId} (type: ${typeof userId})`);
 
       // Use raw SQL via the pool to avoid type issues with ORM
       const result = await pool.query(
@@ -310,11 +305,9 @@ export class DatabaseStorage implements IStorage {
           createdAt: row.created_at
         };
 
-        console.log('Successfully retrieved learner profile:', completeProfile);
         return completeProfile;
       }
 
-      console.log(`No learner profile found for user ID: ${userId}`);
       return undefined;
     } catch (error) {
       console.error('Error in getLearnerProfile:', error);
@@ -339,8 +332,6 @@ export class DatabaseStorage implements IStorage {
 
       // Try again with just minimal fields if we encounter a column-related error
       if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
-        console.log('Falling back to minimal profile creation');
-
         // Create with only the essential fields
         const minimalProfile = {
           id: profile.id || crypto.randomUUID(),
@@ -367,8 +358,6 @@ export class DatabaseStorage implements IStorage {
         console.error(`Invalid user ID for update: ${userId}`);
         return undefined;
       }
-
-      console.log(`Updating learner profile for user ID: ${userIdNum}, data:`, data);
 
       // Use direct SQL for profile update to bypass type issues
       // First check if profile exists
@@ -426,7 +415,6 @@ export class DatabaseStorage implements IStorage {
 
       // If we have nothing to update, just return the existing profile
       if (setStatements.length === 0) {
-        console.log("No fields to update, returning existing profile");
         return this.getLearnerProfile(userIdNum);
       }
 
@@ -437,8 +425,6 @@ export class DatabaseStorage implements IStorage {
         WHERE user_id = $1
         RETURNING *
       `;
-
-      console.log('Executing update query:', updateQuery);
 
       const updateResult = await pool.query(updateQuery, queryParams);
 
@@ -495,7 +481,6 @@ export class DatabaseStorage implements IStorage {
           createdAt: updatedRow.created_at
         };
 
-        console.log('Profile updated successfully:', completeProfile);
         return completeProfile;
       }
 
@@ -529,7 +514,7 @@ export class DatabaseStorage implements IStorage {
           return lessonList[0] as Lesson;
         }
       } catch (e) {
-        console.log('Full lesson query failed, falling back to basic query:', e);
+        // Fall back to basic query below
       }
 
       // Fallback to a more specific query to avoid "column does not exist" errors
@@ -582,7 +567,7 @@ export class DatabaseStorage implements IStorage {
           return lessonList[0] as Lesson;
         }
       } catch (e) {
-        console.log('Full active lesson query failed, falling back to basic query:', e);
+        // Fall back to basic query below
       }
 
       // Fallback to a more specific query to avoid "column does not exist" errors
@@ -658,7 +643,7 @@ export class DatabaseStorage implements IStorage {
           .limit(limit);
         return Array.isArray(result) ? result.map(lesson => lesson as Lesson) : [result as Lesson];
       } catch (e) {
-        console.log('Full history query failed, falling back to basic query:', e);
+        // Fall back to basic query below
       }
 
       // Fallback to a more specific query to avoid "column does not exist" errors

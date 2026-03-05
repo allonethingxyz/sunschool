@@ -83,7 +83,6 @@ export function validateAndSanitizeSVG(rawSvg: string): string | null {
   // or empty groups. Require at least 2 visible drawing elements beyond a
   // simple background fill.
   if (!hasMeaningfulVisualContent(clean)) {
-    console.warn('SVG rejected: no meaningful visual content (truncated/empty generation)');
     return null;
   }
 

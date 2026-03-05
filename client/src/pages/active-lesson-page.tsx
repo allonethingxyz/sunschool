@@ -59,7 +59,6 @@ const ActiveLessonPage = () => {
   const handleStartQuiz = () => {
     if (lesson) {
       try {
-        console.log('Starting quiz for lesson ID:', lesson.id);
         setLocation(`/quiz/${lesson.id}`);
       } catch (err) {
         console.error('Error navigating to quiz:', err);

@@ -19,7 +19,6 @@ export function asyncHandler(fn: (req: Request, res: Response, next: NextFunctio
         
         // For auth endpoints, provide more specific error handling
         if (req.path.includes('/api/login') || req.path.includes('/api/register')) {
-          console.error('Authentication endpoint error:', req.path, error.message);
           res.status(500).json({
             error: 'Authentication service error',
             message: error.message || 'An unexpected error occurred'
@@ -89,13 +88,8 @@ export function generateToken(user: { id: string | number, role: string }): stri
     role: user.role
   };
   
-  // Log for debugging token generation
-  console.log('Generating token for user ID:', user.id, 'with role:', user.role);
-  console.log('Using JWT_SECRET:', JWT_SECRET.substring(0, 3) + '...' + JWT_SECRET.substring(JWT_SECRET.length - 3));
-  
   try {
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-    console.log('Token generated successfully, length:', token.length);
     return token;
   } catch (error) {
     console.error('Failed to generate token:', error);
@@ -109,46 +103,38 @@ export function verifyToken(token: string): JwtPayload {
 
 // Middleware
 export async function authenticateJwt(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  // Enhanced token extraction with logging for debugging
-  // We'll check all possible locations where a token might be present
   let token: string | undefined;
-  let tokenSource: string = 'none';
-  
-  // First try to get token from Authorization header (most common)
+
+  // Try Authorization header first (most common)
   const authHeader = req.headers.authorization;
   if (authHeader) {
     const parts = authHeader.split(' ');
     if (parts.length === 2 && parts[0] === 'Bearer') {
       token = parts[1];
-      tokenSource = 'auth_header';
     }
   }
-  
+
   // Check for custom header (for sunschool.xyz domain)
   if (!token && req.headers['x-sunschool-auth-token']) {
     token = req.headers['x-sunschool-auth-token'] as string;
-    tokenSource = 'sunschool_header';
   }
-  
-  // If no token in headers, check for token in query string (for API calls)
+
+  // Check for token in query string (for API calls)
   if (!token && req.query.token) {
     token = req.query.token as string;
-    tokenSource = 'query_string';
   }
-  
-  // If still no token, check if it's in cookies
+
+  // Check cookies
   if (!token && req.cookies && req.cookies.token) {
     token = req.cookies.token;
-    tokenSource = 'cookie';
   }
-  
-  // Special handling for sunschool.xyz domain, check for token in a special cookie
+
+  // Check for sunschool-specific cookie
   if (!token && req.cookies && req.cookies.sunschool_token) {
     token = req.cookies.sunschool_token;
-    tokenSource = 'sunschool_cookie';
   }
   
-  // Log more detailed information about the request
+  // Determine origin for CORS handling
   const origin = req.headers.origin || req.headers.referer || 'unknown';
   let isSunschool = false;
   try {
@@ -156,22 +142,13 @@ export async function authenticateJwt(req: AuthRequest, res: Response, next: Nex
     isSunschool = parsedOrigin.hostname === 'sunschool.xyz' || parsedOrigin.hostname.endsWith('.sunschool.xyz');
   } catch (_e) { /* ignore invalid origin URL */ }
   
-  // No token found in any location
   if (!token) {
-    console.log(`No auth token found in request to: ${req.method} ${req.path}`);
-    console.log('Headers:', JSON.stringify(req.headers));
-    console.log('Request origin:', origin, isSunschool ? '(sunschool domain)' : '');
     res.status(401).json({ error: 'No authorization token provided' });
     return;
   }
   
-  // Log token information for debugging (without exposing the token)
-  console.log(`Auth token found in ${tokenSource} for request to: ${req.method} ${req.path}`);
-  console.log(`Token length: ${token.length}, origin: ${origin}`);
-  
   // For sunschool.xyz domain, add CORS headers to ensure the response works
   if (isSunschool) {
-    console.log('Adding special CORS headers for sunschool.xyz domain');
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
@@ -181,15 +158,11 @@ export async function authenticateJwt(req: AuthRequest, res: Response, next: Nex
   // Validate and process the token
   try {
     const payload = verifyToken(token);
-    
-    // Log for debugging
-    console.log(`Token verified successfully for user ID: ${payload.userId}`);
-    
+
     // Load user from database
     const user = await storage.getUser(payload.userId);
     
     if (!user) {
-      console.log(`User ${payload.userId} from token not found in database`);
       res.status(401).json({ error: 'User not found' });
       return;
     }
@@ -199,10 +172,9 @@ export async function authenticateJwt(req: AuthRequest, res: Response, next: Nex
     next();
   } catch (error) {
     // Check if it's a token verification error
-    if (error instanceof jwt.JsonWebTokenError || 
-        error instanceof jwt.TokenExpiredError || 
+    if (error instanceof jwt.JsonWebTokenError ||
+        error instanceof jwt.TokenExpiredError ||
         error instanceof jwt.NotBeforeError) {
-      console.log(`Invalid token: ${error.message}`);
       res.status(401).json({ error: 'Invalid or expired token' });
       return;
     }

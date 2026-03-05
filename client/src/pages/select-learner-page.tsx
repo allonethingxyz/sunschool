@@ -21,7 +21,6 @@ export default function SelectLearnerPage() {
   const canCreateLearners = user?.role === 'PARENT' || user?.role === 'ADMIN';
 
   const handleSelectLearner = (learner: any) => {
-    console.log('Selecting learner:', learner.name);
     selectLearner(learner);
     // Navigate back to learner view after selection
     setLocation('/learner');

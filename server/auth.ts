@@ -40,18 +40,15 @@ export async function setupAuth(app: Express) {
     try {
       const { username, password } = req.body;
       
-      // Log detailed information about the login request for debugging
+      // Determine the request origin for CORS handling
       const origin = req.headers.origin || req.headers.referer || 'unknown';
       let isSunschool = false;
       try {
         const parsedOrigin = new URL(origin);
         isSunschool = parsedOrigin.hostname === 'sunschool.xyz' || parsedOrigin.hostname.endsWith('.sunschool.xyz');
       } catch (_e) { /* ignore invalid origin URL */ }
-      console.log(`Login attempt for username: ${username} from origin: ${origin}`);
-
       // For sunschool.xyz domain, add special CORS headers for authentication
       if (isSunschool) {
-        console.log('Adding special CORS headers for sunschool.xyz domain');
         res.header('Access-Control-Allow-Origin', origin);
         res.header('Access-Control-Allow-Credentials', 'true');
         res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
@@ -59,7 +56,6 @@ export async function setupAuth(app: Express) {
       }
       
       if (!username || !password) {
-        console.log('Missing login credentials');
         return res.status(400).json({ error: "Username and password are required" });
       }
       
@@ -67,7 +63,6 @@ export async function setupAuth(app: Express) {
       const user = await storage.getUserByUsername(username);
       
       if (!user) {
-        console.log(`User not found: ${username}`);
         return res.status(401).json({ error: "Invalid credentials" });
       }
       
@@ -75,19 +70,15 @@ export async function setupAuth(app: Express) {
       const isPasswordValid = user.password ? await comparePasswords(password, user.password) : false;
       
       if (!isPasswordValid) {
-        console.log(`Password mismatch for user: ${username}`);
         return res.status(401).json({ error: "Invalid credentials" });
       }
       
       // Generate JWT token
       const token = generateToken({ id: user.id, role: user.role });
-      console.log(`Generated token for user ${username}, token length: ${token.length}`);
       
       // Return user details and token
       const { password: _, ...userWithoutPassword } = user;
       
-      // Include domain information in the response for client-side handling
-      console.log(`Successful login for user: ${username} (${user.id})`);
       return res.json({
         token,
         user: userWithoutPassword,
@@ -96,7 +87,6 @@ export async function setupAuth(app: Express) {
     } catch (error) {
       console.error('Authentication endpoint error:', error);
       const errorMessage = (error instanceof Error) ? error.message : 'Unknown error';
-      console.error(`Authentication endpoint error: ${errorMessage}`);
       
       return res.status(500).json({ 
         error: 'An error occurred during authentication. Please try again.',
@@ -155,7 +145,6 @@ export async function setupAuth(app: Express) {
 
   // Enhanced user info endpoint with cross-domain support
   app.get("/api/user", authenticateJwt, asyncHandler(async (req: AuthRequest, res: Response) => {
-    // Log the request info for debugging
     const origin = req.headers.origin || req.headers.referer || 'unknown';
     let isSunschool = false;
     try {

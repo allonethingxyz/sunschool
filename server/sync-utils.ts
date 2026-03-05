@@ -17,8 +17,7 @@ export async function synchronizeToExternalDatabase(parentId: string, syncConfig
   try {
     // Connect to the target database
     await targetClient.connect();
-    console.log(`Connected to target database for sync: ${syncConfig.id}`);
-    
+
     // Start a transaction
     await targetClient.query('BEGIN');
     
@@ -95,30 +94,19 @@ export async function synchronizeToExternalDatabase(parentId: string, syncConfig
     
     // Commit the transaction
     await targetClient.query('COMMIT');
-    console.log(`Synchronization completed successfully for sync: ${syncConfig.id}`);
-    
+
     // Update the sync status to COMPLETED using the storage API
     try {
-      console.log(`Updating sync config with ID: ${syncConfig.id}, current status: ${syncConfig.syncStatus}`);
-      
-      // Use the storage API which provides better transaction handling
       const updatedConfig = await storage.updateSyncStatus(syncConfig.id, 'COMPLETED');
-      
-      if (updatedConfig) {
-        console.log(`Sync config updated successfully: ${updatedConfig.id}, new status: ${updatedConfig.syncStatus}`);
-      } else {
-        console.error(`Failed to update sync config: No config found with ID ${syncConfig.id}`);
-        
+
+      if (!updatedConfig) {
         // Retry using direct query as a backup approach
         const checkConfig = await db.query.dbSyncConfigs.findFirst({
           where: eq(dbSyncConfigs.id, syncConfig.id)
         });
-        
+
         if (checkConfig) {
-          console.log(`Sync config found in database before retry: ${checkConfig.id}, status: ${checkConfig.syncStatus}`);
-          
-          // Try direct update as a last resort
-          const updateResult = await db.update(dbSyncConfigs)
+          await db.update(dbSyncConfigs)
             .set({
               syncStatus: 'COMPLETED',
               lastSyncAt: new Date(),
@@ -126,17 +114,10 @@ export async function synchronizeToExternalDatabase(parentId: string, syncConfig
             })
             .where(eq(dbSyncConfigs.id, syncConfig.id))
             .returning();
-            
-          if (updateResult && updateResult.length > 0) {
-            console.log(`Sync config updated successfully with direct query: ${updateResult[0].id}`);
-          }
-        } else {
-          console.error(`⚠️ Sync config with ID ${syncConfig.id} not found in database during retry`);
         }
       }
     } catch (updateError) {
       console.error('Error updating sync status:', updateError);
-      // Don't throw here, as the sync itself was successful
     }
     
   } catch (error) {
@@ -149,30 +130,20 @@ export async function synchronizeToExternalDatabase(parentId: string, syncConfig
     
     // Update the sync status to FAILED using the storage API
     try {
-      console.log(`Updating sync config to FAILED with ID: ${syncConfig.id}, current status: ${syncConfig.syncStatus}`);
-      
-      // Use the storage API which provides better transaction handling
       const updatedConfig = await storage.updateSyncStatus(
-        syncConfig.id, 
-        'FAILED', 
+        syncConfig.id,
+        'FAILED',
         error.message || 'Synchronization failed'
       );
-      
-      if (updatedConfig) {
-        console.log(`Sync config updated to FAILED: ${updatedConfig.id}, new status: ${updatedConfig.syncStatus}`);
-      } else {
-        console.error(`Failed to update sync config to FAILED: No config found with ID ${syncConfig.id}`);
-        
+
+      if (!updatedConfig) {
         // Retry using direct query as a backup approach
         const checkConfig = await db.query.dbSyncConfigs.findFirst({
           where: eq(dbSyncConfigs.id, syncConfig.id)
         });
-        
+
         if (checkConfig) {
-          console.log(`Sync config found in database before failure retry: ${checkConfig.id}, status: ${checkConfig.syncStatus}`);
-          
-          // Try direct update as a last resort
-          const updateResult = await db.update(dbSyncConfigs)
+          await db.update(dbSyncConfigs)
             .set({
               syncStatus: 'FAILED',
               lastSyncAt: new Date(),
@@ -181,12 +152,6 @@ export async function synchronizeToExternalDatabase(parentId: string, syncConfig
             })
             .where(eq(dbSyncConfigs.id, syncConfig.id))
             .returning();
-            
-          if (updateResult && updateResult.length > 0) {
-            console.log(`Sync config updated to FAILED with direct query: ${updateResult[0].id}`);
-          }
-        } else {
-          console.error(`⚠️ Sync config with ID ${syncConfig.id} not found in database during failure retry`);
         }
       }
     } catch (updateError) {

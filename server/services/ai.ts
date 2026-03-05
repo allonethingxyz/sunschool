@@ -41,7 +41,7 @@ export const chat = async (options: any): Promise<BittensorResponse> => {
     } catch (error) {
       console.error('Bittensor chat failed:', error);
       if (BITTENSOR_FALLBACK_ENABLED) {
-        console.log('Falling back to OpenRouter for chat');
+
         return await chatOpenRouter(options);
       }
       throw error;
@@ -60,7 +60,7 @@ export const generateLessonContent = async (gradeLevel: number, topic: string) =
     } catch (error) {
       console.error('Bittensor lesson generation failed:', error);
       if (BITTENSOR_FALLBACK_ENABLED) {
-        console.log('Falling back to OpenRouter for lesson generation');
+
         return await generateLessonContentOpenRouter(gradeLevel, topic);
       }
       throw error;
@@ -79,7 +79,7 @@ export const generateQuizQuestions = async (gradeLevel: number, topic: string, q
     } catch (error) {
       console.error('Bittensor quiz generation failed:', error);
       if (BITTENSOR_FALLBACK_ENABLED) {
-        console.log('Falling back to OpenRouter for quiz generation');
+
         return await generateQuizQuestionsOpenRouter(gradeLevel, topic, questionCount);
       }
       throw error;
@@ -98,7 +98,7 @@ export const generateFeedback = async (quizQuestions: any[], userAnswers: number
     } catch (error) {
       console.error('Bittensor feedback generation failed:', error);
       if (BITTENSOR_FALLBACK_ENABLED) {
-        console.log('Falling back to OpenRouter for feedback generation');
+
         return await generateFeedbackOpenRouter(quizQuestions, userAnswers, score, gradeLevel);
       }
       throw error;
@@ -117,7 +117,7 @@ export const generateKnowledgeGraph = async (topic: string, gradeLevel: number) 
     } catch (error) {
       console.error('Bittensor knowledge graph generation failed:', error);
       if (BITTENSOR_FALLBACK_ENABLED) {
-        console.log('Falling back to OpenRouter for knowledge graph generation');
+
         return await generateKnowledgeGraphOpenRouter(topic, gradeLevel);
       }
       throw error;

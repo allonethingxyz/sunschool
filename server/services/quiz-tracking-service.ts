@@ -154,8 +154,6 @@ export async function storeQuizAnswers(
   for (const answer of answersToStore) {
     await storeQuizAnswer(answer);
   }
-
-  console.log(`✓ Stored ${answersToStore.length} quiz answers for learner ${learnerId}`);
 }
 
 /**

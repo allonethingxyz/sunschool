@@ -56,8 +56,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const init = async () => {
       try {
-        console.log('Starting FRESH auth initialization with stricter validation');
-
         // First, clear any potentially corrupted state to start fresh
         try {
           await setAuthToken(null);
@@ -66,8 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           // Remove any other cached data that might cause persistence issues
           await AsyncStorage.removeItem('LEARNER_APP_CACHE');
-
-          console.log('Cleared all potential auth data for fresh start');
         } catch (clearError) {
           console.error('Initial state cleanup error (continuing):', clearError);
         }
@@ -76,20 +72,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const token = await AsyncStorage.getItem('AUTH_TOKEN');
         const hasValidToken = !!token && token.length > 20;
 
-        console.log('Strict token check:', {
-          hasToken: !!token,
-          tokenLength: token ? token.length : 0,
-          seemsValid: hasValidToken
-        });
-
         // Only proceed with validation if we have what appears to be a valid token
         if (hasValidToken) {
           try {
-            console.log('Setting auth token for validation attempt');
             await setAuthToken(token); // Set the token in headers
 
             // Make a synchronous validation request that blocks initialization
-            console.log('Making validation request to /api/user');
             const response = await axiosInstance.get('/api/user', {
               timeout: 5000,  // Short timeout
               validateStatus: (status) => status === 200 // Only 200 is valid
@@ -98,16 +86,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Verify that the response contains a proper user object
             const userData = response.data;
             if (userData && userData.id && userData.role) {
-              console.log('Valid user authentication confirmed:', {
-                userId: userData.id,
-                role: userData.role,
-                name: userData.name
-              });
-
               // User is confirmed valid, update cache
               queryClient.setQueryData(["/api/user"], userData);
             } else {
-              console.error('User validation failed: Invalid user data in response', userData);
               // Clear everything since data is invalid
               await setAuthToken(null);
               await AsyncStorage.removeItem('AUTH_TOKEN');
@@ -115,7 +96,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               queryClient.setQueryData(["/api/user"], null);
             }
           } catch (validationError) {
-            console.error('Token validation request failed, clearing all auth state:', validationError);
             // Clear everything
             await setAuthToken(null);
             await AsyncStorage.removeItem('AUTH_TOKEN');
@@ -123,14 +103,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             queryClient.setQueryData(["/api/user"], null);
           }
         } else {
-          console.log('No valid token found, user is not authenticated');
           queryClient.setQueryData(["/api/user"], null);
         }
 
         // Initialization complete
         setInitializationComplete(true);
       } catch (error) {
-        console.error('Major error during auth initialization:', error);
+        console.error('Auth initialization error:', error);
         setInitError(error instanceof Error ? error : new Error('Unknown error during auth initialization'));
 
         // Clear all state on major error
@@ -167,7 +146,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     structuralSharing: (oldData, newData) => {
       // If new data doesn't look like a valid user, return null
       if (!newData || typeof newData !== 'object' || !('id' in newData) || !('role' in newData)) {
-        console.log('Auth query: Received invalid user data, treating as unauthenticated');
         return null;
       }
       return newData as SelectUser;
@@ -183,8 +161,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Only act when user transitions from authenticated to unauthenticated
     if (prevUser !== null && user === null) {
-      console.log('Session expired: user went from authenticated to null');
-
       // Clear app-specific localStorage items
       try {
         AsyncStorage.removeItem('selectedLearnerId');
@@ -205,27 +181,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData): Promise<LoginResponse> => {
-      console.log('Sending login request to /api/login:', {
-        username: credentials.username,
-        passwordLength: credentials.password ? credentials.password.length : 0
-      });
-
       try {
         const response = await axiosInstance.post('/api/login', credentials);
         const data = response.data;
 
         // Validate response format
         if (!data || !data.token || !data.user) {
-          console.error('Unexpected login response format:', data);
           throw new Error('Invalid username or password');
         }
-
-        console.log('Login response received:', {
-          hasToken: true,
-          tokenLength: data.token.length,
-          userId: data.user.id,
-          role: data.user.role
-        });
 
         return { token: data.token, user: data.user };
       } catch (err: any) {
@@ -254,19 +217,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: async (response: LoginResponse) => {
       try {
-        console.log('Processing login success:', {
-          hasToken: !!response.token,
-          tokenLength: response.token.length,
-          userId: response.user.id,
-          role: response.user.role
-        });
-
         if (!response.token) {
           throw new Error('No authentication token received');
         }
 
         await setAuthToken(response.token);
-        console.log('Auth token set successfully');
 
         const userData = response.user;
         if (!userData) {
@@ -290,8 +245,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     },
     onError: (error: Error) => {
-      console.error('Login mutation error:', error.message);
-
       toast({
         title: "Login failed",
         description: error.message,
@@ -308,28 +261,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const registerMutation = useMutation({
     mutationFn: async (userData: RegisterData): Promise<RegisterResponse> => {
-      console.log('Sending registration request to /api/register:', {
-        ...userData,
-        password: '***REDACTED***'
-      });
-
       try {
         const response = await axiosInstance.post('/api/register', userData);
         const data = response.data;
 
         // Validate response format
         if (!data || !data.token || !data.user) {
-          console.error('Unexpected registration response format:', data);
           throw new Error('Registration failed: unexpected server response');
         }
-
-        console.log('Registration response received:', {
-          hasToken: true,
-          tokenLength: data.token.length,
-          userId: data.user.id,
-          role: data.user.role,
-          wasPromotedToAdmin: data.wasPromotedToAdmin || false
-        });
 
         return {
           token: data.token,
@@ -355,13 +294,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: async (response: RegisterResponse) => {
       try {
-        console.log('Processing registration success:', {
-          hasToken: !!response.token,
-          tokenLength: response.token.length,
-          userId: response.user.id,
-          role: response.user.role
-        });
-
         if (!response.token || !response.user) {
           toast({
             title: "Registration failed",
@@ -373,7 +305,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Store the token
         await setAuthToken(response.token);
-        console.log('Auth token set successfully');
 
         // Update the user data in the query cache
         queryClient.setQueryData(["/api/user"], response.user);
@@ -400,8 +331,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     },
     onError: (error: Error) => {
-      console.error('Registration mutation error:', error.message);
-
       toast({
         title: "Registration failed",
         description: error.message,
@@ -414,17 +343,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     mutationFn: async () => {
       // Call the server logout endpoint
       try {
-        console.log('Starting logout process...');
         await axiosInstance.post('/api/logout');
-        console.log('Server logout successful');
       } catch (error) {
-        console.warn('Server logout request failed, continuing with client-side cleanup:', error);
         // Continue with client-side logout even if server call fails
       }
 
       // Thorough cleanup of all authentication state
       try {
-        console.log('Clearing all auth tokens and persisted data...');
         // Clear auth token from axios headers
         await setAuthToken(null);
 
@@ -436,8 +361,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Clear any other auth-related storage items
         await AsyncStorage.removeItem('LEARNER_APP_CACHE');
-
-        console.log('All auth data cleared successfully');
       } catch (cleanupError) {
         console.error('Error during auth cleanup:', cleanupError);
         throw cleanupError; // Re-throw to trigger the error handler
@@ -455,15 +378,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: "You have been logged out successfully",
       });
 
-      console.log('Logout complete, user state cleared');
-
       // Force page reload to ensure clean state if needed
       if (typeof window !== 'undefined') {
         window.location.href = '/auth';
       }
     },
     onError: (error: Error) => {
-      console.error("Logout error:", error);
       toast({
         title: "Logout Failed",
         description: error.message,
@@ -482,7 +402,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // If there was an initialization error, show a fallback UI
   if (initializationComplete && initError) {
-    console.error('Auth initialization error, showing fallback UI', initError);
     return (
       <div style={{
         padding: '20px',

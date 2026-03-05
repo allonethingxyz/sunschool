@@ -161,8 +161,6 @@ export async function generateEnhancedLesson(
       temperature: 0.7,
     });
     
-    console.log('Generated lesson structure from OpenRouter');
-    
     // Validate we have a response
     if (!structureResponse.choices || !structureResponse.choices[0]?.message?.content) {
       throw new Error('Empty response from OpenRouter for lesson structure');
@@ -234,7 +232,6 @@ export async function generateEnhancedLesson(
     if (withImages) {
       // Cap the number of images per lesson
       const cappedPrompts = allImagePrompts.slice(0, MAX_IMAGES_PER_LESSON);
-      console.log(`Generating ${cappedPrompts.length} images for the lesson (max ${MAX_IMAGES_PER_LESSON})...`);
 
       // Generate all images concurrently via the router
       const imagePromises = cappedPrompts.map(async (imagePrompt) => {
@@ -300,7 +297,6 @@ export async function generateEnhancedLesson(
 
       // 5. Generate a diagram related to the topic via the router
       try {
-        console.log('Generating a diagram for the lesson...');
         const diagramTypes = ['concept map', 'flowchart', 'comparison', 'cycle'];
         const randomDiagramType = diagramTypes[Math.floor(Math.random() * diagramTypes.length)];
 
@@ -337,17 +333,14 @@ export async function generateEnhancedLesson(
     
     // 6. Generate quiz questions for the lesson
     try {
-      console.log('Generating quiz questions for enhanced lesson...');
       const questions = await generateEnhancedQuestions(enhancedLesson, 3);
       if (questions.length > 0) {
         enhancedLesson.questions = questions;
-        console.log(`Generated ${questions.length} quiz questions`);
       }
     } catch (quizError) {
       console.error('Error generating quiz questions for enhanced lesson:', quizError);
     }
 
-    console.log('Enhanced lesson generation complete');
     return enhancedLesson;
   } catch (error) {
     console.error('Error generating enhanced lesson:', error);

@@ -7,11 +7,6 @@ const isNeonDb = env.DATABASE_URL.includes('neon.tech') ||
   env.DATABASE_URL.includes('neonhost');
 const isLocalDb = env.DATABASE_URL.includes('localhost') || env.DATABASE_URL.includes('127.0.0.1');
 
-console.log('Initializing database connection for environment:', process.env.NODE_ENV || 'development');
-console.log('Database connection string exists:', !!process.env.DATABASE_URL);
-console.log('Using Neon driver:', isNeonDb);
-console.log('Is local DB:', isLocalDb);
-
 let pool: any;
 let db: any;
 
@@ -111,7 +106,6 @@ export async function withRetry<T>(
         throw error;
       }
       const delay = initialDelay * Math.pow(2, retries);
-      console.log(`Retrying database operation in ${delay}ms. Attempt ${retries + 1}/${maxRetries}`);
       await new Promise(resolve => setTimeout(resolve, delay));
       retries++;
     }

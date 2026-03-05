@@ -56,22 +56,8 @@ export function registerRoutes(app: Express): Server {
 
   // Root-level registration handler
   app.post("/register", asyncHandler(async (req: Request, res: Response) => {
-    console.log("=================== REGISTRATION START ===================");
-    console.log("Registration request details:", {
-      url: req.url,
-      method: req.method,
-      headers: req.headers,
-      contentType: req.headers['content-type'],
-      acceptHeader: req.headers['accept']
-    });
-
-    // Log request body without password
-    const { password: _, ...safeBody } = req.body;
-    console.log("Request body:", safeBody);
-
     // Ensure proper headers
     res.setHeader('Content-Type', 'application/json');
-    console.log("Response headers set:", res.getHeaders());
 
     const { username, email, name, role, password, parentId } = req.body;
 
@@ -85,16 +71,11 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      console.log("Starting user registration process for:", username);
-
       // Check if username already exists with retry mechanism
-      console.log("Checking if username exists:", username);
       const existingUser = await withRetry(() => storage.getUserByUsername(username));
       if (existingUser) {
-        console.log("Username already exists:", username);
         return res.status(400).json({ error: "Username already exists" });
       }
-      console.log("Username is available");
 
       // Check if this is the first user being registered with retry mechanism
       const userCountResult = await withRetry(() => db.select({ count: count() }).from(users));
@@ -126,22 +107,8 @@ export function registerRoutes(app: Express): Server {
         user: userWithoutPassword
       };
 
-      // Log response before sending
-      console.log("Sending registration response:", {
-        status: 200,
-        contentType: 'application/json',
-        responseLength: JSON.stringify(response).length
-      });
-
-      console.log("Preparing successful registration response:", {
-        status: 200,
-        responseData: { ...response, token: 'REDACTED' }
-      });
-
       res.status(200)
          .json(response);
-
-      console.log("=================== REGISTRATION SUCCESS ===================");
     } catch (error) {
       console.error('Registration error:', {
         name: error.name,
@@ -168,8 +135,7 @@ export function registerRoutes(app: Express): Server {
         statusCode = 503;
       }
 
-      console.log("=================== REGISTRATION FAILED ===================");
-      res.status(statusCode).json({ 
+      res.status(statusCode).json({
         error: errorMessage, 
         details: process.env.NODE_ENV === 'development' ? error.message : undefined 
       });
@@ -178,19 +144,14 @@ export function registerRoutes(app: Express): Server {
 
   // Special API route to handle the root-level login/register/user for production deployment
   app.post("/login", asyncHandler(async (req: Request, res: Response) => {
-    console.log("Proxy: Forwarding login request to /api/login");
-
     try {
       const { username, password } = req.body;
       
-      // Log detailed information about the login request for debugging
       const origin = req.headers.origin || req.headers.referer || 'unknown';
       const isSunschool = origin.includes('sunschool.xyz');
-      console.log(`Root login attempt for username: ${username} from origin: ${origin}`);
-      
+
       // For sunschool.xyz domain, add special CORS headers for authentication
       if (isSunschool) {
-        console.log('Adding special CORS headers for sunschool.xyz domain (root login)');
         res.header('Access-Control-Allow-Origin', origin);
         res.header('Access-Control-Allow-Credentials', 'true');
         res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
@@ -198,7 +159,6 @@ export function registerRoutes(app: Express): Server {
       }
 
       if (!username || !password) {
-        console.log('Missing login credentials');
         return res.status(400).json({ error: "Username and password are required" });
       }
 
@@ -206,7 +166,6 @@ export function registerRoutes(app: Express): Server {
       const user = await storage.getUserByUsername(username);
 
       if (!user) {
-        console.log(`User not found: ${username}`);
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
@@ -214,21 +173,16 @@ export function registerRoutes(app: Express): Server {
       const isPasswordValid = user.password ? await comparePasswords(password, user.password) : false;
 
       if (!isPasswordValid) {
-        console.log(`Password mismatch for user: ${username}`);
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
       // Generate JWT token
-      console.log(`Generating token for user ID: ${user.id} with role: ${user.role}`);
       const token = generateToken({ id: ensureString(user.id), role: user.role });
-      console.log(`Using JWT_SECRET: ${process.env.JWT_SECRET?.substring(0, 3)}...${process.env.JWT_SECRET?.substring(process.env.JWT_SECRET.length - 3)}`);
-      console.log(`Token generated successfully, length: ${token.length}`);
 
       // Return user details and token
       const { password: _, ...userWithoutPassword } = user;
 
       // Include domain information in the response for client-side handling
-      console.log(`Successful login for user: ${username} (${user.id})`);
       return res.json({
         token,
         user: userWithoutPassword,
@@ -237,7 +191,6 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Authentication endpoint error:', error);
       const errorMessage = (error instanceof Error) ? error.message : 'Unknown error';
-      console.error(`Authentication endpoint error: ${errorMessage}`);
       
       return res.status(500).json({ 
         error: 'An error occurred during authentication. Please try again.',
@@ -247,16 +200,10 @@ export function registerRoutes(app: Express): Server {
   }));
 
   app.post("/logout", (req: Request, res: Response) => {
-    // Forward the request to the real API endpoint
-    console.log("Proxy: Forwarding logout request to /api/logout");
-    // Simply redirect to the API endpoint
     res.redirect(307, "/api/logout");
   });
 
   app.get("/user", (req: Request, res: Response) => {
-    // Forward the request to the real API endpoint
-    console.log("Proxy: Forwarding user request to /api/user");
-    // Simply redirect to the API endpoint
     res.redirect(307, "/api/user");
   });
 
@@ -269,32 +216,22 @@ export function registerRoutes(app: Express): Server {
   // Get learners for a parent (Parent only)
   app.get("/api/learners", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
     try {
-      console.log('GET /api/learners request received');
-      console.log('User:', req.user);
-      console.log('Query params:', req.query);
-
       let learners;
       if (req.user?.role === "ADMIN") {
         // For admin users, if parentId is provided, get learners for that parent
         // If no parentId is provided, get all learners with role=LEARNER
         if (req.query.parentId) {
-          console.log(`Admin getting learners for parent ID: ${req.query.parentId}`);
           const parentId = typeof req.query.parentId === 'string' ? req.query.parentId : String(req.query.parentId);
           learners = await storage.getUsersByParentId(parentId);
         } else {
-          // When no parentId is provided for admin, return all learners
-          console.log('Admin getting all learners');
           learners = await storage.getAllLearners();
         }
       } else if (req.user?.role === "PARENT") {
-        console.log(`Parent ${req.user.id} getting their learners`);
         learners = await storage.getUsersByParentId(req.user.id);
       } else {
-        console.log('Invalid request, user is not a parent or admin');
         res.status(400).json({ error: "Invalid request" });
       }
 
-      console.log(`Found ${learners.length} learners`);
       res.json(learners);
     } catch (error) {
       console.error('Error in GET /api/learners:', error);
@@ -337,8 +274,6 @@ export function registerRoutes(app: Express): Server {
           console.error("Error checking email existence:", emailCheckError);
           // Continue with the operation
         }
-      } else {
-        console.log("No email provided for learner - this is allowed");
       }
 
       // Set parent ID based on the user's role
@@ -358,7 +293,6 @@ export function registerRoutes(app: Express): Server {
         // use the admin as the parent (this is our fallback solution)
         else if (role === "LEARNER") {
           parentId = ensureString(req.user.id);
-          console.log(`Admin creating learner without parentId specified. Using admin (${req.user.id}) as parent.`);
         }
       } 
       // For any other scenario where a LEARNER is being created without a parent
@@ -387,9 +321,6 @@ export function registerRoutes(app: Express): Server {
       // Only add password for parent accounts, not for learners
       if (role !== "LEARNER" && req.body.password) {
         userObj.password = req.body.password;
-      } else if (role === "LEARNER") {
-        // For learners, password is not needed
-        console.log('Creating learner without password - passwords only required for parent accounts');
       }
 
       // Create the new user
@@ -440,8 +371,7 @@ export function registerRoutes(app: Express): Server {
           error: "This username is already taken. Please choose a different username."
         });
       } else if (error.code === '23502' && error.column === 'email') {
-        // Not-null constraint for email - we need to generate a temporary email
-        console.log('Email not-null constraint error - creating user with generated email');
+        // Not-null constraint for email - generate a temporary email
 
         // Create a random email for the user (temporary solution until migration is complete)
         const timestamp = Date.now();
@@ -560,8 +490,6 @@ export function registerRoutes(app: Express): Server {
             return res.status(404).json({ error: "User not found" });
           }
 
-          console.log(`Creating learner profile for user ${userId} with role ${user.role}`);
-
           // Create a default profile with grade level 5 and a generated ID
           profile = await storage.createLearnerProfile({
             id: crypto.randomUUID(), // Add a UUID for the ID field
@@ -606,14 +534,6 @@ export function registerRoutes(app: Express): Server {
       return res.status(400).json({ error: "No valid update data provided" });
     }
 
-    console.log(`Updating learner profile for userId: ${userId}`, {
-      gradeLevel, 
-      subjects: Array.isArray(subjects) ? `Array with ${subjects.length} items: ${JSON.stringify(subjects)}` : subjects,
-      recommendedSubjects: Array.isArray(recommendedSubjects) ? recommendedSubjects.length : 'undefined',
-      strugglingAreas: Array.isArray(strugglingAreas) ? strugglingAreas.length : 'undefined',
-      graph: graph ? 'provided' : 'undefined'
-    });
-
     // Check authorization for parents
     if (req.user?.role === "PARENT") {
       try {
@@ -639,8 +559,6 @@ export function registerRoutes(app: Express): Server {
       const checkQuery = `SELECT * FROM learner_profiles WHERE user_id = $1`;
       const checkResult = await pool.query(checkQuery, [userId]);
 
-      console.log(`Profile exists check: ${checkResult.rowCount > 0 ? 'Found profile' : 'No profile found'}`);
-
       // Process grade level if present
       let gradeLevelNum = undefined;
       if (gradeLevel !== undefined) {
@@ -657,8 +575,6 @@ export function registerRoutes(app: Express): Server {
 
       // If profile doesn't exist, create one with default values
       if (checkResult.rowCount === 0) {
-        console.log(`Creating learner profile for user ${userId} during update`);
-
         const newProfileId = crypto.randomUUID();
         const createQuery = `
           INSERT INTO learner_profiles (
@@ -686,7 +602,6 @@ export function registerRoutes(app: Express): Server {
         ]);
 
         if (insertResult.rowCount > 0) {
-          console.log(`Successfully created new learner profile with ID: ${newProfileId}`);
           // Convert database row to expected profile format
           return res.json({
             id: insertResult.rows[0].id,
@@ -712,7 +627,6 @@ export function registerRoutes(app: Express): Server {
 
       // If we get here, the profile exists - update it
       const existingProfile = checkResult.rows[0];
-      console.log(`Found existing profile: ${existingProfile.id}`);
 
       try {
         // Directly perform the update with all fields at once for simplicity and safety
@@ -823,25 +737,9 @@ export function registerRoutes(app: Express): Server {
           JSON.stringify(strugglingAreasValue)
         ];
 
-        console.log('Executing update query with parameters:', updateParams);
-        // Log the actual subjects value being sent to the database
-        console.log('Subjects being saved to database:', JSON.stringify(subjectsValue));
-
         const updateResult = await pool.query(updateQuery, updateParams);
 
         if (updateResult.rowCount > 0) {
-          console.log('Learner profile updated successfully');
-
-          // Log the subjects value returned from the database after update
-          let returnedSubjects;
-          try {
-            returnedSubjects = typeof updateResult.rows[0].subjects === 'string' ? 
-              JSON.parse(updateResult.rows[0].subjects) : updateResult.rows[0].subjects;
-            console.log('Subjects returned from database after update:', JSON.stringify(returnedSubjects));
-          } catch (e) {
-            console.error('Error parsing returned subjects:', e);
-          }
-
           // Convert database row to expected profile format
           const profile = updateResult.rows[0];
           return res.json({
@@ -957,8 +855,6 @@ export function registerRoutes(app: Express): Server {
         finalCategory = getSubjectCategory(finalSubject);
       }
 
-      console.log("Generating varied lesson on " + subject + ": " + category);
-
       let lessonSpec;
       let imagePaths = [];
 
@@ -1020,7 +916,6 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Fallback to basic lesson if enhanced fails or is disabled
-      console.log("AI enhanced lesson generation unavailable, using basic lesson");
 
       // Create a simple lesson without enhanced spec
       lessonSpec = {
@@ -1115,8 +1010,6 @@ export function registerRoutes(app: Express): Server {
 
   // Submit answer to a quiz question
   app.post("/api/lessons/:lessonId/answer", isAuthenticated, asyncHandler(async (req: AuthRequest, res) => {
-    console.log(`Quiz submission attempt for lesson ${req.params.lessonId} by user ${req.user?.id}`);
-
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1124,10 +1017,7 @@ export function registerRoutes(app: Express): Server {
     const lessonId = req.params.lessonId;
     const { answers, doubleOrLoss: doubleOrLossFlag } = req.body;
 
-    console.log(`Answers received:`, answers);
-
     if (!Array.isArray(answers)) {
-      console.log(`Invalid answers format: ${typeof answers}`);
       return res.status(400).json({ error: "Answers must be an array" });
     }
 
@@ -1182,7 +1072,6 @@ export function registerRoutes(app: Express): Server {
         answers,
         lesson.subject || 'General'
       );
-      console.log(`✓ Stored ${questions.length} quiz answers`);
     } catch (error) {
       console.error('Error storing quiz answers:', error);
       // Don't fail the request if storage fails
@@ -1201,7 +1090,6 @@ export function registerRoutes(app: Express): Server {
         lesson.subject || 'General',
         conceptsAndCorrectness
       );
-      console.log(`✓ Updated concept mastery for ${conceptsAndCorrectness.length} questions`);
     } catch (error) {
       console.error('Error updating concept mastery:', error);
       // Don't fail the request if mastery update fails
@@ -1238,17 +1126,14 @@ export function registerRoutes(app: Express): Server {
     const pointsPerCorrect = isDoubleOrLoss ? 2 : 1;
     const pointsAwarded = correctCount * pointsPerCorrect;
 
-    console.log(`Awarding ${pointsAwarded} points (doubleOrLoss=${isDoubleOrLoss}, correct=${correctCount}, wrong=${wrongCount})`);
-
     if (pointsAwarded > 0) {
-      const { newBalance } = await pointsService.awardPoints({
+      await pointsService.awardPoints({
         learnerId: req.user.id,
         amount: pointsAwarded,
         sourceType: "QUIZ_CORRECT",
         sourceId: lessonId,
         description: `Quiz ${score}%${isDoubleOrLoss ? ' [Double-or-Loss ×2]' : ''}`
       });
-      console.log(`Points awarded successfully, new balance: ${newBalance}`);
     }
 
     // Double-or-Loss deduction for wrong answers
@@ -1256,119 +1141,12 @@ export function registerRoutes(app: Express): Server {
       try {
         const { applyDoubleOrLossDeduction } = await import('./services/rewards-service');
         await applyDoubleOrLossDeduction(Number(learnerId), wrongCount);
-        console.log(`Double-or-loss: deducted ${wrongCount} points for wrong answers`);
       } catch (dolErr) {
         console.error('Double-or-loss deduction error:', dolErr);
       }
     }
 
     const newBalance = await pointsService.getBalance(req.user.id);
-
-    // DISABLED: Automatic lesson generation after quiz completion
-    // TODO: Re-enable once migrations are stable
-    /*
-    try {
-      console.log('Attempting to generate new lesson after quiz completion');
-      const learnerProfile = await storage.getLearnerProfile(req.user.id);
-      console.log(`Learner profile loaded:`, learnerProfile ? 'found' : 'not found');
-
-      if (learnerProfile) {
-        // Create a varied lesson even when AI is disabled
-        let lessonSpec;
-        let subject, category, difficulty;
-
-        // Get subjects from learner profile or use default subjects
-        const subjects = learnerProfile.subjects || ['Math', 'Science', 'History', 'Literature', 'Geography'];
-        const categories = {
-          'Math': ['Algebra', 'Geometry', 'Statistics', 'Fractions', 'Decimals'],
-          'Science': ['Biology', 'Chemistry', 'Physics', 'Astronomy', 'Ecology'],
-          'History': ['Ancient Civilizations', 'World War II', 'American History', 'Renaissance', 'Industrial Revolution'],
-          'Literature': ['Poetry', 'Fiction', 'Shakespeare', 'Mythology', 'Drama'],
-          'Geography': ['Continents', 'Countries', 'Climate', 'Landforms', 'Oceans']
-        };
-
-        // Select a random subject from the learner's preferred subjects
-        subject = subjects[Math.floor(Math.random() * subjects.length)];
-
-        // Select a random category from the chosen subject
-        const subjectCategories = categories[subject] || categories['Math'];
-        category = subjectCategories[Math.floor(Math.random() * subjectCategories.length)];
-
-        // Randomly choose difficulty
-        const difficulties = ['beginner', 'intermediate', 'advanced'];
-        difficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
-
-        // Check for previously completed lessons to avoid repetition
-        const previousLessons = await storage.getLearnerLessons(req.user.id);
-        const recentSubjects = previousLessons
-          .slice(0, 3)
-          .map(lesson => lesson.subject)
-          .filter(Boolean);
-
-        // Choose a different subject if possible
-        if (recentSubjects.includes(subject) && subjects.length > 1) {
-          const newSubjects = subjects.filter(s => !recentSubjects.includes(s));
-          if (newSubjects.length > 0) {
-            subject = newSubjects[Math.floor(Math.random() * newSubjects.length)];
-            const newCategories = categories[subject] || categories['Math'];
-            category = newCategories[Math.floor(Math.random() * newCategories.length)];
-          }
-        }
-
-        if (USE_AI) {
-          lessonSpec = await generateLesson(learnerProfile.gradeLevel, `${subject}: ${category}`);
-        } else {
-          // Generate varied lessons when AI is disabled
-          console.log("Generating varied lesson on " + subject + ": " + category);
-
-          // Create detailed, educational SVG images based on the subject
-          const svgImageData = getSubjectSVG(subject, category);
-          const sampleImage = {
-            id: crypto.randomUUID(),
-            description: "Educational illustration of " + category + " in " + subject,
-            alt: category + " educational illustration",
-            promptUsed: "Create an educational illustration about " + category + " in " + subject
-          };
-
-          // Create rich, educational content appropriate for the grade level
-          const lessonContent = generateLessonContent(subject, category, learnerProfile.gradeLevel);
-
-          // Generate age-appropriate quiz questions (non-AI version - no adaptive learning)
-          const quizQuestions = generateQuizQuestions(subject, category, learnerProfile.gradeLevel);
-
-          // Create the full lesson specification with rich content
-          lessonSpec = {
-            title: `${category} in ${subject}`,
-            content: lessonContent,
-            questions: quizQuestions,
-            images: [sampleImage]
-          };
-        }
-
-        // Create the new lesson with UUID and varied content
-        console.log(`Creating new lesson: subject=${subject}, category=${category}, difficulty=${difficulty}`);
-        await storage.createLesson({
-          id: crypto.randomUUID(),
-          learnerId: Number(req.user.id),
-          moduleId: "generated-" + Date.now(),
-          status: "ACTIVE",
-          subject,
-          category,
-          difficulty,
-          spec: lessonSpec,
-          imagePaths: [{
-            path: `/images/subjects/${subject.toLowerCase()}.svg`,
-            alt: `${category} educational image`,
-            description: `An illustration related to ${category}`
-          }]
-        });
-        console.log('New lesson created successfully');
-      }
-    } catch (error) {
-      console.error("Failed to generate a new lesson after quiz completion:", error);
-      // Don't fail the request if new lesson generation fails
-    }
-    */
 
     res.json({
       lesson: updatedLesson,

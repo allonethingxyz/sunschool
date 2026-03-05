@@ -41,17 +41,10 @@ const AuthPage = () => {
   const [, setLocation] = useLocation();
   useEffect(() => {
     if (user) {
-      console.log('Auth page: User is already authenticated', { 
-        userId: user.id,
-        userRole: user.role
-      });
-      
       try {
         if (user.role === 'LEARNER') {
-          console.log('Auth page: Redirecting authenticated learner to /learner');
           setLocation('/learner');
         } else {
-          console.log('Auth page: Redirecting authenticated user to dashboard');
           setLocation('/dashboard');
         }
       } catch (error) {
@@ -62,8 +55,6 @@ const AuthPage = () => {
           window.location.href = path;
         }
       }
-    } else {
-      console.log('Auth page: User is not authenticated, showing login/register form');
     }
   }, [user, setLocation]);
   

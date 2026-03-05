@@ -16,10 +16,7 @@ export default function ChangeLearnerSubjects() {
   // we need to extract the ID from the path manually
   const pathSegments = path.split('/');
   const learnerId = pathSegments[pathSegments.length - 1];
-  
-  console.log("Current path:", path);
-  console.log("Extracted learner ID:", learnerId);
-  
+
   // State for subject management
   const [subjects, setSubjects] = useState<string[]>([]);
   const [newSubject, setNewSubject] = useState<string>('');
@@ -32,9 +29,7 @@ export default function ChangeLearnerSubjects() {
     queryKey: ['/api/learner-profile', learnerId],
     queryFn: async () => {
       try {
-        console.log("Fetching profile data for learner ID:", learnerId);
         const response = await apiRequest('GET', `/api/learner-profile/${learnerId}`);
-        console.log("Profile data response:", response);
         return response.data;
       } catch (error) {
         console.error("Error fetching learner profile:", error);
@@ -50,7 +45,6 @@ export default function ChangeLearnerSubjects() {
   useEffect(() => {
     if (learnerProfile && Array.isArray(learnerProfile.subjects)) {
       setSubjects(learnerProfile.subjects);
-      console.log("Loaded subjects from profile:", learnerProfile.subjects);
     }
   }, [learnerProfile]);
   
@@ -74,21 +68,11 @@ export default function ChangeLearnerSubjects() {
     onSuccess: (data: any) => {
       setSaveStatus('success');
       setConfirmationMessage('Subjects updated successfully!');
-      
-      // Verify the update by comparing what we sent vs what's in the DB
-      console.log("Subjects sent to server:", subjects);
-      console.log("Subjects returned from server:", data.subjects);
-      
-      if (data.subjects && JSON.stringify(data.subjects) === JSON.stringify(subjects)) {
-        console.log("✅ Subjects successfully saved to database");
-      } else {
-        console.warn("⚠️ Subject validation mismatch:", {
-          clientSubjects: subjects,
-          serverSubjects: data.subjects || []
-        });
+
+      if (data.subjects && JSON.stringify(data.subjects) !== JSON.stringify(subjects)) {
         setErrorMessage('Warning: There may be a discrepancy between local and server data.');
       }
-      
+
       // Invalidate relevant queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/learner-profile'] });
       queryClient.invalidateQueries({ queryKey: ['/api/learners'] });
@@ -116,12 +100,7 @@ export default function ChangeLearnerSubjects() {
     
     // Update local state with the new subject
     const updatedSubjects = [...subjects, subjectToAdd];
-    
-    // Log for debugging
-    console.log("Adding subject:", subjectToAdd);
-    console.log("Previous subjects:", subjects);
-    console.log("Updated subjects:", updatedSubjects);
-    
+
     // Update state
     setSubjects(updatedSubjects);
     setNewSubject(''); // Clear input
@@ -143,34 +122,20 @@ export default function ChangeLearnerSubjects() {
       return;
     }
     
-    console.log("Saving subjects to server:", subjects);
-    
-    // Add timestamp to verify freshness of data when it returns
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] Starting save operation`);
-    
     try {
       // Save the subjects to the database
       await updateSubjectsMutation.mutateAsync(subjects);
-      
+
       // After saving, fetch the profile again to verify subjects were saved
       const response = await apiRequest('GET', `/api/learner-profile/${learnerId}`);
       const refreshedProfile = response.data;
-      
-      console.log(`[${timestamp}] Verification - subjects in database:`, refreshedProfile.subjects);
-      
+
       // Deep comparison of the arrays
       const sortedOriginal = [...subjects].sort();
       const sortedFromDB = [...(refreshedProfile.subjects || [])].sort();
       const arraysMatch = JSON.stringify(sortedOriginal) === JSON.stringify(sortedFromDB);
-      
-      if (arraysMatch) {
-        console.log("✅ Database verification passed - subjects successfully saved and retrieved");
-      } else {
-        console.warn("⚠️ Database verification failed - subject lists don't match:", {
-          localSubjects: sortedOriginal,
-          databaseSubjects: sortedFromDB
-        });
+
+      if (!arraysMatch) {
         setErrorMessage('Warning: Database verification failed. Some subjects may not have been saved correctly.');
       }
     } catch (error) {

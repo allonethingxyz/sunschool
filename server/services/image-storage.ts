@@ -8,7 +8,6 @@ const IMAGES_DIR = path.join(process.cwd(), 'public', 'images');
 function ensureImageDirExists() {
   if (!fs.existsSync(IMAGES_DIR)) {
     fs.mkdirSync(IMAGES_DIR, { recursive: true });
-    console.log(`Created images directory at ${IMAGES_DIR}`);
   }
 }
 

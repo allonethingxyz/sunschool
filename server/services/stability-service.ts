@@ -97,8 +97,6 @@ export async function generateEducationalImage(
       style_preset: mergedOptions.stylePreset,
     };
 
-    console.log(`Generating image with prompt: ${enhancedPrompt}`);
-    
     const response = await axios.post(url, body, { headers });
     
     if (response.data && response.data.artifacts && response.data.artifacts.length > 0) {
@@ -115,7 +113,6 @@ export async function generateEducationalImage(
     return null;
   } catch (error) {
     console.error('Error generating image with Stability AI:', error.message);
-    console.error('Full error details:', error);
     return null;
   }
 }

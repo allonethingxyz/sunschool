@@ -94,9 +94,7 @@ const LearnerHome = () => {
     queryKey: ['/api/lessons/active', selectedLearner?.id],
     queryFn: async () => {
       try {
-        console.log(`Fetching active lesson for learner ${selectedLearner?.id}...`);
         const res = await apiRequest('GET', `/api/lessons/active?learnerId=${selectedLearner?.id}`);
-        console.log('Active lesson response:', res);
         return res.data;
       } catch (err) {
         console.error('Error fetching active lesson:', err);
@@ -115,9 +113,7 @@ const LearnerHome = () => {
     queryKey: [`/api/learner-profile/${selectedLearner?.id}`],
     queryFn: async () => {
       try {
-        console.log(`Fetching learner profile for learner ${selectedLearner?.id}...`);
         const res = await apiRequest('GET', `/api/learner-profile/${selectedLearner?.id}`);
-        console.log('Learner profile response:', res);
         return res.data;
       } catch (err) {
         console.error('Error fetching learner profile:', err);
@@ -130,11 +126,9 @@ const LearnerHome = () => {
   // Generate a new lesson
     const generateLessonMutation = useMutation({
     mutationFn: (data: { learnerId: number, topic: string, gradeLevel: number, subject: string, category: string, difficulty: 'beginner' | 'intermediate' | 'advanced' }) => {
-      console.log('Generating new lesson with data:', data);
       return apiRequest('POST', '/api/lessons/create', data).then(res => res.data);
     },
-    onSuccess: (data) => {
-      console.log('Successfully generated new lesson:', data);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/lessons/active', selectedLearner?.id] });
     },
     onError: (error) => {

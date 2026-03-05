@@ -56,8 +56,6 @@ export async function generateEducationalImage(
       body.quality = options.quality;
     }
 
-    console.log(`[OpenRouter Image] Generating with model ${OPENROUTER_IMAGE_MODEL}: ${enhancedPrompt.substring(0, 80)}...`);
-
     const response = await axios.post(OPENROUTER_IMAGE_URL, body, {
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,

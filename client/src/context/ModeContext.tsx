@@ -76,7 +76,6 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setPendingNavigation(null);
 
       try {
-        console.log('Navigating to:', target);
         setLocation(target);
       } catch (error) {
         console.error('Navigation error:', error);
@@ -175,8 +174,6 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    console.log('Selecting learner:', learner.name, learner.id);
-
     // Enter switching state
     setIsSwitching(true);
 
@@ -193,7 +190,6 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (typeof window !== 'undefined' && learner.id !== undefined) {
       window.localStorage.setItem('selectedLearnerId', String(learner.id));
       window.localStorage.setItem('preferredMode', 'LEARNER');
-      console.log('Saved learner ID and mode to localStorage:', learner.id);
     }
 
     // Switch to LEARNER mode and schedule navigation via state
@@ -242,10 +238,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const toggleMode = useCallback(() => {
-    console.log('Toggle mode called', { currentMode: mode, canToggle: canToggleMode() });
-
     if (!canToggleMode()) {
-      console.log('Cannot toggle mode - conditions not met');
       return;
     }
 
@@ -255,7 +248,6 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'You have unsaved changes. Are you sure you want to switch modes? Your changes will be lost.'
       );
       if (!confirmed) {
-        console.log('Mode toggle cancelled - user has unsaved changes');
         return;
       }
       // User confirmed, clear the dirty forms registry
@@ -270,7 +262,6 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Auto-select the first learner if none is selected
         const firstLearner = availableLearners[0];
         if (firstLearner && typeof firstLearner.id !== 'undefined') {
-          console.log('Auto-selecting first learner for mode switch:', firstLearner.name);
           selectLearner(firstLearner);
           return; // selectLearner handles mode switch and navigation
         } else {
@@ -278,13 +269,10 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
       } else if (!selectedLearner && (!availableLearners || availableLearners.length === 0)) {
-        console.log('No learners available - directing to learners management page');
         setPendingNavigation('/learners');
         return;
       }
     }
-
-    console.log('Toggling mode:', mode, '->', newMode);
 
     // Update mode state; localStorage sync handled by useEffect
     setMode(newMode);

@@ -139,8 +139,7 @@ const LearnersPage: React.FC = () => {
       apiRequest('PUT', `/api/learner-profile/${userId}`, {
         graph
       }).then(res => res.data),
-    onSuccess: (data) => {
-      console.log('Graph updated successfully:', data);
+    onSuccess: () => {
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/learner-profile'] });
       queryClient.invalidateQueries({ queryKey: ['/api/learners'] });
@@ -194,9 +193,6 @@ const LearnersPage: React.FC = () => {
       return;
     }
     
-    // Log the subjects before sending to server
-    console.log("Subjects being sent to server:", subjects);
-    
     // Make sure all subjects are correctly included
     updateSubjectsMutation.mutate({
       userId: currentEditLearner.id,
@@ -204,21 +200,10 @@ const LearnersPage: React.FC = () => {
       recommendedSubjects,
       strugglingAreas
     }, {
-      onSuccess: (data) => {
+      onSuccess: () => {
         // Add successful update confirmation
         alert("Subjects updated successfully!");
-        
-        // Verify the update by comparing updated values with what's in the database
-        const updatedSubjects = data.subjects;
-        if (JSON.stringify(updatedSubjects) === JSON.stringify(subjects)) {
-          console.log("Subjects successfully verified in database:", updatedSubjects);
-        } else {
-          console.warn("Subjects validation mismatch:", {
-            clientSubjects: subjects,
-            serverSubjects: updatedSubjects
-          });
-        }
-        
+
         // Close modal and update state as before
         queryClient.invalidateQueries({ queryKey: ['/api/learner-profile'] });
         queryClient.invalidateQueries({ queryKey: ['/api/learners'] });

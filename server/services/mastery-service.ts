@@ -269,22 +269,7 @@ export async function bulkUpdateMasteryFromAnswers(
   subject: string,
   conceptsAndCorrectness: Array<{ concepts: string[]; isCorrect: boolean }>
 ): Promise<void> {
-  console.log(`\n=== Updating Mastery for Learner ${learnerId} ===`);
-  console.log(`Subject: ${subject}`);
-  console.log(`Questions: ${conceptsAndCorrectness.length}`);
-
   for (const { concepts, isCorrect } of conceptsAndCorrectness) {
     await updateMasteryFromQuiz(learnerId, subject, concepts, isCorrect);
-  }
-
-  // Log summary
-  const weakConcepts = await getConceptsNeedingReinforcement(learnerId, subject);
-  if (weakConcepts.length > 0) {
-    console.log(`\n⚠️  Concepts needing reinforcement:`);
-    weakConcepts.forEach(c => {
-      console.log(`  - ${c.conceptName}: ${(c.masteryLevel * 100).toFixed(0)}% (${c.correctCount}/${c.totalCount})`);
-    });
-  } else {
-    console.log(`✓ All concepts mastered!`);
   }
 }

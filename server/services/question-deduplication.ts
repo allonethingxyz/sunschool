@@ -49,8 +49,6 @@ export async function storeQuestionHashes(
     const questionHash = hashQuestion(question.text);
     await storeQuestionHash(learnerId, topic, questionHash);
   }
-
-  console.log(`✓ Stored ${questions.length} question hashes for learner ${learnerId}, topic: ${topic}`);
 }
 
 /**
@@ -164,7 +162,6 @@ export async function cleanupOldHistory(daysToKeep: number = 90): Promise<number
     `);
 
     const deletedCount = (result as any).rowCount || 0;
-    console.log(`✓ Cleaned up ${deletedCount} old question history records`);
     return deletedCount;
   } catch (error) {
     console.error('Error cleaning up question history:', error);

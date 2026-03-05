@@ -25,12 +25,10 @@ async function runMigrations() {
   const isNeon = dbUrl.includes('neon.tech') || dbUrl.includes('neonhost');
 
   if (isLocal) {
-    console.log('Local database detected — skipping auto-migration (use psql directly)');
     return;
   }
 
   try {
-    console.log('Running database migrations...');
     const migrationsFolder = path.resolve('drizzle', 'migrations');
 
     if (isNeon) {
@@ -54,16 +52,13 @@ async function runMigrations() {
       await pgPool.end();
     }
 
-    console.log('✓ Database migrations applied successfully!');
   } catch (error) {
     console.error('Error applying migrations:', error);
   }
 }
 
 // Run migrations before starting server
-runMigrations().then(() => {
-  console.log('Migration check complete, starting server...');
-}).catch((err) => {
+runMigrations().catch((err) => {
   console.error('Migration check failed:', err);
 });
 
@@ -87,9 +82,6 @@ app.use(cors({
     if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('replit.dev')) {
       callback(null, true);
     } else {
-      // Log the request origin for debugging
-      console.log(`CORS request from origin: ${origin}`);
-      // Still allow it for now during development
       callback(null, true);
     }
   },
@@ -109,8 +101,6 @@ if (process.env.NODE_ENV === 'production') {
   clientDistPath = path.join(process.cwd(), "client/dist");
 }
 
-console.log(`Client dist path: ${clientDistPath}`);
-
 // Serve static files from the client dist folder
 app.use(express.static(clientDistPath));
 
@@ -120,13 +110,10 @@ const server = registerRoutes(app);
 // Serve React app for all other routes - this must come after API routes
 app.use((req, res) => {
   const indexPath = path.join(clientDistPath, "index.html");
-  console.log(`Serving index from: ${indexPath}`);
   res.sendFile(indexPath);
 });
 
 // Start server
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
-  // Signal that server is ready for connections
-  console.log(`Server ready to accept connections on port ${PORT}`);
 });

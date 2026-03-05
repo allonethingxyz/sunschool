@@ -46,7 +46,6 @@ export async function generateImage(
         description: result.description,
       };
     }
-    console.log('[ImageRouter] OpenRouter image generation failed, trying fallback...');
   }
 
   // Try SVG LLM generation
@@ -61,7 +60,6 @@ export async function generateImage(
         description: svgResult.description,
       };
     }
-    console.log('[ImageRouter] SVG LLM generation failed, trying fallback...');
   }
 
   // Try Stability AI fallback
@@ -75,7 +73,6 @@ export async function generateImage(
         description: stabilityResult.description,
       };
     }
-    console.log('[ImageRouter] Stability AI fallback also failed');
   }
 
   // Final fallback: rich programmatic SVG illustration
@@ -83,7 +80,6 @@ export async function generateImage(
   const programmatic = getProgrammaticSVG(topic, description, options.subject);
   if (programmatic.svgData) {
     const id = Math.random().toString(36).substring(2, 12);
-    console.log('[ImageRouter] Using programmatic SVG illustration as final fallback');
     return {
       id,
       svgData: programmatic.svgData,
@@ -118,7 +114,6 @@ export async function generateDiagram(
         type: svgResult.type,
       };
     }
-    console.log('[ImageRouter] SVG LLM diagram generation failed, trying fallback...');
   }
 
   // Fallback to subject-based programmatic SVG

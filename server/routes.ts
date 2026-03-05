@@ -1126,27 +1126,28 @@ export function registerRoutes(app: Express): Server {
     const pointsPerCorrect = isDoubleOrLoss ? 2 : 1;
     const pointsAwarded = correctCount * pointsPerCorrect;
 
-    if (pointsAwarded > 0) {
-      await pointsService.awardPoints({
-        learnerId: req.user.id,
-        amount: pointsAwarded,
-        sourceType: "QUIZ_CORRECT",
-        sourceId: lessonId,
-        description: `Quiz ${score}%${isDoubleOrLoss ? ' [Double-or-Loss ×2]' : ''}`
-      });
-    }
+    let newBalance = 0;
+    try {
+      if (pointsAwarded > 0) {
+        await pointsService.awardPoints({
+          learnerId: req.user.id,
+          amount: pointsAwarded,
+          sourceType: "QUIZ_CORRECT",
+          sourceId: lessonId,
+          description: `Quiz ${score}%${isDoubleOrLoss ? ' [Double-or-Loss ×2]' : ''}`
+        });
+      }
 
-    // Double-or-Loss deduction for wrong answers
-    if (isDoubleOrLoss && wrongCount > 0) {
-      try {
+      // Double-or-Loss deduction for wrong answers
+      if (isDoubleOrLoss && wrongCount > 0) {
         const { applyDoubleOrLossDeduction } = await import('./services/rewards-service');
         await applyDoubleOrLossDeduction(Number(learnerId), wrongCount);
-      } catch (dolErr) {
-        console.error('Double-or-loss deduction error:', dolErr);
       }
-    }
 
-    const newBalance = await pointsService.getBalance(req.user.id);
+      newBalance = await pointsService.getBalance(req.user.id);
+    } catch (pointsErr) {
+      console.error('Points/rewards error (quiz still succeeds):', pointsErr);
+    }
 
     res.json({
       lesson: updatedLesson,

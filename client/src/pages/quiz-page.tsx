@@ -89,6 +89,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     queryKey: ['/api/rewards', learnerId],
     queryFn: () => apiRequest('GET', `/api/rewards?learnerId=${learnerId}`).then(r => r.data),
     enabled: !!learnerId,
+    retry: false,
   });
 
   // Submit answers mutation
@@ -362,14 +363,12 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
 
               {/* Points summary */}
               <View style={[styles.pointsSummary, { backgroundColor: theme.colors.background }]}>
-                {quizScore.pointsAwarded > 0 && (
-                  <View style={styles.pointsRow}>
-                    <Text style={styles.pointsEmoji}>⭐</Text>
-                    <Text style={[styles.pointsLabel, { color: theme.colors.textPrimary }]}>
-                      +{quizScore.pointsAwarded} pts earned{quizScore.doubleOrLoss ? ' (×2!)' : ''}
-                    </Text>
-                  </View>
-                )}
+                <View style={styles.pointsRow}>
+                  <Text style={styles.pointsEmoji}>⭐</Text>
+                  <Text style={[styles.pointsLabel, { color: theme.colors.textPrimary }]}>
+                    +{quizScore.pointsAwarded ?? 0} pts earned{quizScore.doubleOrLoss ? ' (×2!)' : ''}
+                  </Text>
+                </View>
                 {quizScore.pointsDeducted > 0 && (
                   <View style={styles.pointsRow}>
                     <Text style={styles.pointsEmoji}>⚡</Text>
@@ -384,7 +383,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
                     Balance: {quizScore.newBalance} pts
                   </Text>
                 </View>
-                {rewardGoals.length > 0 && quizScore.pointsAwarded > 0 && (
+                {rewardGoals.length > 0 && (
                   <TouchableOpacity style={[styles.goToGoalsBtn, { borderColor: theme.colors.primary }]}
                     onPress={() => setShowDelegation(true)}>
                     <Text style={[styles.goToGoalsBtnText, { color: theme.colors.primary }]}>

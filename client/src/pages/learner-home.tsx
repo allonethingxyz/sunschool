@@ -275,10 +275,33 @@ const LearnerHome = () => {
               </View>
 
               {activeLesson ? (
-                <LessonCard
-                  lesson={activeLesson}
-                  onPress={handleViewLesson}
-                />
+                <>
+                  <LessonCard
+                    lesson={activeLesson}
+                    onPress={handleViewLesson}
+                  />
+                  <View style={styles.newLessonActions}>
+                    <TouchableOpacity
+                      style={styles.selectSubjectButton}
+                      onPress={handleOpenSubjectSelector}
+                    >
+                      <Text style={styles.selectSubjectButtonText}>
+                        Change Subject
+                      </Text>
+                      <Book size={16} color={colors.primary} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.generateButton}
+                      onPress={() => handleGenerateLesson()}
+                    >
+                      <Text style={styles.generateButtonText}>
+                        New Lesson
+                      </Text>
+                      <Zap size={16} color={colors.onPrimary} />
+                    </TouchableOpacity>
+                  </View>
+                </>
               ) : (
                 <View style={styles.emptyState}>
                   <Book size={48} color={colors.primaryLight} />
@@ -374,6 +397,13 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 8,
+  },
+  newLessonActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 12,
   },
   emptyStateActions: {
     flexDirection: 'row',

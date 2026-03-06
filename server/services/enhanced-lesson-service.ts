@@ -3,6 +3,7 @@ import { generateImage, generateDiagram, MAX_IMAGES_PER_LESSON } from './image-g
 import { EnhancedLessonSpec, LessonSection, LessonImage, LessonDiagram } from '../../shared/schema';
 import { saveBase64Image } from './image-storage';
 import { generateEducationalSVG } from './svg-llm-service';
+import { LESSON_PROMPTS, IMAGE_PROMPTS, getReadingLevelInstructions, getMathematicalNotationRules } from '../prompts';
 
 // Create a simple ID generator since nanoid is causing ESM issues
 function generateId(length: number = 10): string {
@@ -88,42 +89,125 @@ function mapSectionType(type: string): LessonSection['type'] {
 }
 
 /**
- * Base lesson prompt for OpenRouter
+ * Get grade-appropriate word limits for each section
  */
-const baseEnhancedLessonPrompt = `Create an educational lesson for a grade school student. 
-The lesson should be rich in educational content, engaging, and appropriate for the grade level specified.
+function getWordLimits(gradeLevel: number): { total: number; introduction: number; key_concepts: number; examples: number; practice: number; summary: number; sentenceMax: number } {
+  if (gradeLevel <= 2) return { total: 75, introduction: 15, key_concepts: 20, examples: 20, practice: 15, summary: 5, sentenceMax: 5 };
+  if (gradeLevel <= 4) return { total: 200, introduction: 30, key_concepts: 70, examples: 50, practice: 35, summary: 15, sentenceMax: 8 };
+  if (gradeLevel <= 6) return { total: 400, introduction: 60, key_concepts: 160, examples: 100, practice: 60, summary: 20, sentenceMax: 12 };
+  if (gradeLevel <= 8) return { total: 700, introduction: 100, key_concepts: 280, examples: 170, practice: 100, summary: 50, sentenceMax: 18 };
+  return { total: 1200, introduction: 150, key_concepts: 500, examples: 300, practice: 150, summary: 100, sentenceMax: 25 };
+}
 
-Follow these requirements:
-1. The content should be factually accurate and educational
-2. The writing should be clear, concise, and engaging for the target age group
-3. Structure the content in sections with clear headings
-4. Include opportunities for visual elements (you don't need to create the visuals)
-5. Suggest 3-4 places where images would enhance understanding
-6. Include a brief summary at the beginning
-7. List key vocabulary terms or concepts
-8. Suggest 2-3 related topics that build on this knowledge
-9. The content should take approximately 10-15 minutes to read
+/**
+ * Build a grade-appropriate lesson prompt that integrates the grade-specific prompt system
+ */
+function buildEnhancedLessonPrompt(gradeLevel: number, topic: string, subject?: string): string {
+  const limits = getWordLimits(gradeLevel);
+  const readingLevel = getReadingLevelInstructions(gradeLevel);
+  const mathRules = getMathematicalNotationRules(gradeLevel);
+  const gradePrompt = LESSON_PROMPTS.ENHANCED_LESSON(gradeLevel, topic);
 
-Please format your response as a JSON object with the following structure:
+  return `You are creating an educational lesson for a grade ${gradeLevel} student about "${topic}"${subject ? ` (subject: ${subject})` : ''}.
+
+${gradePrompt}
+
+${readingLevel}
+
+${mathRules}
+
+=== CRITICAL RULES ===
+
+1. NEVER REFERENCE IMAGES IN TEXT
+   The lesson text must stand completely on its own. Images are generated separately and placed by the app.
+   BAD: "Look at the picture below to see fractions."
+   BAD: "As shown in the image above..."
+   BAD: "The diagram on the right shows..."
+   GOOD: "A fraction is a part of a whole. When you cut a pizza into 4 equal slices, each slice is 1/4."
+   GOOD: "Think about cutting a pie into equal pieces."
+
+2. SCOPE DISCIPLINE
+   Only promise content that is actually delivered in the lesson. The summary must only mention topics covered in the sections.
+   BAD summary: "We'll learn adding, subtracting, and multiplying fractions" (then only covering what fractions are)
+   GOOD summary: "We'll learn what fractions are and how to read them."
+
+3. CONSISTENT VISUAL METAPHOR
+   Pick ONE concrete metaphor (e.g., pizza slices for fractions) and use it consistently throughout all sections. Do not switch between pizza, chocolate bars, water, and pie in the same lesson.
+
+4. SECTION ORDERING (mandatory)
+   Sections MUST follow this exact progression from concrete to abstract:
+   - introduction: Hook + connect to what students already know
+   - key_concepts: Core ideas with definitions, using the chosen metaphor
+   - examples: Worked examples showing the concept in action
+   - practice: Student activities or problems to try
+   - summary: Brief recap of ONLY what was actually covered
+
+5. FORMATTING
+   - Short paragraphs: 2-3 sentences maximum per paragraph
+   - Use **bold** for vocabulary terms when first introduced
+   - Use bullet points for lists of items or steps
+   - Maximum ${limits.sentenceMax} words per sentence
+   - Maximum ${limits.total} words total across all sections
+
+6. WORD LIMITS PER SECTION
+   - introduction: ${limits.introduction} words max
+   - key_concepts: ${limits.key_concepts} words max
+   - examples: ${limits.examples} words max
+   - practice: ${limits.practice} words max
+   - summary: ${limits.summary} words max
+
+7. IMAGE DESCRIPTIONS
+   Each section's imageDescription must be a specific, concrete visual prompt — NOT a generic label.
+   BAD: "Main illustration for fractions"
+   BAD: "Image showing the concept"
+   GOOD: "A circular pizza cut into 4 equal slices with 1 slice pulled away, on a white background. No text or numbers overlaid on the image."
+   GOOD: "Three identical rectangular chocolate bars, each divided into different numbers of equal pieces (2, 3, and 4 pieces), on a white background. No text or numbers overlaid on the image."
+   Every imageDescription MUST end with "No text or numbers overlaid on the image."
+
+=== OUTPUT FORMAT ===
+
+Respond with ONLY valid JSON — no markdown, no code fences, no explanations.
 
 {
-  "title": "Main title of the lesson",
-  "subtitle": "Optional subtitle or tagline",
-  "summary": "A brief 2-3 sentence summary of what will be learned",
-  "targetGradeLevel": 5,
+  "title": "Lesson title",
+  "subtitle": "Short tagline",
+  "summary": "2-3 sentence summary of ONLY what this lesson actually covers",
+  "targetGradeLevel": ${gradeLevel},
   "difficultyLevel": "Beginner/Intermediate/Advanced",
-  "estimatedDuration": 15,
+  "estimatedDuration": 10,
   "sections": [
     {
       "title": "Section Title",
-      "type": "introduction/core/advanced/activity/conclusion",
-      "content": "Markdown formatted content for this section",
-      "imageDescription": "Description of an image that would work well here"
-    }
+      "type": "introduction",
+      "content": "Markdown formatted content (use **bold**, bullet points, short paragraphs)",
+      "imageDescription": "Specific visual description ending with: No text or numbers overlaid on the image."
+    },
+    { "type": "key_concepts", "..." : "..." },
+    { "type": "examples", "..." : "..." },
+    { "type": "practice", "..." : "..." },
+    { "type": "summary", "..." : "..." }
   ],
   "keywords": ["keyword1", "keyword2"],
   "relatedTopics": ["related topic 1", "related topic 2"]
 }`;
+}
+
+/**
+ * Build a grade-appropriate image generation prompt with strict rules
+ */
+function buildImagePrompt(description: string, topic: string, gradeLevel: number): string {
+  return `${description}
+
+Style: Simple, clean, flat illustration. Bright colors appropriate for grade ${gradeLevel} students. White background.
+
+STRICT RULES:
+- NO text, letters, words, or labels anywhere in the image
+- NO numbers, fractions, mathematical notation, or symbols
+- NO annotations, callouts, or speech bubbles
+- Simple clean shapes and objects only
+- Bright, friendly colors
+- White or very light background`;
+}
 
 /**
  * Generate a full enhanced lesson with content and images
@@ -149,8 +233,7 @@ export async function generateEnhancedLesson(
       messages: [
         {
           role: 'system',
-          content: baseEnhancedLessonPrompt +
-            '\n\nIMPORTANT: Respond with ONLY valid JSON — no markdown, no code fences, no explanations.'
+          content: buildEnhancedLessonPrompt(gradeLevel, topic, subject)
         },
         {
           role: 'user',
@@ -202,7 +285,7 @@ export async function generateEnhancedLesson(
         allImagePrompts.push({
           id: imageId,
           description: section.imageDescription,
-          prompt: `${section.imageDescription} related to ${topic} for grade ${gradeLevel} education`
+          prompt: buildImagePrompt(section.imageDescription, topic, gradeLevel)
         });
         sectionImageIds.push(imageId);
       }
@@ -210,21 +293,23 @@ export async function generateEnhancedLesson(
       // Map the section type to one of the allowed types in our schema
       const validSectionType = mapSectionType(section.type || 'content');
       
-      // Add the section to our enhanced lesson 
+      // Add the section to our enhanced lesson
       enhancedLesson.sections.push({
         title: section.title,
         content: section.content,
         type: validSectionType,
-        imageIds: sectionImageIds
+        imageIds: sectionImageIds,
+        imageDescription: section.imageDescription || undefined,
       });
     }
     
     // 3. Generate a featured image for the lesson
     const featuredImageId = generateId(10);
+    const featuredDescription = `A colorful illustration representing ${topic} for young students. No text or numbers overlaid on the image.`;
     allImagePrompts.push({
       id: featuredImageId,
-      description: `Main illustration for ${content.title}`,
-      prompt: `Educational illustration for "${content.title}" lesson for grade ${gradeLevel} students, ${topic}, main concept visualization`
+      description: featuredDescription,
+      prompt: buildImagePrompt(featuredDescription, topic, gradeLevel)
     });
     enhancedLesson.featuredImage = featuredImageId;
     
@@ -397,5 +482,128 @@ export async function generateEnhancedQuestions(
     console.error('Error generating enhanced questions:', error);
     return [];
   }
+}
+
+/**
+ * Generate only images and diagrams for an existing EnhancedLessonSpec.
+ * Does NOT make any text-generation LLM calls — uses the imageDescription
+ * fields already stored in the spec.
+ */
+export async function generateLessonImages(
+  enhancedSpec: EnhancedLessonSpec,
+  topic: string,
+  gradeLevel: number,
+  subject?: string
+): Promise<{ images: LessonImage[]; diagrams: LessonDiagram[] }> {
+  const allImagePrompts: { id: string; description: string; prompt: string }[] = [];
+
+  // Collect image prompts from each section's imageDescription
+  for (const section of enhancedSpec.sections) {
+    if (section.imageIds && section.imageIds.length > 0 && section.imageDescription) {
+      for (const imageId of section.imageIds) {
+        allImagePrompts.push({
+          id: imageId,
+          description: section.imageDescription,
+          prompt: buildImagePrompt(section.imageDescription, topic, gradeLevel),
+        });
+      }
+    }
+  }
+
+  // Featured image
+  if (enhancedSpec.featuredImage) {
+    const featuredDescription = `A colorful illustration representing ${topic} for young students. No text or numbers overlaid on the image.`;
+    allImagePrompts.push({
+      id: enhancedSpec.featuredImage,
+      description: featuredDescription,
+      prompt: buildImagePrompt(featuredDescription, topic, gradeLevel),
+    });
+  }
+
+  // Cap and generate images
+  const cappedPrompts = allImagePrompts.slice(0, MAX_IMAGES_PER_LESSON);
+  const imagePromises = cappedPrompts.map(async (imagePrompt) => {
+    const result = await generateImage(
+      imagePrompt.prompt,
+      imagePrompt.description,
+      gradeLevel,
+      { subject: subject || topic }
+    );
+
+    if (result) {
+      if (result.svgData) {
+        return {
+          id: imagePrompt.id,
+          description: imagePrompt.description,
+          alt: imagePrompt.description,
+          svgData: result.svgData,
+          promptUsed: result.promptUsed,
+        };
+      }
+
+      if (result.base64Data) {
+        try {
+          const imagePath = await saveBase64Image(
+            result.base64Data,
+            `lesson_${topic.replace(/\s+/g, '_')}_${imagePrompt.id}`
+          );
+          return {
+            id: imagePrompt.id,
+            description: imagePrompt.description,
+            alt: imagePrompt.description,
+            base64Data: result.base64Data,
+            promptUsed: result.promptUsed,
+            path: imagePath,
+          };
+        } catch (saveError) {
+          console.error('Error saving image to filesystem:', saveError);
+          return {
+            id: imagePrompt.id,
+            description: imagePrompt.description,
+            alt: imagePrompt.description,
+            base64Data: result.base64Data,
+            promptUsed: result.promptUsed,
+          };
+        }
+      }
+    }
+
+    return {
+      id: imagePrompt.id,
+      description: imagePrompt.description,
+      alt: imagePrompt.description,
+      promptUsed: imagePrompt.prompt,
+    };
+  });
+
+  const images = await Promise.all(imagePromises);
+
+  // Generate a diagram
+  const diagrams: LessonDiagram[] = [];
+  try {
+    const diagramTypes = ['concept map', 'flowchart', 'comparison', 'cycle'];
+    const randomDiagramType = diagramTypes[Math.floor(Math.random() * diagramTypes.length)];
+
+    const diagramResult = await generateDiagram(
+      topic,
+      randomDiagramType,
+      gradeLevel,
+      `${randomDiagramType} diagram about ${topic}`
+    );
+
+    if (diagramResult) {
+      diagrams.push({
+        id: diagramResult.id,
+        type: mapDiagramType(randomDiagramType),
+        title: diagramResult.title,
+        svgData: diagramResult.svgData,
+        description: diagramResult.description,
+      });
+    }
+  } catch (error) {
+    console.error('Error generating diagram:', error);
+  }
+
+  return { images, diagrams };
 }
 

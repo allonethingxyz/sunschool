@@ -100,6 +100,7 @@ export type LessonSection = {
   content: string;
   type: "introduction" | "key_concepts" | "examples" | "practice" | "summary" | "fun_facts";
   imageIds?: string[];
+  imageDescription?: string;
 };
 
 // Define enhanced lesson spec type

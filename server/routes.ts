@@ -918,22 +918,20 @@ export function registerRoutes(app: Express): Server {
               imagePaths: []
             });
 
-            // Phase 2: Generate images in the BACKGROUND (non-blocking)
-            // This runs after the response is sent so the user isn't waiting
+            // Phase 2: Generate ONLY images in the BACKGROUND (non-blocking)
+            // Uses the existing lesson spec — no duplicate text generation
             const lessonId = newLesson.id;
             setImmediate(async () => {
               try {
-                const { generateEnhancedLesson: genWithImages } = await import('./services/enhanced-lesson-service');
-                const withImages = await genWithImages(
-                  gradeLevel, topic, true, finalSubject,
-                  difficulty as 'beginner' | 'intermediate' | 'advanced'
+                const { generateLessonImages } = await import('./services/enhanced-lesson-service');
+                const { images, diagrams } = await generateLessonImages(
+                  enhancedSpec, topic, gradeLevel, finalSubject
                 );
-                if (withImages?.images?.length) {
-                  const imgPaths = withImages.images
+                if (images?.length) {
+                  const imgPaths = images
                     .filter((img: any) => img.path)
                     .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
-                  // Merge images into the existing enhanced spec
-                  const mergedSpec = { ...enhancedSpec, images: withImages.images, diagrams: withImages.diagrams || [] };
+                  const mergedSpec = { ...enhancedSpec, images, diagrams: diagrams || [] };
                   await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
                   console.log(`[BG] Images generated for lesson ${lessonId}`);
                 }

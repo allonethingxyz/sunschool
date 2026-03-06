@@ -163,6 +163,37 @@ function parseMarkdownContent(content: string): MarkdownSection[] {
 }
 
 /**
+ * Parse inline markdown (e.g. **bold**) into React Native Text elements
+ */
+function renderInlineMarkdown(text: string, baseStyle: object): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const regex = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Add text before the bold match
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    // Add the bold text
+    parts.push(
+      <Text key={`bold-${match.index}`} style={{ fontWeight: 'bold' }}>
+        {match[1]}
+      </Text>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  // Add remaining text after last match
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : [text];
+}
+
+/**
  * Render a markdown section
  */
 function renderSection(section: MarkdownSection, index: number) {
@@ -189,21 +220,25 @@ function renderSection(section: MarkdownSection, index: number) {
       return (
         <View key={`section-${index}`} style={styles.bulletContainer}>
           <Text style={styles.bulletPoint}>•</Text>
-          <Text style={styles.bulletText}>{section.content}</Text>
+          <Text style={styles.bulletText}>
+            {renderInlineMarkdown(section.content, styles.bulletText)}
+          </Text>
         </View>
       );
     case 'numbered':
       return (
         <View key={`section-${index}`} style={styles.numberedContainer}>
           <Text style={styles.bulletPoint}>{index + 1}.</Text>
-          <Text style={styles.bulletText}>{section.content}</Text>
+          <Text style={styles.bulletText}>
+            {renderInlineMarkdown(section.content, styles.bulletText)}
+          </Text>
         </View>
       );
     case 'paragraph':
     default:
       return (
         <Text key={`section-${index}`} style={styles.paragraph}>
-          {section.content}
+          {renderInlineMarkdown(section.content, styles.paragraph)}
         </Text>
       );
   }

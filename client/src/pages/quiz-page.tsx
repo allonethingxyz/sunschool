@@ -7,6 +7,7 @@ import {
   ScrollView,
   SafeAreaView,
   Switch,
+  Modal,
 } from 'react-native';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
@@ -235,12 +236,17 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
         />
       )}
 
-      {/* ── Point delegation overlay ── */}
-      {showDelegation && quizScore && rewardGoals.length > 0 && (
+      {/* ── Point delegation modal (fullscreen overlay) ── */}
+      <Modal
+        visible={showDelegation && !!quizScore && rewardGoals.length > 0}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDelegation(false)}
+      >
         <View style={styles.delegationOverlay}>
           <View style={[styles.delegationBox, { backgroundColor: theme.colors.surfaceColor }]}>
             <Text style={[styles.delegationTitle, { color: theme.colors.textPrimary }]}>
-              🎉 You earned {quizScore.pointsAwarded} pts!
+              🎉 You earned {quizScore?.pointsAwarded ?? 0} pts!
             </Text>
             <Text style={[styles.delegationSub, { color: theme.colors.textSecondary }]}>
               Save them toward a reward goal:
@@ -250,7 +256,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
                 const pct = Math.min(100, Math.round(((g.savedPoints ?? 0) / g.tokenCost) * 100));
                 return (
                   <TouchableOpacity key={g.id} style={[styles.delegationGoalRow, { borderColor: g.color }]}
-                    onPress={() => { saveDelegation(g.id, quizScore.pointsAwarded); setShowDelegation(false); }}>
+                    onPress={() => { saveDelegation(g.id, quizScore!.pointsAwarded); setShowDelegation(false); }}>
                     <Text style={{ fontSize: 24 }}>{g.imageEmoji}</Text>
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={[styles.delegationGoalTitle, { color: theme.colors.textPrimary }]}>{g.title}</Text>
@@ -269,7 +275,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      </Modal>
 
       <View style={[styles.subheader, { backgroundColor: theme.colors.surfaceColor, borderBottomColor: theme.colors.divider }]}>
         {!quizSubmitted && (
@@ -669,9 +675,9 @@ const styles = StyleSheet.create({
   goToGoalsBtnText: { fontWeight: '700', fontSize: 14 },
   // Delegation overlay
   delegationOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center',
-    padding: 20, zIndex: 9999,
+    padding: 20,
   },
   delegationBox: { width: '100%', maxWidth: 420, borderRadius: 20, padding: 20 },
   delegationTitle: { fontSize: 20, fontWeight: '800', marginBottom: 4 },

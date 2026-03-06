@@ -878,44 +878,33 @@ export function registerRoutes(app: Express): Server {
       }
 
       let lessonSpec;
-      let imagePaths = [];
+      let imagePaths: any[] = [];
 
       if (USE_AI && enhanced) {
         try {
           // Import on demand to avoid circular dependencies
           const { generateEnhancedLesson } = await import('./services/enhanced-lesson-service');
 
-          // Generate enhanced lesson with images
+          // Phase 1: Generate text + questions WITHOUT images (fast — ~5s)
           const enhancedSpec = await generateEnhancedLesson(
-            gradeLevel, 
-            topic, 
-            true, // always with images
+            gradeLevel,
+            topic,
+            false, // NO images — return fast
             finalSubject,
             difficulty as 'beginner' | 'intermediate' | 'advanced'
           );
 
           if (enhancedSpec) {
-            // Extract image paths from the enhanced spec for storage
-            if (enhancedSpec.images) {
-              imagePaths = enhancedSpec.images
-                .filter(img => img.path)
-                .map(img => ({
-                  path: img.path,
-                  alt: img.alt || img.description,
-                  description: img.description
-                }));
-            }
-
             // Create a regular spec from the enhanced one for backward compatibility
             lessonSpec = {
               title: enhancedSpec.title,
-              content: `# ${enhancedSpec.title}\n\n${enhancedSpec.summary}\n\n${enhancedSpec.sections.map(s => 
-                `#,# ${s.title}\n\n${s.content}`).join('\n\n')}`,
+              content: `# ${enhancedSpec.title}\n\n${enhancedSpec.summary}\n\n${enhancedSpec.sections.map(s =>
+                `## ${s.title}\n\n${s.content}`).join('\n\n')}`,
               questions: enhancedSpec.questions,
               graph: enhancedSpec.graph
             };
 
-            // Create the lesson with enhanced spec
+            // Create the lesson immediately (no images yet)
             const newLesson = await storage.createLesson({
               id: crypto.randomUUID(),
               learnerId: Number(targetLearnerId),
@@ -926,7 +915,31 @@ export function registerRoutes(app: Express): Server {
               difficulty,
               spec: lessonSpec,
               enhancedSpec,
-              imagePaths
+              imagePaths: []
+            });
+
+            // Phase 2: Generate images in the BACKGROUND (non-blocking)
+            // This runs after the response is sent so the user isn't waiting
+            const lessonId = newLesson.id;
+            setImmediate(async () => {
+              try {
+                const { generateEnhancedLesson: genWithImages } = await import('./services/enhanced-lesson-service');
+                const withImages = await genWithImages(
+                  gradeLevel, topic, true, finalSubject,
+                  difficulty as 'beginner' | 'intermediate' | 'advanced'
+                );
+                if (withImages?.images?.length) {
+                  const imgPaths = withImages.images
+                    .filter((img: any) => img.path)
+                    .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
+                  // Merge images into the existing enhanced spec
+                  const mergedSpec = { ...enhancedSpec, images: withImages.images, diagrams: withImages.diagrams || [] };
+                  await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
+                  console.log(`[BG] Images generated for lesson ${lessonId}`);
+                }
+              } catch (bgErr) {
+                console.error(`[BG] Image generation failed for lesson ${lessonId}:`, bgErr);
+              }
             });
 
             return res.json(newLesson);
@@ -1183,6 +1196,53 @@ export function registerRoutes(app: Express): Server {
       doubleOrLoss: isDoubleOrLoss,
       newBalance,
       newAchievements: newAchievements.map(a => a.payload)
+    });
+
+    // ── Background pre-generation: queue next lesson so one is always ready ──
+    setImmediate(async () => {
+      try {
+        // Check if learner already has a QUEUED or ACTIVE lesson
+        const existingActive = await storage.getActiveLesson(String(learnerId));
+        if (existingActive) return; // already has one ready
+
+        const profile = await storage.getLearnerProfile(String(learnerId));
+        if (!profile || !profile.subjects?.length) return;
+
+        const nextSubject = profile.subjects[Math.floor(Math.random() * profile.subjects.length)];
+        const { getSubjectCategory } = await import('./services/subject-recommendation');
+        const nextCategory = getSubjectCategory(nextSubject);
+        const { generateEnhancedLesson } = await import('./services/enhanced-lesson-service');
+
+        // Generate text-only (fast) so a lesson is immediately available
+        const spec = await generateEnhancedLesson(
+          profile.gradeLevel, nextSubject, false, nextSubject, 'beginner'
+        );
+        if (!spec) return;
+
+        const lessonSpec = {
+          title: spec.title,
+          content: `# ${spec.title}\n\n${spec.summary}\n\n${spec.sections.map(s =>
+            `## ${s.title}\n\n${s.content}`).join('\n\n')}`,
+          questions: spec.questions,
+          graph: spec.graph
+        };
+
+        const queued = await storage.createLesson({
+          id: crypto.randomUUID(),
+          learnerId: Number(learnerId),
+          moduleId: "auto-" + Date.now(),
+          status: "ACTIVE",
+          subject: nextSubject,
+          category: nextCategory,
+          difficulty: 'beginner',
+          spec: lessonSpec,
+          enhancedSpec: spec,
+          imagePaths: []
+        });
+        console.log(`[BG] Pre-generated lesson ${queued.id} for learner ${learnerId}`);
+      } catch (bgErr) {
+        console.error('[BG] Pre-generation failed:', bgErr);
+      }
     });
   }));
 

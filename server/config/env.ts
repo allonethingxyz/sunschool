@@ -58,7 +58,7 @@ export const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || '';
 
 // Image Generation Configuration
 export const IMAGE_PROVIDER = process.env.IMAGE_PROVIDER || 'openrouter'; // 'openrouter' | 'svg-llm' | 'stability'
-export const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image-preview';
-export const OPENROUTER_SVG_MODEL = process.env.OPENROUTER_SVG_MODEL || 'google/gemini-3.1-pro-preview';
+export const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.0-flash-exp:free';
+export const OPENROUTER_SVG_MODEL = process.env.OPENROUTER_SVG_MODEL || 'google/gemini-2.0-flash-exp:free';
 export const IMAGE_GENERATION_TIMEOUT = parseInt(process.env.IMAGE_GENERATION_TIMEOUT || '15000');
 export const MAX_IMAGES_PER_LESSON = parseInt(process.env.MAX_IMAGES_PER_LESSON || '4');

@@ -41,6 +41,7 @@ export interface IStorage {
   getLearnerLessons(learnerId: string): Promise<Lesson[]>;
   getLessonHistory(learnerId: string, limit?: number): Promise<Lesson[]>;
   updateLessonStatus(id: string, status: "QUEUED" | "ACTIVE" | "DONE", score?: number): Promise<Lesson | undefined>;
+  updateLessonImages(id: string, enhancedSpec: any, imagePaths: any): Promise<void>;
 
   // Achievement operations
   createAchievement(achievement: InsertAchievement): Promise<Achievement>;
@@ -741,6 +742,17 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error in updateLessonStatus:', error);
       return undefined;
+    }
+  }
+
+  async updateLessonImages(id: string, enhancedSpec: any, imagePaths: any): Promise<void> {
+    try {
+      await db
+        .update(lessons)
+        .set({ enhancedSpec, imagePaths })
+        .where(eq(lessons.id, id));
+    } catch (error) {
+      console.error('Error in updateLessonImages:', error);
     }
   }
 

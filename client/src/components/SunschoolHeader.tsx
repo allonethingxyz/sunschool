@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Home, Book, User, BarChart2 } from 'react-feather';
+import { Home, Book, User, BarChart2, ArrowLeft } from 'react-feather';
 import { colors, typography } from '../styles/theme';
 import { useLocation } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
@@ -14,47 +14,33 @@ interface SunschoolHeaderProps {
 const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
-  const { isLearnerMode } = useMode();
-  
+  const { isLearnerMode, toggleMode } = useMode();
+
   const isActive = (path: string) => location === path;
-  
+
+  const isParentOrAdmin = user?.role === 'PARENT' || user?.role === 'ADMIN';
+
   const getNavItems = () => {
     if (!user || !user.role) return [];
-    
-    // Ensure we have a valid string role
-    const userRole = typeof user.role === 'string' ? (user.role as 'ADMIN' | 'PARENT' | 'LEARNER') : 'LEARNER';
-    
-    // Basic navigation items for all authenticated users
+
+    // When in learner mode (including parents viewing as child), show learner nav
+    if (isLearnerMode) {
+      return [
+        { label: 'Home', path: '/learner', icon: Home },
+        { label: 'Progress', path: '/progress', icon: BarChart2 },
+      ];
+    }
+
+    // Parent/Admin in grown-up mode
     const navItems = [
-      { 
-        label: 'Dashboard', 
-        path: '/dashboard', 
-        icon: Home,
-        roles: ['ADMIN', 'PARENT', 'LEARNER']
-      },
+      { label: 'Dashboard', path: '/dashboard', icon: Home },
     ];
-    
-    // Additional items based on user role
-    if (userRole === 'LEARNER') {
-      navItems.push(
-        { label: 'Lessons', path: '/learner', icon: Book, roles: ['LEARNER'] },
-        { label: 'Progress', path: '/progress', icon: BarChart2, roles: ['LEARNER'] }
-      );
-    } else {
-      navItems.push(
-        { label: 'Learners', path: '/learners', icon: User, roles: ['ADMIN', 'PARENT'] },
-        { label: 'Reports', path: '/reports', icon: BarChart2, roles: ['ADMIN', 'PARENT'] }
-      );
+
+    if (user.role === 'ADMIN') {
+      navItems.push({ label: 'Admin', path: '/admin', icon: User });
     }
-    
-    // Admin-specific items
-    if (userRole === 'ADMIN') {
-      navItems.push(
-        { label: 'Admin', path: '/admin', icon: User, roles: ['ADMIN'] }
-      );
-    }
-    
-    return navItems.filter(item => item.roles.includes(userRole));
+
+    return navItems;
   };
 
   return (
@@ -90,21 +76,32 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
 
         {user && (
           <View style={styles.navigation}>
-            {/* Show LearnerSelector for parents and admins in any mode */}
-            {(user?.role === 'PARENT' || user?.role === 'ADMIN') && (
-              <LearnerSelector subtle={!isLearnerMode} />
+            {/* Back to Parent button when a parent/admin is in learner mode */}
+            {isLearnerMode && isParentOrAdmin && (
+              <TouchableOpacity
+                style={styles.backToParentButton}
+                onPress={toggleMode}
+              >
+                <ArrowLeft size={14} color={colors.onPrimary} />
+                <Text style={styles.backToParentText}>Parent View</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* LearnerSelector only in learner mode for parents/admins */}
+            {isLearnerMode && isParentOrAdmin && (
+              <LearnerSelector subtle={false} />
             )}
 
             {getNavItems().map((item, index) => (
-              <TouchableOpacity 
+              <TouchableOpacity
                 key={index}
                 style={[styles.navItem, isActive(item.path) && styles.activeNavItem]}
                 onPress={() => navigate(item.path)}
               >
-                <item.icon 
-                  size={18} 
-                  color={isActive(item.path) ? colors.secondary : colors.onPrimary} 
-                  style={styles.navIcon} 
+                <item.icon
+                  size={18}
+                  color={isActive(item.path) ? colors.secondary : colors.onPrimary}
+                  style={styles.navIcon}
                 />
                 <Text style={[styles.navText, isActive(item.path) && styles.activeNavText]}>
                   {item.label}
@@ -206,6 +203,22 @@ const styles = StyleSheet.create({
   activeNavText: {
     color: colors.secondary,
     fontWeight: '600',
+  },
+  backToParentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  backToParentText: {
+    ...typography.body2,
+    color: colors.onPrimary,
+    fontWeight: '600',
+    marginLeft: 6,
+    fontSize: 12,
   }
 });
 

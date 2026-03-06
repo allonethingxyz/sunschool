@@ -10,7 +10,8 @@ function generateId(length: number = 10): string {
   return result;
 }
 
-const OPENROUTER_IMAGE_URL = 'https://openrouter.ai/api/v1/images/generations';
+// OpenRouter now uses the chat completions endpoint with modalities for image generation
+const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 export interface OpenRouterImageResult {
   id: string;
@@ -26,8 +27,8 @@ interface OpenRouterImageOptions {
 }
 
 /**
- * Generates an educational image using OpenRouter's image generation API
- * (OpenAI-compatible endpoint supporting DALL-E 3, Flux, etc.)
+ * Generates an educational image using OpenRouter's chat completions API
+ * with modalities: ["image"] for image output.
  */
 export async function generateEducationalImage(
   prompt: string,
@@ -41,22 +42,20 @@ export async function generateEducationalImage(
   }
 
   try {
-    // Enhance prompt for educational, child-safe content
     const enhancedPrompt = enhancePromptForEducation(prompt, gradeLevel);
 
     const body: Record<string, any> = {
       model: OPENROUTER_IMAGE_MODEL,
-      prompt: enhancedPrompt,
-      n: options.n || 1,
-      size: options.size || '1024x1024',
-      response_format: 'b64_json',
+      messages: [
+        {
+          role: 'user',
+          content: enhancedPrompt,
+        },
+      ],
+      modalities: ['image'],
     };
 
-    if (options.quality) {
-      body.quality = options.quality;
-    }
-
-    const response = await axios.post(OPENROUTER_IMAGE_URL, body, {
+    const response = await axios.post(OPENROUTER_CHAT_URL, body, {
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
@@ -66,14 +65,22 @@ export async function generateEducationalImage(
       timeout: IMAGE_GENERATION_TIMEOUT,
     });
 
-    const data = response.data?.data;
-    if (data && data.length > 0 && data[0].b64_json) {
-      return {
-        id: generateId(10),
-        base64Data: data[0].b64_json,
-        promptUsed: enhancedPrompt,
-        description: description || 'Educational image generated with AI',
-      };
+    // New response format: choices[0].message.images[0].image_url.url
+    const message = response.data?.choices?.[0]?.message;
+    if (message?.images && message.images.length > 0) {
+      const imageUrl: string = message.images[0]?.image_url?.url || '';
+      // The URL is a data URI: "data:image/png;base64,..."
+      const base64Match = imageUrl.match(/^data:image\/[^;]+;base64,(.+)$/);
+      const base64Data = base64Match ? base64Match[1] : imageUrl;
+
+      if (base64Data) {
+        return {
+          id: generateId(10),
+          base64Data,
+          promptUsed: enhancedPrompt,
+          description: description || 'Educational image generated with AI',
+        };
+      }
     }
 
     console.error('[OpenRouter Image] No image data in response');
@@ -81,7 +88,9 @@ export async function generateEducationalImage(
   } catch (error: any) {
     console.error('[OpenRouter Image] Error:', error.message);
     if (axios.isAxiosError(error) && error.response) {
-      console.error('[OpenRouter Image] Response:', error.response.status, JSON.stringify(error.response.data));
+      // Truncate response body to avoid flooding logs with HTML
+      const respData = JSON.stringify(error.response.data);
+      console.error('[OpenRouter Image] Response:', error.response.status, respData.substring(0, 200));
     }
     return null;
   }

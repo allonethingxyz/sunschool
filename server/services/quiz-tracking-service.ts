@@ -111,7 +111,7 @@ export async function storeQuizAnswer(answer: QuizAnswer): Promise<void> {
         ${answer.userAnswer},
         ${answer.correctAnswer},
         ${answer.isCorrect},
-        ${answer.conceptTags},
+        ${sql`${`{${answer.conceptTags.join(',')}}`}::text[]`},
         ${answer.answeredAt || new Date()}
       )
     `);

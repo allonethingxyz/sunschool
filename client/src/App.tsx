@@ -30,10 +30,7 @@ import { Toaster } from './components/ui/toast';
 import { PlausibleAnalytics } from './components/PlausibleAnalytics';
 import { useAuth } from './hooks/use-auth';
 import { ModeProvider } from './context/ModeContext';
-import ModeToggle from './components/ModeToggle';
 import AppLayout from './components/AppLayout';
-import WelcomeModal from './components/WelcomeModal';
-import { useWelcomeModal } from './hooks/use-welcome-modal';
 
 // Home redirect component to handle auth status
 const HomeRedirect = () => {
@@ -60,29 +57,14 @@ const HomeRedirect = () => {
 };
 
 export default function App() {
-  const { user } = useAuth();
-  const { isVisible, closeModal } = useWelcomeModal();
-
   return (
     <div className="app-container">
-      <PlausibleAnalytics 
-        domain="sunschool.xyz" 
-        enabled={process.env.NODE_ENV === 'production' && process.env.ENABLE_STATS !== 'false'} 
+      <PlausibleAnalytics
+        domain="sunschool.xyz"
+        enabled={process.env.NODE_ENV === 'production' && process.env.ENABLE_STATS !== 'false'}
       />
-      {/* Welcome Modal */}
-      <WelcomeModal isVisible={isVisible} onClose={closeModal} />
-      
+
       <ModeProvider>
-        {user && (
-          <div style={{ 
-            position: 'fixed', 
-            top: 20, 
-            right: 20, 
-            zIndex: 9999,
-          }}>
-            <ModeToggle />
-          </div>
-        )}
         <AppLayout>
           <Switch>
             {/* Public routes (no auth required) */}

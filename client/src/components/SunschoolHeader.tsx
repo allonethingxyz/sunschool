@@ -85,7 +85,7 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
             </View>
           )}
         </View>
-        <Text style={styles.headerSubtitle}>{subtitle || "powered by SUNSCHOOL AI TUTOR"}</Text>
+        <Text style={styles.headerSubtitle}>{subtitle || "AI Tutor"}</Text>
       </TouchableOpacity>
 
         {user && (

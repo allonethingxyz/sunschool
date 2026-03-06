@@ -16,13 +16,13 @@ export interface ConceptMastery {
   subject: string;
   correctCount: number;
   totalCount: number;
-  masteryLevel: number; // 0.00 to 1.00
+  masteryLevel: number; // 0-100 integer
   lastTested: Date;
   needsReinforcement: boolean;
   createdAt?: Date;
 }
 
-const MASTERY_THRESHOLD = 0.70; // 70% accuracy for mastery
+const MASTERY_THRESHOLD = 70; // 70% accuracy for mastery (stored as 0-100 integer)
 
 /**
  * Update or create mastery record for a concept
@@ -47,7 +47,7 @@ export async function updateConceptMastery(
       const record = existing.rows[0] as any;
       const newCorrectCount = record.correct_count + (isCorrect ? 1 : 0);
       const newTotalCount = record.total_count + 1;
-      const newMasteryLevel = newTotalCount > 0 ? newCorrectCount / newTotalCount : 0;
+      const newMasteryLevel = newTotalCount > 0 ? Math.round((newCorrectCount / newTotalCount) * 100) : 0;
       const needsReinforcement = newMasteryLevel < MASTERY_THRESHOLD;
 
       await db.execute(sql`
@@ -64,7 +64,7 @@ export async function updateConceptMastery(
       `);
     } else {
       // Create new record
-      const masteryLevel = isCorrect ? 1.0 : 0.0;
+      const masteryLevel = isCorrect ? 100 : 0;
       const needsReinforcement = masteryLevel < MASTERY_THRESHOLD;
 
       await db.execute(sql`

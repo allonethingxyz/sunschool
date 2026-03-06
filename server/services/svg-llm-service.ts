@@ -110,7 +110,7 @@ function hasMeaningfulVisualContent(svg: string): boolean {
     return !(fullWidth && fullHeight);
   });
 
-  return drawingMatches.length + nonBgRects.length >= 3;
+  return drawingMatches.length + nonBgRects.length >= 2;
 }
 
 export interface SVGResult {

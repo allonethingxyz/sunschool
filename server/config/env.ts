@@ -58,7 +58,23 @@ export const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || '';
 
 // Image Generation Configuration
 export const IMAGE_PROVIDER = process.env.IMAGE_PROVIDER || 'openrouter'; // 'openrouter' | 'svg-llm' | 'stability'
-export const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.0-flash-exp:free';
-export const OPENROUTER_SVG_MODEL = process.env.OPENROUTER_SVG_MODEL || 'google/gemini-2.0-flash-exp:free';
+export const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-pro-preview';
+export const OPENROUTER_SVG_MODEL = process.env.OPENROUTER_SVG_MODEL || 'google/gemini-3.1-pro-preview';
 export const IMAGE_GENERATION_TIMEOUT = parseInt(process.env.IMAGE_GENERATION_TIMEOUT || '15000');
 export const MAX_IMAGES_PER_LESSON = parseInt(process.env.MAX_IMAGES_PER_LESSON || '4');
+
+// Fallback model chains — tried in order when primary model returns 404 or fails
+export const SVG_MODEL_FALLBACKS: string[] = (process.env.SVG_MODEL_FALLBACKS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+export const IMAGE_MODEL_FALLBACKS: string[] = (process.env.IMAGE_MODEL_FALLBACKS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
+// Built-in fallback chains (used when env overrides are empty)
+export const DEFAULT_SVG_MODEL_FALLBACKS = [
+  'google/gemini-3.1-flash-lite-preview',
+  'google/gemini-3-flash-preview',
+];
+export const DEFAULT_IMAGE_MODEL_FALLBACKS = [
+  'google/gemini-3.1-flash-image-preview',
+  'google/gemini-3-flash-preview',
+];

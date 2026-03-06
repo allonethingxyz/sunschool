@@ -1,6 +1,20 @@
 import { askOpenRouter } from '../openrouter';
-import { OPENROUTER_SVG_MODEL, IMAGE_GENERATION_TIMEOUT } from '../config/env';
+import { OPENROUTER_SVG_MODEL, SVG_MODEL_FALLBACKS, DEFAULT_SVG_MODEL_FALLBACKS } from '../config/env';
 import { SVG_PROMPTS } from '../prompts';
+
+/** Ordered list of models to try: primary + fallbacks */
+function getSvgModelChain(): string[] {
+  const fallbacks = SVG_MODEL_FALLBACKS.length > 0
+    ? SVG_MODEL_FALLBACKS
+    : DEFAULT_SVG_MODEL_FALLBACKS;
+  return [OPENROUTER_SVG_MODEL, ...fallbacks];
+}
+
+/** Returns true for errors that indicate the model itself is unavailable */
+function isModelUnavailable(error: any): boolean {
+  const msg = error?.message || '';
+  return msg.includes('404') || msg.includes('No endpoints found') || msg.includes('not available');
+}
 
 /**
  * Lightweight SVG sanitizer — removes dangerous tags, attributes, and external
@@ -128,97 +142,121 @@ export interface DiagramSVGResult {
 }
 
 /**
- * Generates an educational SVG illustration using an LLM via OpenRouter
+ * Generates an educational SVG illustration using an LLM via OpenRouter.
+ * Tries the primary model first, then falls back through the model chain.
  */
 export async function generateEducationalSVG(
   topic: string,
   concept: string,
   gradeLevel: number
 ): Promise<SVGResult | null> {
-  try {
-    const gradePrompt = SVG_PROMPTS.EDUCATIONAL_SVG(topic, concept, gradeLevel);
+  const models = getSvgModelChain();
+  const gradePrompt = SVG_PROMPTS.EDUCATIONAL_SVG(topic, concept, gradeLevel);
+  const messages = [
+    { role: 'system' as const, content: SVG_SYSTEM_PROMPT },
+    {
+      role: 'user' as const,
+      content: `${gradePrompt}\n\nCreate an educational SVG illustration about "${concept}" related to "${topic}" for grade ${gradeLevel} students. Output only valid SVG markup.`
+    }
+  ];
 
-    const response = await askOpenRouter({
-      messages: [
-        { role: 'system', content: SVG_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `${gradePrompt}\n\nCreate an educational SVG illustration about "${concept}" related to "${topic}" for grade ${gradeLevel} students. Output only valid SVG markup.`
-        }
-      ],
-      model: OPENROUTER_SVG_MODEL,
-      temperature: 0.3,
-      max_tokens: 4000,
-    });
+  for (const model of models) {
+    try {
+      const response = await askOpenRouter({
+        messages,
+        model,
+        temperature: 0.3,
+        max_tokens: 4000,
+      });
 
-    const rawSvg = response.choices[0]?.message?.content;
-    if (!rawSvg) return null;
+      const rawSvg = response.choices[0]?.message?.content;
+      if (!rawSvg) continue;
 
-    const svgData = validateAndSanitizeSVG(rawSvg);
-    if (!svgData) {
-      console.error('SVG LLM output failed validation/sanitization');
+      const svgData = validateAndSanitizeSVG(rawSvg);
+      if (!svgData) {
+        console.warn(`[SVG] Model ${model} returned invalid SVG, trying next`);
+        continue;
+      }
+
+      console.log(`[SVG] Generated educational SVG with model: ${model}`);
+      return {
+        id: generateId(10),
+        svgData,
+        description: `Educational illustration of ${concept} for grade ${gradeLevel}`,
+      };
+    } catch (error: any) {
+      if (isModelUnavailable(error) && model !== models[models.length - 1]) {
+        console.warn(`[SVG] Model ${model} unavailable (${error.message}), trying next fallback`);
+        continue;
+      }
+      console.error(`[SVG] Error generating educational SVG with ${model}:`, error.message);
       return null;
     }
-
-    return {
-      id: generateId(10),
-      svgData,
-      description: `Educational illustration of ${concept} for grade ${gradeLevel}`,
-    };
-  } catch (error: any) {
-    console.error('Error generating educational SVG:', error.message);
-    return null;
   }
+
+  console.error('[SVG] All models exhausted for educational SVG');
+  return null;
 }
 
 /**
- * Generates a diagram SVG using an LLM via OpenRouter
+ * Generates a diagram SVG using an LLM via OpenRouter.
+ * Tries the primary model first, then falls back through the model chain.
  */
 export async function generateDiagramSVG(
   topic: string,
   diagramType: string,
   gradeLevel: number
 ): Promise<DiagramSVGResult | null> {
-  try {
-    const gradePrompt = SVG_PROMPTS.EDUCATIONAL_SVG(topic, diagramType, gradeLevel);
+  const models = getSvgModelChain();
+  const gradePrompt = SVG_PROMPTS.EDUCATIONAL_SVG(topic, diagramType, gradeLevel);
+  const diagramInstructions = getDiagramInstructions(diagramType);
+  const messages = [
+    { role: 'system' as const, content: SVG_SYSTEM_PROMPT },
+    {
+      role: 'user' as const,
+      content: `${gradePrompt}\n\n${diagramInstructions}\n\nCreate a ${diagramType} diagram about "${topic}" for grade ${gradeLevel} students. Output only valid SVG markup.`
+    }
+  ];
 
-    const diagramInstructions = getDiagramInstructions(diagramType);
+  for (const model of models) {
+    try {
+      const response = await askOpenRouter({
+        messages,
+        model,
+        temperature: 0.3,
+        max_tokens: 4000,
+      });
 
-    const response = await askOpenRouter({
-      messages: [
-        { role: 'system', content: SVG_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `${gradePrompt}\n\n${diagramInstructions}\n\nCreate a ${diagramType} diagram about "${topic}" for grade ${gradeLevel} students. Output only valid SVG markup.`
-        }
-      ],
-      model: OPENROUTER_SVG_MODEL,
-      temperature: 0.3,
-      max_tokens: 4000,
-    });
+      const rawSvg = response.choices[0]?.message?.content;
+      if (!rawSvg) continue;
 
-    const rawSvg = response.choices[0]?.message?.content;
-    if (!rawSvg) return null;
+      const svgData = validateAndSanitizeSVG(rawSvg);
+      if (!svgData) {
+        console.warn(`[SVG] Model ${model} returned invalid diagram SVG, trying next`);
+        continue;
+      }
 
-    const svgData = validateAndSanitizeSVG(rawSvg);
-    if (!svgData) {
-      console.error('SVG diagram LLM output failed validation/sanitization');
+      const title = `${diagramType.charAt(0).toUpperCase() + diagramType.slice(1)} of ${topic}`;
+      console.log(`[SVG] Generated diagram SVG with model: ${model}`);
+      return {
+        id: generateId(10),
+        svgData,
+        title,
+        description: `${diagramType} diagram about ${topic} for grade ${gradeLevel}`,
+        type: diagramType,
+      };
+    } catch (error: any) {
+      if (isModelUnavailable(error) && model !== models[models.length - 1]) {
+        console.warn(`[SVG] Model ${model} unavailable (${error.message}), trying next fallback`);
+        continue;
+      }
+      console.error(`[SVG] Error generating diagram SVG with ${model}:`, error.message);
       return null;
     }
-
-    const title = `${diagramType.charAt(0).toUpperCase() + diagramType.slice(1)} of ${topic}`;
-
-    return {
-      id: generateId(10),
-      svgData,
-      title,
-      description: `${diagramType} diagram about ${topic} for grade ${gradeLevel}`,
-      type: diagramType,
-    };
-  } catch (error: any) {
-    console.error('Error generating diagram SVG:', error.message);
-    return null;
   }
+
+  console.error('[SVG] All models exhausted for diagram SVG');
+  return null;
 }
 
 function getDiagramInstructions(diagramType: string): string {

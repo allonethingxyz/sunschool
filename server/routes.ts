@@ -346,6 +346,17 @@ export function registerRoutes(app: Express): Server {
             gradeLevel,
             graph: { nodes: [], edges: [] },
           });
+
+          // Create starter reward goals so the points system works immediately
+          try {
+            const { createReward } = await import('./services/rewards-service');
+            const parentId = Number(req.user?.id ?? newUser.parentId);
+            await createReward(parentId, { title: 'Extra Recess', description: '15 minutes of extra free time', tokenCost: 10, imageEmoji: '🏃', color: '#4CAF50' });
+            await createReward(parentId, { title: 'Pick a Movie', description: 'Choose a movie for family night', tokenCost: 25, imageEmoji: '🎬', color: '#2196F3' });
+            await createReward(parentId, { title: 'Special Outing', description: 'A trip to somewhere fun', tokenCost: 50, imageEmoji: '🎢', color: '#FF9800' });
+          } catch (rewardErr) {
+            console.error('Error creating starter rewards (non-fatal):', rewardErr);
+          }
         } catch (profileError) {
           console.error('Error creating learner profile:', profileError);
           // Continue so we can return the user object even if profile creation fails
@@ -408,6 +419,17 @@ export function registerRoutes(app: Express): Server {
               gradeLevel,
               graph: { nodes: [], edges: [] },
             });
+
+            // Create starter reward goals
+            try {
+              const { createReward } = await import('./services/rewards-service');
+              const parentId = Number(req.user?.id ?? newUser.parentId);
+              await createReward(parentId, { title: 'Extra Recess', description: '15 minutes of extra free time', tokenCost: 10, imageEmoji: '🏃', color: '#4CAF50' });
+              await createReward(parentId, { title: 'Pick a Movie', description: 'Choose a movie for family night', tokenCost: 25, imageEmoji: '🎬', color: '#2196F3' });
+              await createReward(parentId, { title: 'Special Outing', description: 'A trip to somewhere fun', tokenCost: 50, imageEmoji: '🎢', color: '#FF9800' });
+            } catch (rewardErr) {
+              console.error('Error creating starter rewards (non-fatal):', rewardErr);
+            }
           }
 
           // Return the created user without password
@@ -1060,8 +1082,9 @@ export function registerRoutes(app: Express): Server {
     // Update lesson status
     const updatedLesson = await storage.updateLessonStatus(lessonId, "DONE", score);
 
-    // Convert user ID to number once for all three operations
-    const learnerId: number = typeof req.user.id === 'number' ? req.user.id : parseInt(String(req.user.id), 10);
+    // Use the lesson's learner ID (not req.user.id) so that points, mastery,
+    // and analytics are attributed to the child even when a parent submits.
+    const learnerId: number = typeof lesson.learnerId === 'number' ? lesson.learnerId : parseInt(String(lesson.learnerId), 10);
 
     // === NEW: Store individual quiz answers for analytics ===
     try {
@@ -1108,13 +1131,13 @@ export function registerRoutes(app: Express): Server {
     }
 
     // Check for achievements
-    const lessonHistory = await storage.getLessonHistory(req.user.id);
+    const lessonHistory = await storage.getLessonHistory(learnerId);
     const newAchievements = checkForAchievements(lessonHistory, updatedLesson);
 
     // Award any new achievements
     for (const achievement of newAchievements) {
       await storage.createAchievement({
-        learnerId: ensureString(req.user.id),
+        learnerId: ensureString(learnerId),
         type: achievement.type,
         payload: achievement.payload
       });
@@ -1130,7 +1153,7 @@ export function registerRoutes(app: Express): Server {
     try {
       if (pointsAwarded > 0) {
         await pointsService.awardPoints({
-          learnerId: req.user.id,
+          learnerId,
           amount: pointsAwarded,
           sourceType: "QUIZ_CORRECT",
           sourceId: lessonId,
@@ -1141,10 +1164,10 @@ export function registerRoutes(app: Express): Server {
       // Double-or-Loss deduction for wrong answers
       if (isDoubleOrLoss && wrongCount > 0) {
         const { applyDoubleOrLossDeduction } = await import('./services/rewards-service');
-        await applyDoubleOrLossDeduction(Number(learnerId), wrongCount);
+        await applyDoubleOrLossDeduction(learnerId, wrongCount);
       }
 
-      newBalance = await pointsService.getBalance(req.user.id);
+      newBalance = await pointsService.getBalance(learnerId);
     } catch (pointsErr) {
       console.error('Points/rewards error (quiz still succeeds):', pointsErr);
     }

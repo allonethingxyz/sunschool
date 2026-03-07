@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: 'column',
-    height: '100%',
+    height: '100vh',
     backgroundColor: colors.background,
   },
   content: {
@@ -46,6 +46,7 @@ const styles = StyleSheet.create({
     maxWidth: 1200,
     marginHorizontal: 'auto',
     padding: 20,
+    overflow: 'auto' as any,
   },
 });
 

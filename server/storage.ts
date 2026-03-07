@@ -562,7 +562,9 @@ export class DatabaseStorage implements IStorage {
       try {
         const result = await db.select()
           .from(lessons)
-          .where(and(eq(lessons.learnerId, Number(Number(learnerId))), eq(lessons.status, "ACTIVE")));
+          .where(and(eq(lessons.learnerId, Number(Number(learnerId))), eq(lessons.status, "ACTIVE")))
+          .orderBy(desc(lessons.createdAt))
+          .limit(1);
         const lessonList = Array.isArray(result) ? result : [result];
         if (lessonList.length > 0) {
           return lessonList[0] as Lesson;
@@ -584,7 +586,9 @@ export class DatabaseStorage implements IStorage {
           completedAt: lessons.completedAt,
         })
         .from(lessons)
-        .where(and(eq(lessons.learnerId, Number(Number(learnerId))), eq(lessons.status, "ACTIVE")));
+        .where(and(eq(lessons.learnerId, Number(Number(learnerId))), eq(lessons.status, "ACTIVE")))
+        .orderBy(desc(lessons.createdAt))
+        .limit(1);
 
       const lessonList = Array.isArray(result) ? result : [result];
 

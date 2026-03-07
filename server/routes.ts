@@ -856,6 +856,12 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
+      // Retire any existing ACTIVE lesson so the new one becomes current
+      const previousLesson = await storage.getActiveLesson(targetLearnerId);
+      if (previousLesson) {
+        await storage.updateLessonStatus(previousLesson.id, "DONE", 0);
+      }
+
       // Get learner profile
       const learnerProfile = await storage.getLearnerProfile(targetLearnerId);
       if (!learnerProfile) {

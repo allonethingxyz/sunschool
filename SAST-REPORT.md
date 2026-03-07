@@ -1,6 +1,6 @@
 # SAST Security Scan Report
 
-**Project**: origen-one (sunschool.xyz)
+**Project**: sunschool (sunschool.xyz)
 **Date**: 2026-02-21
 **Branch**: `sast/python-security-scan`
 **Tools**: Bandit 1.9.3, Semgrep 1.152.0

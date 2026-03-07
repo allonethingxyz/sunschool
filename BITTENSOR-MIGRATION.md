@@ -113,7 +113,7 @@ export BITTENSOR_SUBNET_1_URL=https://custom-subnet.bittensor.io/graphql
 ### Integration Test Script
 Run the provided test script to verify configuration:
 ```bash
-cd /Users/seanmcdonald/Documents/GitHub/origen-one
+cd /Users/seanmcdonald/Documents/GitHub/sunschool
 npx ts-node scripts/test-bittensor-integration.ts
 ```
 

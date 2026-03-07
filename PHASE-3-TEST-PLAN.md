@@ -8,7 +8,7 @@
 - **Navigation Timing**: Ensured navigation happens after state updates are committed
 - **Logging**: Added comprehensive console logging for debugging mode switches
 
-### 2. Visual Mode Indicators (`/client/src/components/OrigenHeader.tsx`)
+### 2. Visual Mode Indicators (`/client/src/components/SunschoolHeader.tsx`)
 - **Mode Badge**: Added prominent visual badge showing current mode
   - Green badge with 👦 icon for LEARNER MODE
   - Blue badge with 👨 icon for PARENT MODE

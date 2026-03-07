@@ -115,8 +115,8 @@ SUNSCHOOL is a web-based educational platform that provides AI-generated lessons
 ### Clone and Setup
 
 ```bash
-git clone https://github.com/realityinspector/origen-one.git
-cd origen-one
+git clone https://github.com/All-One-Thing/sunschool.git
+cd sunschool
 npm install
 ```
 

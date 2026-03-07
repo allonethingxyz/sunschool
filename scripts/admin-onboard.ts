@@ -45,7 +45,7 @@ async function main() {
     // Create admin user
     const adminUser = {
       username: 'admin',
-      email: 'admin@origen.edu',
+      email: 'admin@sunschool.xyz',
       name: 'Admin User',
       role: 'ADMIN',
       password: await hashPassword(adminPassword),
@@ -61,7 +61,7 @@ async function main() {
     
     // Save the credentials to a file (in a real-world scenario, you'd send an email instead)
     const credentialsInfo = `
-ORIGEN ADMIN CREDENTIALS
+SUNSCHOOL ADMIN CREDENTIALS
 ----------------------
 Username: admin
 Password: ${adminPassword}

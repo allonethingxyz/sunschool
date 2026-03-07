@@ -73,7 +73,7 @@ These are functional bugs that make the app unreliable. They should be fixed fir
 - Consolidate to a single login endpoint. The 4-endpoint loop exists because of domain migration from Replit to sunschool.xyz. Now that the domain is settled, use one canonical endpoint.
 - Simplify the response handler: expect `{ token, user }` format. If the format doesn't match, show a clear error, don't redirect.
 - Replace the wall-of-text error with human-readable messages: "Check your internet connection", "Invalid username or password", "Server is temporarily unavailable".
-- Remove the legacy `origen-api.replit.app` references in the logout flow (line 709).
+- Remove any legacy domain references in the logout flow (line 709).
 
 ### 1.5 Add session expiry detection and cleanup
 
@@ -387,11 +387,9 @@ Smaller items that improve overall quality.
 
 **Problem:** Lines 202, 280, 287, 295 all say "toSunschool" (missing space). Should be "to Sunschool."
 
-### 4.2 Complete the origen → sunschool rename
+### 4.2 Complete the origen → sunschool rename — COMPLETED ✅
 
-**Files:** `server/openrouter.ts:63`, `server/middleware/auth.ts:60`, `client/src/App.tsx:78`, `client/src/pages/welcome-page.tsx:39`, `use-auth.tsx:709`
-
-**Problem:** ~20 remaining references to "origen" in source code, including HTTP headers, analytics domain, GitHub links, and JWT dev secrets.
+**Status:** Rebrand completed. All code references updated to sunschool. Repo moved to `All-One-Thing/sunschool`.
 
 ### 4.3 Delete stale duplicate files
 

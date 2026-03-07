@@ -63,6 +63,44 @@ function toSavings(row: any) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Refund helper — returns saved points to learners' general balances
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function refundSavingsForReward(client: any, rewardId: string) {
+  const { rows: savings } = await client.query(
+    `SELECT learner_id, saved_points FROM reward_goal_savings
+     WHERE reward_id = $1 AND saved_points > 0`,
+    [rewardId]
+  );
+
+  for (const s of savings) {
+    // Credit points back to learner balance
+    await client.query(
+      `UPDATE learner_points
+       SET current_balance = current_balance + $1, last_updated = NOW()
+       WHERE learner_id = $2`,
+      [s.saved_points, s.learner_id]
+    );
+
+    // Record ledger entry for the refund
+    await client.query(
+      `INSERT INTO points_ledger (learner_id, amount, source_type, source_id, description)
+       VALUES ($1, $2, 'GOAL_REFUND', $3, 'Reward removed — saved points refunded')`,
+      [s.learner_id, s.saved_points, rewardId]
+    );
+
+    // Zero out the savings
+    await client.query(
+      `UPDATE reward_goal_savings SET saved_points = 0, updated_at = NOW()
+       WHERE learner_id = $1 AND reward_id = $2`,
+      [s.learner_id, rewardId]
+    );
+  }
+
+  return savings.length;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Reward CRUD (parent)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -141,21 +179,53 @@ export async function updateReward(
   fields.push(`updated_at=NOW()`);
   values.push(rewardId, parentId);
 
-  const { rows } = await pool.query(
-    `UPDATE rewards SET ${fields.join(', ')}
-     WHERE id=$${idx++} AND parent_id=$${idx}
-     RETURNING *`,
-    values
-  );
-  if (!rows[0]) throw new Error('Reward not found or not owned by parent');
-  return toReward(rows[0]);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `UPDATE rewards SET ${fields.join(', ')}
+       WHERE id=$${idx++} AND parent_id=$${idx}
+       RETURNING *`,
+      values
+    );
+    if (!rows[0]) throw new Error('Reward not found or not owned by parent');
+
+    // If reward was just deactivated, refund all learner savings
+    if (data.isActive === false) {
+      await refundSavingsForReward(client, rewardId);
+    }
+
+    await client.query('COMMIT');
+    return toReward(rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function deleteReward(rewardId: string, parentId: number) {
-  await pool.query(
-    `DELETE FROM rewards WHERE id=$1 AND parent_id=$2`,
-    [rewardId, parentId]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Refund all learner savings for this reward back to their balances
+    await refundSavingsForReward(client, rewardId);
+
+    await client.query(
+      `DELETE FROM rewards WHERE id=$1 AND parent_id=$2`,
+      [rewardId, parentId]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -380,9 +450,10 @@ export async function approveRedemption(
     );
 
     // Increment reward.current_redemptions
-    await client.query(
+    const { rows: updatedReward } = await client.query(
       `UPDATE rewards SET current_redemptions = current_redemptions + 1, updated_at=NOW()
-       WHERE id=$1`,
+       WHERE id=$1
+       RETURNING current_redemptions, max_redemptions`,
       [r.reward_id]
     );
 
@@ -392,6 +463,17 @@ export async function approveRedemption(
        WHERE learner_id=$1 AND reward_id=$2`,
       [r.learner_id, r.reward_id]
     );
+
+    // Auto-deactivate if max redemptions reached
+    const ur = updatedReward[0];
+    if (ur?.max_redemptions && ur.current_redemptions >= ur.max_redemptions) {
+      await client.query(
+        `UPDATE rewards SET is_active = FALSE, updated_at=NOW() WHERE id=$1`,
+        [r.reward_id]
+      );
+      // Refund any other learners' savings for this now-deactivated reward
+      await refundSavingsForReward(client, r.reward_id);
+    }
 
     await client.query('COMMIT');
     return { success: true, learnerId: r.learner_id, rewardId: r.reward_id };

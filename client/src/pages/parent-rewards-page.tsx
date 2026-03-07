@@ -366,7 +366,10 @@ const ParentRewardsPage: React.FC = () => {
   const approveMutation = useMutation({
     mutationFn: ({ id, notes }: { id: string; notes?: string }) =>
       apiRequest('PUT', `/api/redemptions/${id}/approve`, { notes }).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/redemptions'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/redemptions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/rewards'] });
+    },
   });
 
   const rejectMutation = useMutation({
@@ -423,7 +426,11 @@ const ParentRewardsPage: React.FC = () => {
                 <RewardCard key={r.id} reward={r}
                   learnerProgress={rewardProgress[r.id]}
                   onEdit={() => { setEditingReward(r); setShowForm(true); }}
-                  onDelete={() => deleteMutation.mutate(r.id)}
+                  onDelete={() => {
+                    if (window.confirm(`Delete "${r.title}"? Any learner points saved toward this goal will be refunded.`)) {
+                      deleteMutation.mutate(r.id);
+                    }
+                  }}
                 />
               ))
             }

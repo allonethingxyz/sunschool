@@ -389,13 +389,11 @@ Smaller items that improve overall quality.
 
 ### 4.2 Complete the origen → sunschool rename — COMPLETED ✅
 
-**Status:** Rebrand completed. All code references updated to sunschool. Repo moved to `All-One-Thing/sunschool`.
+**Status:** Rebrand completed. All code references updated to sunschool. Repo at `https://github.com/allonethingxyz/sunschool`.
 
-### 4.3 Delete stale duplicate files
+### 4.3 Delete stale duplicate files — COMPLETED ✅
 
-**Files:** `server/openrouter 2.ts`, `server/routes 2.ts`
-
-**Problem:** Duplicate files with spaces in names — likely accidental copies.
+**Status:** Duplicate files (`server/openrouter 2.ts`, `server/routes 2.ts`) have been removed.
 
 ### 4.4 Standardize grade level handling
 

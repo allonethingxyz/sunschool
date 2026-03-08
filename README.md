@@ -30,17 +30,19 @@ SUNSCHOOL is a web-based educational platform that provides AI-generated lessons
 
 ### Implemented Features
 
-- **AI-Generated Lessons**: Content created using OpenRouter API with age-appropriate validation
+- **AI-Generated Lessons**: Content created using OpenRouter API with grade-specific prompts (K-2, 3-4, 5-6, 7-8, 9+) and age-appropriate validation
 - **SVG & Image Integration**: Lessons include dynamically generated SVG illustrations and OpenRouter image model support
 - **Parent-as-Learner Mode**: Parents can switch to learner mode to view and generate lessons for their children
 - **Quiz Analytics & Tracking**: Individual answer storage with concept tagging and question deduplication
 - **Concept Mastery System**: Track learner performance across specific concepts (addition, subtraction, etc.)
-- **Adaptive Learning**: Question-level analytics to identify strengths and weaknesses
-- **Achievement System**: Gamified learning with badges and recognition
+- **Adaptive Learning**: Question-level analytics to identify strengths and weaknesses, with spaced repetition
+- **Gamification & Rewards**: Points-based token economy with parent-managed rewards shop, goal setting, and reward redemption with approval workflow
+- **Achievement System**: Gamified learning with badges, token rewards, and recognition
 - **User Management**: Three-tier system with ADMIN, PARENT, and LEARNER roles
 - **Parent-Child Relationships**: Parents can manage multiple learner accounts
 - **Database Synchronization**: Parents can configure external PostgreSQL database connections for data backup
 - **Progress Tracking**: Comprehensive lesson completion, scoring, and points history
+- **Multi-Provider AI**: Support for OpenRouter (primary) and Bittensor Subnet 1 (experimental) with automatic fallback
 - **Cross-Platform Web App**: Works on desktop and mobile browsers
 - **Automatic Database Migrations**: Schema updates applied automatically on server startup
 - **End-to-End Testing**: Comprehensive Playwright test suite covering the full child lesson flow
@@ -108,7 +110,7 @@ SUNSCHOOL is a web-based educational platform that provides AI-generated lessons
 
 ### Prerequisites
 
-- Node.js (v18.x or newer)
+- Node.js (v20.x or newer, v22 recommended)
 - PostgreSQL database (local or cloud)
 - npm package manager
 
@@ -167,6 +169,21 @@ Starts the server at http://localhost:5000 (or configured PORT).
 ```bash
 npm run build
 npm start
+```
+
+### Railway Deployment
+
+The app is configured for Railway with NIXPACKS (Node 22). Push to `main` triggers automatic deployment.
+
+```json
+// railway.json
+{
+  "build": { "builder": "NIXPACKS" },
+  "deploy": {
+    "startCommand": "NODE_ENV=production node dist/server/index.js",
+    "healthcheckPath": "/api/healthcheck"
+  }
+}
 ```
 
 ## Admin Setup
@@ -232,6 +249,18 @@ ts-node scripts/admin-onboard.ts
 - `PUT /api/sync-configs/:id` - Update sync config (PARENT)
 - `DELETE /api/sync-configs/:id` - Delete sync config (PARENT)
 - `POST /api/sync-configs/:id/push` - Trigger sync (PARENT)
+
+### Gamification & Rewards
+- `GET /api/points/balance` - Get learner's point balance
+- `GET /api/learner/:learnerId/points-history` - Get points history
+- `GET /api/rewards/available` - List available rewards (LEARNER)
+- `POST /api/rewards/redeem/:rewardId` - Request reward redemption (LEARNER)
+- `GET /api/rewards` - List rewards (PARENT)
+- `POST /api/rewards` - Create reward (PARENT)
+- `PUT /api/rewards/:id` - Update reward (PARENT)
+- `DELETE /api/rewards/:id` - Delete reward (PARENT)
+- `GET /api/rewards/redemptions` - View pending redemptions (PARENT)
+- `POST /api/rewards/redemptions/:id/approve` - Approve redemption (PARENT)
 
 ### Other
 - `GET /api/reports` - Get reports

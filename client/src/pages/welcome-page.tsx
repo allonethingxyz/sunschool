@@ -171,7 +171,7 @@ const WelcomePage: React.FC = () => {
   }
 
   const openGitHub = () => {
-    Linking.openURL('https://github.com/realityinspector/sunschool');
+    Linking.openURL('https://github.com/allonethingxyz/sunschool');
   };
 
   const goToAuth = () => {

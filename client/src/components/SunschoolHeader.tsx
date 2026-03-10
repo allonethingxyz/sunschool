@@ -50,25 +50,23 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
             <View style={styles.logoIcon} aria-hidden="true">
               <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
                 <defs>
-                  <linearGradient id="hbg" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#4A90D9"/>
-                    <stop offset="100%" stopColor="#2E6BB5"/>
+                  <linearGradient id="hSunG" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#F5A623"/>
+                    <stop offset="100%" stopColor="#F97316"/>
                   </linearGradient>
                 </defs>
-                <rect width="32" height="32" rx="6" fill="url(#hbg)"/>
-                <circle cx="16" cy="13" r="6" fill="#FFD93D"/>
-                <g stroke="#FFD93D" strokeWidth="1.5" strokeLinecap="round" opacity="0.7">
-                  <line x1="16" y1="4" x2="16" y2="2"/>
-                  <line x1="22" y1="7" x2="24" y2="5"/>
-                  <line x1="25" y1="13" x2="27" y2="13"/>
-                  <line x1="22" y1="19" x2="24" y2="21"/>
-                  <line x1="10" y1="7" x2="8" y2="5"/>
-                  <line x1="7" y1="13" x2="5" y2="13"/>
-                  <line x1="10" y1="19" x2="8" y2="21"/>
-                </g>
-                <g fill="#FFFFFF" opacity="0.95">
-                  <path d="M16 23 Q16 21.5 10 21 L7 20.7 Q6 20.6 6 21.5 L6 27 Q6 27.8 7 27.9 L10 28.2 Q16 29 16 27.5 Z"/>
-                  <path d="M16 23 Q16 21.5 22 21 L25 20.7 Q26 20.6 26 21.5 L26 27 Q26 27.8 25 27.9 L22 28.2 Q16 29 16 27.5 Z"/>
+                <circle cx="16" cy="16" r="8" fill="url(#hSunG)"/>
+                <circle cx="16" cy="16" r="6" fill="none" stroke="#fff" strokeWidth="0.5" opacity="0.3"/>
+                <circle cx="16" cy="16" r="2" fill="#fff" opacity="0.6"/>
+                <g stroke="#F5A623" strokeWidth="2" strokeLinecap="round" opacity="0.7">
+                  <line x1="16" y1="5" x2="16" y2="2"/>
+                  <line x1="16" y1="27" x2="16" y2="30"/>
+                  <line x1="5" y1="16" x2="2" y2="16"/>
+                  <line x1="27" y1="16" x2="30" y2="16"/>
+                  <line x1="8.2" y1="8.2" x2="6" y2="6"/>
+                  <line x1="23.8" y1="8.2" x2="26" y2="6"/>
+                  <line x1="8.2" y1="23.8" x2="6" y2="26"/>
+                  <line x1="23.8" y1="23.8" x2="26" y2="26"/>
                 </g>
               </svg>
             </View>

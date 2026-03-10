@@ -2,11 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Dimensions } from 'react-native';
 import { useLocation, Redirect } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
-import { GitHub, BookOpen, Eye, Shield, Users, Award, BarChart2, Star, ArrowRight, CheckCircle, Zap, Lock, Globe } from 'react-feather';
+import { GitHub, BookOpen, Eye, Shield, Users, Award, BarChart2, Star, ArrowRight, Zap, Lock, Globe, Map } from 'react-feather';
 
 const windowWidth = Dimensions.get('window').width;
 
-// Sunschool brand colors (from learnerColors)
 const brand = {
   primary: '#4A90D9',
   primaryDark: '#2E6BB5',
@@ -15,150 +14,87 @@ const brand = {
   green: '#6BCB77',
   gold: '#FFD93D',
   purple: '#C084FC',
+  amber: '#F5A623',
   bg: '#F8FAFF',
-  text: '#2D3436',
+  text: '#1B2341',
   textLight: '#636E72',
   divider: '#DFE6E9',
   white: '#FFFFFF',
 };
 
-// ─── Sacred-geometry sun graphic (SVG) ────────────────────────────────────
-const SacredSunGraphic: React.FC = () => {
-  const cx = 160;
-  const cy = 160;
-  const size = 320;
+// ─── Inline sun icon matching the new logo ───────────────────────────────────
+const SunIcon: React.FC<{ size?: number }> = ({ size = 28 }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="wSunG" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#F5A623" />
+        <stop offset="100%" stopColor="#F97316" />
+      </linearGradient>
+    </defs>
+    <circle cx="16" cy="16" r="8" fill="url(#wSunG)" />
+    <circle cx="16" cy="16" r="6" fill="none" stroke="#fff" strokeWidth="0.5" opacity="0.3" />
+    <circle cx="16" cy="16" r="2" fill="#fff" opacity="0.6" />
+    <g stroke="#F5A623" strokeWidth="2" strokeLinecap="round" opacity="0.7">
+      <line x1="16" y1="5" x2="16" y2="2" />
+      <line x1="16" y1="27" x2="16" y2="30" />
+      <line x1="5" y1="16" x2="2" y2="16" />
+      <line x1="27" y1="16" x2="30" y2="16" />
+      <line x1="8.2" y1="8.2" x2="6" y2="6" />
+      <line x1="23.8" y1="8.2" x2="26" y2="6" />
+      <line x1="8.2" y1="23.8" x2="6" y2="26" />
+      <line x1="23.8" y1="23.8" x2="26" y2="26" />
+    </g>
+  </svg>
+);
 
-  // Orbital radii
-  const r1 = 48;  // inner ring
-  const r2 = 80;  // mid ring
-  const r3 = 120; // outer ring
-  const r4 = 150; // outermost halo
-
-  // Points around a circle
-  const pt = (r: number, i: number, n: number) => {
-    const a = (Math.PI * 2 * i) / n - Math.PI / 2;
-    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
-  };
-
-  // Seed of Life: 6 overlapping circles around center
-  const seedCircles = Array.from({ length: 6 }, (_, i) => pt(r1, i, 6));
-
-  // Hexagonal connectors on mid ring
-  const hexPts = Array.from({ length: 6 }, (_, i) => pt(r2, i, 6));
-
-  // 12-point star connectors on outer ring
-  const starPts = Array.from({ length: 12 }, (_, i) => pt(r3, i, 12));
-
-  // Orbital nodes (the "planets")
-  const orbitals = [
-    { r: r2, idx: 0, n: 6, color: brand.secondary, size: 7 },
-    { r: r2, idx: 2, n: 6, color: brand.green, size: 6 },
-    { r: r2, idx: 4, n: 6, color: brand.purple, size: 7 },
-    { r: r3, idx: 1, n: 12, color: brand.gold, size: 5 },
-    { r: r3, idx: 4, n: 12, color: brand.secondary, size: 4 },
-    { r: r3, idx: 7, n: 12, color: brand.green, size: 5 },
-    { r: r3, idx: 10, n: 12, color: brand.purple, size: 4 },
-  ];
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      style={{ overflow: 'visible' }}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        {/* Radial glow for center sun */}
-        <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={brand.gold} stopOpacity={0.6} />
-          <stop offset="60%" stopColor={brand.secondary} stopOpacity={0.15} />
-          <stop offset="100%" stopColor={brand.secondary} stopOpacity={0} />
-        </radialGradient>
-        {/* Subtle outer halo */}
-        <radialGradient id="halo" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#FFFFFF" stopOpacity={0} />
-          <stop offset="70%" stopColor="#FFFFFF" stopOpacity={0.03} />
-          <stop offset="100%" stopColor="#FFFFFF" stopOpacity={0.08} />
-        </radialGradient>
-      </defs>
-
-      {/* Outermost halo ring */}
-      <circle cx={cx} cy={cy} r={r4} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
-
-      {/* Outer 12-pointed star web */}
-      {starPts.map((p, i) => {
-        const next = starPts[(i + 1) % 12];
-        return <line key={`s${i}`} x1={p.x} y1={p.y} x2={next.x} y2={next.y} stroke="rgba(255,255,255,0.1)" strokeWidth={0.7} />;
+// ─── Hero sun graphic (larger, decorative) ───────────────────────────────────
+const HeroSunGraphic: React.FC = () => (
+  <svg width="320" height="320" viewBox="0 0 320 320" aria-hidden="true" focusable="false" style={{ overflow: 'visible' }}>
+    <defs>
+      <linearGradient id="heroSunG" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#F5A623" />
+        <stop offset="100%" stopColor="#F97316" />
+      </linearGradient>
+      <radialGradient id="heroGlow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="#F5A623" stopOpacity="0.3" />
+        <stop offset="60%" stopColor="#F5A623" stopOpacity="0.08" />
+        <stop offset="100%" stopColor="#F5A623" stopOpacity="0" />
+      </radialGradient>
+    </defs>
+    {/* Glow */}
+    <circle cx="160" cy="160" r="150" fill="url(#heroGlow)" />
+    {/* Outer rays */}
+    <g stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round">
+      {Array.from({ length: 16 }, (_, i) => {
+        const a = (Math.PI * 2 * i) / 16;
+        const x1 = 160 + 70 * Math.cos(a);
+        const y1 = 160 + 70 * Math.sin(a);
+        const x2 = 160 + (i % 2 === 0 ? 120 : 95) * Math.cos(a);
+        const y2 = 160 + (i % 2 === 0 ? 120 : 95) * Math.sin(a);
+        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />;
       })}
-      {/* Cross-connections every other point (hexagram) */}
-      {starPts.filter((_, i) => i % 2 === 0).map((p, i, arr) => {
-        const opp = arr[(i + 1) % arr.length];
-        return <line key={`sx${i}`} x1={p.x} y1={p.y} x2={opp.x} y2={opp.y} stroke="rgba(255,255,255,0.05)" strokeWidth={0.5} />;
-      })}
-
-      {/* Outer orbit ring */}
-      <circle cx={cx} cy={cy} r={r3} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={0.8} strokeDasharray="4 6" />
-
-      {/* Mid-ring hexagon */}
-      <polygon
-        points={hexPts.map(p => `${p.x},${p.y}`).join(' ')}
-        fill="none"
-        stroke="rgba(255,255,255,0.15)"
-        strokeWidth={0.8}
-      />
-      {/* Mid orbit ring */}
-      <circle cx={cx} cy={cy} r={r2} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={0.8} />
-
-      {/* Radial spokes from center to outer ring */}
-      {hexPts.map((p, i) => (
-        <line key={`spoke${i}`} x1={cx} y1={cy} x2={starPts[i * 2].x} y2={starPts[i * 2].y} stroke="rgba(255,255,255,0.07)" strokeWidth={0.6} />
-      ))}
-
-      {/* Seed of Life: 6 overlapping circles */}
-      {seedCircles.map((p, i) => (
-        <circle key={`seed${i}`} cx={p.x} cy={p.y} r={r1} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={0.7} />
-      ))}
-
-      {/* Inner ring */}
-      <circle cx={cx} cy={cy} r={r1} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={0.8} />
-
-      {/* Center sun glow */}
-      <circle cx={cx} cy={cy} r={56} fill="url(#sunGlow)" />
-
-      {/* Center sun core */}
-      <circle cx={cx} cy={cy} r={16} fill={brand.gold} opacity={0.9} />
-      <circle cx={cx} cy={cy} r={10} fill={brand.secondary} opacity={0.7} />
-      <circle cx={cx} cy={cy} r={4} fill="#FFFFFF" opacity={0.9} />
-
-      {/* Tiny dots at star-web vertices */}
-      {starPts.map((p, i) => (
-        <circle key={`dot${i}`} cx={p.x} cy={p.y} r={1.8} fill="rgba(255,255,255,0.3)" />
-      ))}
-
-      {/* Hex vertex dots */}
-      {hexPts.map((p, i) => (
-        <circle key={`hd${i}`} cx={p.x} cy={p.y} r={2.2} fill="rgba(255,255,255,0.25)" />
-      ))}
-
-      {/* Orbital nodes ("planets") */}
-      {orbitals.map((o, i) => {
-        const p = pt(o.r, o.idx, o.r === r2 ? 6 : 12);
-        return (
-          <g key={`orb${i}`}>
-            <circle cx={p.x} cy={p.y} r={o.size + 4} fill={o.color} opacity={0.12} />
-            <circle cx={p.x} cy={p.y} r={o.size} fill={o.color} opacity={0.85} />
-            <circle cx={p.x} cy={p.y} r={o.size * 0.4} fill="#FFFFFF" opacity={0.5} />
-          </g>
-        );
-      })}
-
-      {/* Outer halo wash */}
-      <circle cx={cx} cy={cy} r={r4} fill="url(#halo)" />
-    </svg>
-  );
-};
+    </g>
+    {/* Orbit ring */}
+    <circle cx="160" cy="160" r="100" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.8" strokeDasharray="4 6" />
+    {/* Sun core */}
+    <circle cx="160" cy="160" r="56" fill="url(#heroSunG)" opacity="0.9" />
+    <circle cx="160" cy="160" r="42" fill="none" stroke="#fff" strokeWidth="1" opacity="0.2" />
+    <circle cx="160" cy="160" r="14" fill="#fff" opacity="0.5" />
+    {/* Orbital dots */}
+    {[
+      { angle: 0.3, r: 100, color: brand.secondary, s: 6 },
+      { angle: 1.5, r: 100, color: brand.green, s: 5 },
+      { angle: 2.8, r: 100, color: brand.purple, s: 6 },
+      { angle: 4.2, r: 100, color: brand.gold, s: 4 },
+      { angle: 5.5, r: 100, color: brand.primary, s: 5 },
+    ].map((o, i) => (
+      <g key={i}>
+        <circle cx={160 + o.r * Math.cos(o.angle)} cy={160 + o.r * Math.sin(o.angle)} r={o.s + 3} fill={o.color} opacity="0.15" />
+        <circle cx={160 + o.r * Math.cos(o.angle)} cy={160 + o.r * Math.sin(o.angle)} r={o.s} fill={o.color} opacity="0.85" />
+      </g>
+    ))}
+  </svg>
+);
 
 const WelcomePage: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -190,22 +126,10 @@ const WelcomePage: React.FC = () => {
         <View style={styles.navbar} accessibilityRole="navigation" accessibilityLabel="Main navigation">
           <View style={styles.navInner}>
             <View style={styles.logoWrap}>
-              <View style={styles.logoIcon} aria-hidden="true">
-                <Text style={{ fontSize: 20 }}>&#9728;</Text>
-              </View>
-              <Text style={styles.logoText}>Sunschool</Text>
+              <SunIcon size={28} />
+              <Text style={styles.logoText}>SUNSCHOOL</Text>
             </View>
             <View style={styles.navLinks}>
-              {windowWidth >= 600 && (
-                <>
-                  <TouchableOpacity style={styles.navLink} accessibilityRole="link">
-                    <Text style={styles.navLinkText}>Features</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.navLink} accessibilityRole="link">
-                    <Text style={styles.navLinkText}>How It Works</Text>
-                  </TouchableOpacity>
-                </>
-              )}
               <TouchableOpacity style={styles.navCta} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started">
                 <Text style={styles.navCtaText}>Get Started</Text>
               </TouchableOpacity>
@@ -217,23 +141,13 @@ const WelcomePage: React.FC = () => {
         <View style={styles.hero}>
           <View style={styles.heroInner}>
             <View style={styles.heroLeft}>
-              <Text style={styles.heroTitle} accessibilityRole="header">Where Learning{'\n'}Comes Alive</Text>
-              <Text style={styles.heroSub}>
-                AI-powered lessons that adapt to your child.{'\n'}Fun for kids. Peace of mind for parents.
+              <Text style={styles.heroLabel}>SUNSCHOOL</Text>
+              <Text style={styles.heroTitle} accessibilityRole="header">
+                School {'\u2014'} anywhere{'\n'}under the sun.
               </Text>
-
-              <View style={styles.heroBenefits}>
-                {[
-                  { icon: <Zap size={16} color={brand.gold} />, text: 'Personalized AI lessons for every learner' },
-                  { icon: <Shield size={16} color={brand.green} />, text: 'Parents own the data and control the prompts' },
-                  { icon: <Globe size={16} color={brand.purple} />, text: 'Open source, transparent, community-driven' },
-                ].map((b, i) => (
-                  <View key={i} style={styles.benefitRow}>
-                    <View style={styles.benefitIcon}>{b.icon}</View>
-                    <Text style={styles.benefitText}>{b.text}</Text>
-                  </View>
-                ))}
-              </View>
+              <Text style={styles.heroSub}>
+                An AI tutor that adapts to your child. Open source, so you can see exactly how it works.
+              </Text>
 
               <View style={styles.heroCtas}>
                 <TouchableOpacity style={styles.ctaPrimary} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started Free">
@@ -247,12 +161,26 @@ const WelcomePage: React.FC = () => {
               </View>
             </View>
 
-            {/* Right side: sacred geometry sun */}
             {windowWidth >= 768 && (
               <View style={styles.heroRight}>
-                <SacredSunGraphic />
+                <HeroSunGraphic />
               </View>
             )}
+          </View>
+        </View>
+
+        {/* ── Product Description ── */}
+        <View style={styles.sectionWhite}>
+          <View style={styles.sectionWrap}>
+            <Text style={styles.sectionTitle} accessibilityRole="header">
+              Your child's tutor. Their pace. Their place.
+            </Text>
+            <Text style={styles.productDesc}>
+              Sunschool is an AI-powered tutor that meets your kid where they are {'\u2014'} grade level, learning style, speed. Every lesson adapts in real time. No two kids get the same experience.
+            </Text>
+            <Text style={styles.productDesc}>
+              It works on a blue-light-free e-reader tablet that runs on solar and satellite {'\u2014'} no Wi-Fi, no outlet, no classroom required. Backyard. Beach. Backseat. If the sun's out, school's on.
+            </Text>
           </View>
         </View>
 
@@ -260,10 +188,10 @@ const WelcomePage: React.FC = () => {
         <View style={styles.trustBar}>
           <View style={styles.trustInner}>
             {[
-              { icon: <Globe size={20} color={brand.primary} />, label: 'Open Source' },
-              { icon: <BookOpen size={20} color={brand.secondary} />, label: 'K-12' },
-              { icon: <Zap size={20} color={brand.gold} />, label: 'AI-Powered' },
-              { icon: <Lock size={20} color={brand.green} />, label: 'Parent-Controlled' },
+              { icon: <Globe size={20} color={brand.primary} aria-hidden="true" />, label: 'Open Source' },
+              { icon: <BookOpen size={20} color={brand.secondary} aria-hidden="true" />, label: 'K-12' },
+              { icon: <Zap size={20} color={brand.amber} aria-hidden="true" />, label: 'AI-Powered' },
+              { icon: <Lock size={20} color={brand.green} aria-hidden="true" />, label: 'Parent-Controlled' },
             ].map((item, i) => (
               <View key={i} style={styles.trustItem}>
                 {item.icon}
@@ -273,18 +201,17 @@ const WelcomePage: React.FC = () => {
           </View>
         </View>
 
-        {/* ── For Kids Section ── */}
-        <View style={styles.sectionWhite}>
+        {/* ── What kids experience ── */}
+        <View style={styles.sectionTinted}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">Kids Love Learning with Sunschool</Text>
-            <Text style={styles.sectionSub}>Interactive, personalized, and actually fun.</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">What kids experience</Text>
 
             <View style={styles.cardGrid}>
               {[
-                { icon: <BookOpen size={28} color={brand.white} />, bg: brand.primary, title: 'Lessons Made for You', desc: 'AI adapts to your grade level, learning style, and pace. Every lesson feels just right.' },
-                { icon: <Award size={28} color={brand.white} />, bg: brand.secondary, title: 'Fun Challenges', desc: 'Quizzes and activities that make learning feel like play, not homework.' },
-                { icon: <Star size={28} color={brand.white} />, bg: brand.green, title: 'Earn Trophies', desc: 'Collect badges, unlock achievements, and celebrate every milestone.' },
-                { icon: <BarChart2 size={28} color={brand.white} />, bg: brand.purple, title: 'Watch Yourself Grow', desc: 'See your knowledge grow on a visual map. Connect subjects and discover new interests.' },
+                { icon: <BookOpen size={28} color={brand.white} aria-hidden="true" />, bg: brand.primary, title: 'Lessons that feel like theirs', desc: 'The AI adjusts to how your child actually learns \u2014 not a grade-wide average. Every lesson fits.' },
+                { icon: <Award size={28} color={brand.white} aria-hidden="true" />, bg: brand.secondary, title: 'Play, not homework', desc: 'Quizzes feel like games. Challenges feel like puzzles. They\u2019ll ask to do more.' },
+                { icon: <Star size={28} color={brand.white} aria-hidden="true" />, bg: brand.green, title: 'Trophies and streaks', desc: 'Badges and milestones keep momentum going. Progress they can see and celebrate.' },
+                { icon: <Map size={28} color={brand.white} aria-hidden="true" />, bg: brand.purple, title: 'A map of everything they know', desc: 'Subjects connect visually. Kids see where they\u2019ve been and what\u2019s next \u2014 curiosity does the rest.' },
               ].map((card, i) => (
                 <View key={i} style={styles.featureCard}>
                   <View style={[styles.featureIconCircle, { backgroundColor: card.bg }]}>
@@ -298,18 +225,17 @@ const WelcomePage: React.FC = () => {
           </View>
         </View>
 
-        {/* ── For Parents Section ── */}
-        <View style={styles.sectionTinted}>
+        {/* ── What parents get ── */}
+        <View style={styles.sectionWhite}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">Parents Love the Control</Text>
-            <Text style={styles.sectionSub}>Full visibility. Full ownership. Full peace of mind.</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">What parents get</Text>
 
             <View style={styles.cardGrid}>
               {[
-                { icon: <Eye size={28} color={brand.white} />, bg: brand.primary, title: 'Real-Time Progress', desc: 'Watch your child learn in real time. See strengths, gaps, and growth at a glance.' },
-                { icon: <Shield size={28} color={brand.white} />, bg: brand.green, title: 'You Own the Data', desc: 'Your family\'s learning data stays yours. Export anytime, delete anytime.' },
-                { icon: <Users size={28} color={brand.white} />, bg: brand.secondary, title: 'Multi-Child Support', desc: 'One parent account, unlimited learner profiles. Each child gets their own journey.' },
-                { icon: <GitHub size={28} color={brand.white} />, bg: brand.text, title: 'Open Source & Transparent', desc: 'See exactly how the AI works. Contribute, audit, or self-host.' },
+                { icon: <Eye size={28} color={brand.white} aria-hidden="true" />, bg: brand.primary, title: 'See everything, in real time', desc: 'Live progress on strengths, gaps, and growth. Not a report card \u2014 a dashboard.' },
+                { icon: <Shield size={28} color={brand.white} aria-hidden="true" />, bg: brand.green, title: 'Your data stays yours', desc: 'Nothing gets sold. Nothing trains a model. Export or delete anytime.' },
+                { icon: <Users size={28} color={brand.white} aria-hidden="true" />, bg: brand.secondary, title: 'All your kids, one account', desc: 'Each child gets their own adaptive path. Add learners as your family grows.' },
+                { icon: <GitHub size={28} color={brand.white} aria-hidden="true" />, bg: brand.text, title: 'Open source, all the way down', desc: 'Read the code. Audit the prompts. Self-host if you want. Education you can verify, not just trust.' },
               ].map((card, i) => (
                 <View key={i} style={styles.featureCard}>
                   <View style={[styles.featureIconCircle, { backgroundColor: card.bg }]}>
@@ -324,16 +250,15 @@ const WelcomePage: React.FC = () => {
         </View>
 
         {/* ── How It Works ── */}
-        <View style={styles.sectionWhite}>
+        <View style={styles.sectionTinted}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">How It Works</Text>
-            <Text style={styles.sectionSub}>Up and running in minutes.</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">Up and running in minutes</Text>
 
             <View style={styles.stepsContainer}>
               {[
-                { num: '1', color: brand.primary, title: 'Create Your Account', desc: 'Sign up with email and password. No credit card needed.' },
-                { num: '2', color: brand.secondary, title: 'Add Your Child', desc: 'Create a learner profile with their grade level and interests.' },
-                { num: '3', color: brand.green, title: 'Start Learning!', desc: 'Access personalized AI lessons instantly. Track progress from your dashboard.' },
+                { num: '1', color: brand.primary, title: 'Sign up', desc: 'Email and password. No credit card. No trial clock.' },
+                { num: '2', color: brand.secondary, title: 'Add your child', desc: 'Name, grade, interests. The AI takes it from there.' },
+                { num: '3', color: brand.green, title: 'Start learning', desc: 'Hand them the tablet. Go pour your coffee.' },
               ].map((step, i) => (
                 <View key={i} style={styles.stepRow}>
                   <View style={[styles.stepCircle, { backgroundColor: step.color }]}>
@@ -349,18 +274,18 @@ const WelcomePage: React.FC = () => {
           </View>
         </View>
 
-        {/* ── Testimonial / Social Proof ── */}
-        <View style={styles.sectionTinted}>
+        {/* ── Testimonials ── */}
+        <View style={styles.sectionWhite}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">What Parents Are Saying</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">From parents using Sunschool</Text>
             <View style={styles.testimonialGrid}>
               {[
-                { quote: 'My daughter actually asks to do her lessons now. The AI adapts perfectly to her pace.', name: 'Sarah M.', detail: 'Parent of a 3rd grader', color: brand.primary },
-                { quote: 'I love that I can see exactly what the AI is teaching. Transparency matters to our family.', name: 'James T.', detail: 'Parent of 2 kids', color: brand.secondary },
-                { quote: 'We travel full-time and Sunschool makes it possible to keep learning structured and fun.', name: 'Mia L.', detail: 'Homeschool parent', color: brand.green },
+                { quote: 'She takes it outside and does math in the hammock. Voluntarily. I have no explanation.', name: 'Sarah M.', detail: 'Parent of a 3rd grader', color: brand.primary },
+                { quote: 'I read the source code before my kids touched it. Every ed-tech company should have to clear that bar.', name: 'James T.', detail: 'Parent of 2', color: brand.secondary },
+                { quote: 'We travel full-time. Sunschool works on a beach in Portugal or a cabin in Montana \u2014 no Wi-Fi needed.', name: 'Mia L.', detail: 'Homeschool parent', color: brand.green },
               ].map((t, i) => (
                 <View key={i} style={[styles.testimonialCard, { borderLeftColor: t.color }]}>
-                  <Text style={styles.testimonialQuote}>"{t.quote}"</Text>
+                  <Text style={styles.testimonialQuote}>{'\u201C'}{t.quote}{'\u201D'}</Text>
                   <Text style={styles.testimonialName}>{t.name}</Text>
                   <Text style={styles.testimonialDetail}>{t.detail}</Text>
                 </View>
@@ -372,23 +297,25 @@ const WelcomePage: React.FC = () => {
         {/* ── Final CTA ── */}
         <View style={styles.finalCta}>
           <View style={styles.finalCtaInner}>
-            <Text style={styles.finalCtaTitle} accessibilityRole="header">Ready to Start Your Child's{'\n'}Learning Adventure?</Text>
+            <Text style={styles.finalCtaTitle} accessibilityRole="header">
+              School starts when{'\n'}the sun does.
+            </Text>
+            <Text style={styles.finalCtaNote}>Free forever for core features. No credit card needed.</Text>
             <TouchableOpacity style={styles.finalCtaButton} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started Free">
               <Text style={styles.finalCtaButtonText}>Get Started Free</Text>
               <ArrowRight size={18} color={brand.white} style={{ marginLeft: 8 }} aria-hidden="true" />
             </TouchableOpacity>
-            <Text style={styles.finalCtaNote}>No credit card needed. Free forever for core features.</Text>
           </View>
         </View>
 
         {/* ── Footer ── */}
         <View style={styles.footer} accessibilityRole="contentinfo">
           <View style={styles.footerInner}>
-            <View style={styles.footerBrand} aria-hidden="true">
-              <Text style={{ fontSize: 18 }}>&#9728;&#65039;</Text>
+            <View style={styles.footerBrand}>
+              <SunIcon size={20} />
               <Text style={styles.footerLogo}>Sunschool</Text>
             </View>
-            <Text style={styles.footerTagline}>AI-powered learning where parents own the prompt.</Text>
+            <Text style={styles.footerTagline}>Part of All One Thing.{'\n'}Open source education for all.</Text>
 
             <View style={styles.footerLinks} accessibilityRole="list">
               <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.location.href = '/privacy'; }} accessibilityRole="link" accessibilityLabel="Privacy Policy">
@@ -448,40 +375,23 @@ const styles = StyleSheet.create({
   logoWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  logoIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFF3E0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
+    gap: 10,
   },
   logoText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: brand.primary,
-    letterSpacing: -0.3,
+    fontSize: 20,
+    fontWeight: '800',
+    color: brand.text,
+    letterSpacing: 2,
   },
   navLinks: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  navLink: {
-    marginHorizontal: 14,
-  },
-  navLinkText: {
-    fontSize: 15,
-    color: brand.text,
-    fontWeight: '500',
   },
   navCta: {
     backgroundColor: brand.secondary,
     paddingVertical: 10,
     paddingHorizontal: 22,
     borderRadius: 24,
-    marginLeft: 12,
   },
   navCtaText: {
     color: brand.white,
@@ -509,8 +419,15 @@ const styles = StyleSheet.create({
   },
   heroLeft: {
     flex: windowWidth < 768 ? 0 : 1,
-    maxWidth: 580,
+    maxWidth: 600,
     width: '100%',
+  },
+  heroLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 3,
+    marginBottom: 16,
   },
   heroTitle: {
     fontSize: windowWidth < 768 ? 34 : 50,
@@ -524,29 +441,7 @@ const styles = StyleSheet.create({
     fontSize: windowWidth < 768 ? 17 : 20,
     lineHeight: windowWidth < 768 ? 26 : 30,
     color: 'rgba(255,255,255,0.9)',
-    marginBottom: 28,
-  },
-  heroBenefits: {
     marginBottom: 32,
-  },
-  benefitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  benefitIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  benefitText: {
-    fontSize: 16,
-    color: brand.white,
-    fontWeight: '500',
   },
   heroCtas: {
     flexDirection: windowWidth < 480 ? 'column' : 'row',
@@ -583,13 +478,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-
-  /* Hero right graphic */
   heroRight: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 320,
+  },
+
+  /* Product description */
+  productDesc: {
+    fontSize: windowWidth < 768 ? 16 : 18,
+    lineHeight: windowWidth < 768 ? 26 : 30,
+    color: brand.textLight,
+    textAlign: 'center',
+    marginBottom: 16,
+    maxWidth: 720,
+    marginHorizontal: 'auto',
   },
 
   /* Trust Bar */
@@ -642,14 +546,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: brand.text,
     textAlign: 'center',
-    marginBottom: 12,
-  },
-  sectionSub: {
-    fontSize: 17,
-    color: brand.textLight,
-    textAlign: 'center',
-    marginBottom: 48,
-    lineHeight: 26,
+    marginBottom: 16,
   },
 
   /* Feature cards */
@@ -658,6 +555,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 24,
+    marginTop: 24,
   },
   featureCard: {
     width: windowWidth < 768 ? '100%' : windowWidth < 1024 ? '46%' : '22%',
@@ -696,8 +594,9 @@ const styles = StyleSheet.create({
 
   /* How It Works steps */
   stepsContainer: {
-    maxWidth: 700,
+    maxWidth: 600,
     marginHorizontal: 'auto',
+    marginTop: 24,
   },
   stepRow: {
     flexDirection: 'row',
@@ -739,11 +638,12 @@ const styles = StyleSheet.create({
     flexDirection: windowWidth < 768 ? 'column' : 'row',
     gap: 24,
     justifyContent: 'center',
+    marginTop: 24,
   },
   testimonialCard: {
     flex: 1,
     minWidth: 260,
-    backgroundColor: brand.white,
+    backgroundColor: brand.bg,
     borderRadius: 12,
     padding: 24,
     borderLeftWidth: 4,
@@ -774,7 +674,7 @@ const styles = StyleSheet.create({
   /* Final CTA */
   finalCta: {
     backgroundColor: brand.primary,
-    backgroundImage: `linear-gradient(135deg, ${brand.primary} 0%, ${brand.purple} 100%)`,
+    backgroundImage: `linear-gradient(135deg, ${brand.primaryDark} 0%, ${brand.primary} 100%)`,
     paddingVertical: windowWidth < 768 ? 60 : 80,
     paddingHorizontal: 20,
     alignItems: 'center',
@@ -785,12 +685,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   finalCtaTitle: {
-    fontSize: windowWidth < 768 ? 26 : 36,
+    fontSize: windowWidth < 768 ? 28 : 40,
     fontWeight: '800',
     color: brand.white,
     textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: windowWidth < 768 ? 36 : 50,
+  },
+  finalCtaNote: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.75)',
+    textAlign: 'center',
     marginBottom: 28,
-    lineHeight: windowWidth < 768 ? 34 : 46,
   },
   finalCtaButton: {
     backgroundColor: brand.secondary,
@@ -799,17 +705,11 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
   },
   finalCtaButtonText: {
     color: brand.white,
     fontSize: 19,
     fontWeight: '700',
-  },
-  finalCtaNote: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.75)',
-    textAlign: 'center',
   },
 
   /* Footer */
@@ -834,13 +734,14 @@ const styles = StyleSheet.create({
   footerLogo: {
     fontSize: 20,
     fontWeight: '700',
-    color: brand.primary,
+    color: brand.text,
   },
   footerTagline: {
     fontSize: 15,
     color: brand.textLight,
     marginBottom: 24,
     textAlign: 'center',
+    lineHeight: 22,
   },
   footerLinks: {
     flexDirection: 'row',

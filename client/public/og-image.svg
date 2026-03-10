@@ -4,44 +4,49 @@
       <stop offset="0%" stop-color="#4A90D9"/>
       <stop offset="100%" stop-color="#2E6BB5"/>
     </linearGradient>
-    <radialGradient id="glow" cx="30%" cy="50%" r="60%">
-      <stop offset="0%" stop-color="#FFD93D" stop-opacity="0.15"/>
-      <stop offset="100%" stop-color="#FFD93D" stop-opacity="0"/>
+    <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F5A623"/>
+      <stop offset="100%" stop-color="#F97316"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="18%" cy="50%" r="40%">
+      <stop offset="0%" stop-color="#F5A623" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#F5A623" stop-opacity="0"/>
     </radialGradient>
   </defs>
   <!-- Background -->
   <rect width="1200" height="630" fill="url(#bgGrad)"/>
   <rect width="1200" height="630" fill="url(#glow)"/>
   <!-- Sun -->
-  <circle cx="200" cy="315" r="80" fill="#FFD93D" opacity="0.9"/>
-  <circle cx="200" cy="315" r="60" fill="#FF8C42" opacity="0.2"/>
+  <circle cx="200" cy="315" r="70" fill="url(#sunGrad)" opacity="0.95"/>
+  <circle cx="200" cy="315" r="52" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.25"/>
+  <circle cx="200" cy="315" r="18" fill="#fff" opacity="0.5"/>
   <!-- Rays -->
-  <g stroke="#FFD93D" stroke-width="3" stroke-linecap="round" opacity="0.5">
-    <line x1="200" y1="215" x2="200" y2="185"/>
-    <line x1="270" y1="245" x2="290" y2="225"/>
-    <line x1="300" y1="315" x2="330" y2="315"/>
-    <line x1="270" y1="385" x2="290" y2="405"/>
-    <line x1="200" y1="415" x2="200" y2="445"/>
-    <line x1="130" y1="385" x2="110" y2="405"/>
-    <line x1="100" y1="315" x2="70" y2="315"/>
-    <line x1="130" y1="245" x2="110" y2="225"/>
+  <g stroke="#F5A623" stroke-width="3.5" stroke-linecap="round" opacity="0.55">
+    <line x1="200" y1="225" x2="200" y2="195"/>
+    <line x1="264" y1="251" x2="284" y2="231"/>
+    <line x1="290" y1="315" x2="320" y2="315"/>
+    <line x1="264" y1="379" x2="284" y2="399"/>
+    <line x1="200" y1="405" x2="200" y2="435"/>
+    <line x1="136" y1="379" x2="116" y2="399"/>
+    <line x1="110" y1="315" x2="80" y2="315"/>
+    <line x1="136" y1="251" x2="116" y2="231"/>
   </g>
-  <!-- Seed of life in sun -->
-  <g fill="none" stroke="#FFFFFF" stroke-width="1.2" opacity="0.4">
-    <circle cx="200" cy="315" r="30"/>
-    <circle cx="200" cy="285" r="30"/>
-    <circle cx="226" cy="300" r="30"/>
-    <circle cx="226" cy="330" r="30"/>
-    <circle cx="200" cy="345" r="30"/>
-    <circle cx="174" cy="330" r="30"/>
-    <circle cx="174" cy="300" r="30"/>
+  <!-- Inner rays -->
+  <g stroke="#F5A623" stroke-width="2" stroke-linecap="round" opacity="0.3">
+    <line x1="168" y1="231" x2="158" y2="211"/>
+    <line x1="232" y1="231" x2="242" y2="211"/>
+    <line x1="232" y1="399" x2="242" y2="419"/>
+    <line x1="168" y1="399" x2="158" y2="419"/>
+    <line x1="118" y1="283" x2="98" y2="273"/>
+    <line x1="118" y1="347" x2="98" y2="357"/>
+    <line x1="282" y1="283" x2="302" y2="273"/>
+    <line x1="282" y1="347" x2="302" y2="357"/>
   </g>
   <!-- Text -->
-  <text x="380" y="270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="96" font-weight="800" fill="#FFFFFF" letter-spacing="-2">SUNSCHOOL</text>
-  <text x="385" y="340" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="36" fill="rgba(255,255,255,0.85)" font-weight="400">AI-powered learning where parents own the prompt</text>
-  <!-- Tagline bar -->
-  <rect x="380" y="380" width="60" height="4" rx="2" fill="#FF8C42"/>
-  <text x="380" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" fill="rgba(255,255,255,0.65)" font-weight="500">sunschool.xyz</text>
-  <!-- Bottom attribution -->
-  <text x="380" y="455" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" fill="rgba(255,255,255,0.45)" font-weight="400">by All One Thing Labs</text>
+  <text x="400" y="250" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="96" font-weight="800" fill="#FFFFFF" letter-spacing="4">SUNSCHOOL</text>
+  <text x="405" y="320" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="32" fill="rgba(255,255,255,0.85)" font-weight="400">School — anywhere under the sun.</text>
+  <!-- Divider -->
+  <rect x="405" y="350" width="60" height="3" rx="1.5" fill="#F5A623" opacity="0.6"/>
+  <text x="405" y="395" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="22" fill="rgba(255,255,255,0.6)" font-weight="500">sunschool.xyz</text>
+  <text x="405" y="428" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="17" fill="rgba(255,255,255,0.4)" font-weight="400">An All One Thing learning platform</text>
 </svg>

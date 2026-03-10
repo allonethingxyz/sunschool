@@ -1054,7 +1054,7 @@ export function registerRoutes(app: Express): Server {
     }
 
     const lessonId = req.params.lessonId;
-    const { answers, doubleOrLoss: doubleOrLossFlag } = req.body;
+    const { answers, doubleOrLoss: doubleOrLossFlag, doubleQuestionIndices } = req.body;
 
     if (!Array.isArray(answers)) {
       return res.status(400).json({ error: "Answers must be an array" });
@@ -1160,11 +1160,29 @@ export function registerRoutes(app: Express): Server {
       });
     }
 
-    // After score calculation — award points with optional Double-or-Loss multiplier
+    // After score calculation — award points with per-question Double-or-Loss
     const wrongCount = questions.length - correctCount;
-    const isDoubleOrLoss = doubleOrLossFlag === true;
-    const pointsPerCorrect = isDoubleOrLoss ? 2 : 1;
-    const pointsAwarded = correctCount * pointsPerCorrect;
+
+    // Support both legacy whole-quiz flag and new per-question indices
+    const perQuestionDoubles: Set<number> = new Set(
+      Array.isArray(doubleQuestionIndices) ? doubleQuestionIndices : []
+    );
+    const isLegacyDoubleOrLoss = doubleOrLossFlag === true && perQuestionDoubles.size === 0;
+
+    let pointsAwarded = 0;
+    let pointsDeducted = 0;
+
+    for (let i = 0; i < questions.length; i++) {
+      const isCorrect = answers[i] === questions[i].correctIndex;
+      const isDoubled = isLegacyDoubleOrLoss || perQuestionDoubles.has(i);
+      if (isCorrect) {
+        pointsAwarded += isDoubled ? 2 : 1;
+      } else if (isDoubled) {
+        pointsDeducted += 1;
+      }
+    }
+
+    const hasAnyDouble = isLegacyDoubleOrLoss || perQuestionDoubles.size > 0;
 
     let newBalance = 0;
     try {
@@ -1174,14 +1192,14 @@ export function registerRoutes(app: Express): Server {
           amount: pointsAwarded,
           sourceType: "QUIZ_CORRECT",
           sourceId: lessonId,
-          description: `Quiz ${score}%${isDoubleOrLoss ? ' [Double-or-Loss ×2]' : ''}`
+          description: `Quiz ${score}%${hasAnyDouble ? ' [Double-or-Loss]' : ''}`
         });
       }
 
-      // Double-or-Loss deduction for wrong answers
-      if (isDoubleOrLoss && wrongCount > 0) {
+      // Double-or-Loss deduction for wrong answers on doubled questions
+      if (pointsDeducted > 0) {
         const { applyDoubleOrLossDeduction } = await import('./services/rewards-service');
-        await applyDoubleOrLossDeduction(learnerId, wrongCount);
+        await applyDoubleOrLossDeduction(learnerId, pointsDeducted);
       }
 
       newBalance = await pointsService.getBalance(learnerId);
@@ -1196,8 +1214,9 @@ export function registerRoutes(app: Express): Server {
       totalQuestions: questions.length,
       wrongCount,
       pointsAwarded,
-      pointsDeducted: isDoubleOrLoss ? wrongCount : 0,
-      doubleOrLoss: isDoubleOrLoss,
+      pointsDeducted,
+      doubleOrLoss: hasAnyDouble,
+      doubleQuestionIndices: Array.from(perQuestionDoubles),
       newBalance,
       newAchievements: newAchievements.map(a => a.payload)
     });
@@ -1328,6 +1347,16 @@ export function registerRoutes(app: Express): Server {
         // Calculate subject performance if available
         let subjectPerformance = profile?.subjectPerformance || {};
 
+        // Get concept mastery count from the mastery service
+        let conceptsLearnedCount = 0;
+        try {
+          const { getMasterySummary } = await import('./services/mastery-service');
+          const masterySummary = await getMasterySummary(Number(learnerId));
+          conceptsLearnedCount = masterySummary.totalConcepts;
+        } catch (e) {
+          console.error('Error fetching mastery summary for report:', e);
+        }
+
         // Calculate additional analytics
         const analytics = {
           lessonsCompleted: completedLessons,
@@ -1335,7 +1364,7 @@ export function registerRoutes(app: Express): Server {
           lessonsQueued: queuedLessons,
           totalLessons: lessons.length,
           achievementsCount: achievements.length,
-          conceptsLearned: profile?.graph?.nodes?.length || 0,
+          conceptsLearned: conceptsLearnedCount,
           progressRate: lessons.length > 0 ? (completedLessons / lessons.length) * 100 : 0,
           subjectDistribution: {} as Record<string, number>
         };

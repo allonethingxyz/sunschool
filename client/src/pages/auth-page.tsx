@@ -140,10 +140,30 @@ const AuthPage = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerContainer}>
           <View style={styles.logoContainer} aria-hidden="true">
-            <Book size={48} color={colors.primary} aria-hidden="true" />
+            <svg width="56" height="56" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+              <defs>
+                <linearGradient id="authSunG" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#F5A623" />
+                  <stop offset="100%" stopColor="#F97316" />
+                </linearGradient>
+              </defs>
+              <circle cx="16" cy="16" r="8" fill="url(#authSunG)" />
+              <circle cx="16" cy="16" r="6" fill="none" stroke="#fff" strokeWidth="0.5" opacity="0.3" />
+              <circle cx="16" cy="16" r="2" fill="#fff" opacity="0.6" />
+              <g stroke="#F5A623" strokeWidth="2" strokeLinecap="round" opacity="0.7">
+                <line x1="16" y1="5" x2="16" y2="2" />
+                <line x1="16" y1="27" x2="16" y2="30" />
+                <line x1="5" y1="16" x2="2" y2="16" />
+                <line x1="27" y1="16" x2="30" y2="16" />
+                <line x1="8.2" y1="8.2" x2="6" y2="6" />
+                <line x1="23.8" y1="8.2" x2="26" y2="6" />
+                <line x1="8.2" y1="23.8" x2="6" y2="26" />
+                <line x1="23.8" y1="23.8" x2="26" y2="26" />
+              </g>
+            </svg>
           </View>
           <Text style={styles.title} accessibilityRole="header">SUNSCHOOL</Text>
-          <Text style={styles.subtitle}>The Open Source AI Tutor</Text>
+          <Text style={styles.subtitle}>School — anywhere under the sun.</Text>
         </View>
         
         <View style={styles.tabContainer} accessibilityRole="tablist">
@@ -441,8 +461,6 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,

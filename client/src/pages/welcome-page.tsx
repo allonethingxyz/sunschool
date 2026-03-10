@@ -326,7 +326,7 @@ const WelcomePage: React.FC = () => {
         <View style={styles.finalCta}>
           <View style={styles.finalCtaInner}>
             <Text style={styles.finalCtaTitle} accessibilityRole="header">
-              School starts when{'\n'}the sun does.
+              School {'\u2014'} anywhere{'\n'}under the sun.
             </Text>
             <Text style={styles.finalCtaNote}>Free forever for core features. No credit card needed.</Text>
             <TouchableOpacity style={styles.finalCtaButton} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started Free">

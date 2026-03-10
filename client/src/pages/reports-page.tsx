@@ -288,7 +288,7 @@ const ReportsPage: React.FC = () => {
                             <Text style={styles.achievementTitle}>{achievement.title}</Text>
                             <Text style={styles.achievementDescription}>{achievement.description}</Text>
                             <Text style={styles.achievementDate}>
-                              Earned on {new Date(achievement.createdAt).toLocaleDateString()}
+                              Earned on {(achievement.awardedAt ? new Date(achievement.awardedAt).toLocaleDateString() : 'Unknown date')}
                             </Text>
                           </View>
                         </View>

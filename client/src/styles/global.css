@@ -21,11 +21,11 @@
 
 /* Outline button hover effect */
 .outlineButton:hover {
-  background-color: rgba(98, 0, 238, 0.05);
+  background-color: rgba(74, 144, 217, 0.05);
 }
 
 .outlineButton:active {
-  background-color: rgba(98, 0, 238, 0.1);
+  background-color: rgba(74, 144, 217, 0.1);
 }
 
 /* Card hover effects */
@@ -53,13 +53,13 @@
 }
 
 .tab:not(.activeTab):hover {
-  border-bottom-color: rgba(98, 0, 238, 0.3);
+  border-bottom-color: rgba(74, 144, 217, 0.3);
 }
 
 /* Input focus effect */
 input:focus {
-  border-color: #6200EE;
-  box-shadow: 0 0 0 2px rgba(98, 0, 238, 0.2);
+  border-color: #4A90D9;
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.25);
   outline: none;
 }
 
@@ -135,7 +135,12 @@ input:focus {
 
 /* Add focus styles for accessibility */
 :focus {
-  outline: 2px solid rgba(98, 0, 238, 0.5);
+  outline: 2px solid rgba(74, 144, 217, 0.7);
+  outline-offset: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(74, 144, 217, 0.7);
   outline-offset: 2px;
 }
 

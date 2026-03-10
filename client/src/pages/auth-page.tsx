@@ -139,23 +139,29 @@ const AuthPage = () => {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerContainer}>
-          <View style={styles.logoContainer}>
-            <Book size={48} color={colors.primary} />
+          <View style={styles.logoContainer} aria-hidden="true">
+            <Book size={48} color={colors.primary} aria-hidden="true" />
           </View>
-          <Text style={styles.title}>SUNSCHOOL</Text>
+          <Text style={styles.title} accessibilityRole="header">SUNSCHOOL</Text>
           <Text style={styles.subtitle}>The Open Source AI Tutor</Text>
         </View>
         
-        <View style={styles.tabContainer}>
+        <View style={styles.tabContainer} accessibilityRole="tablist">
           <TouchableOpacity
             style={[styles.tab, isLogin ? styles.activeTab : null]}
             onPress={() => setIsLogin(true)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isLogin }}
+            accessibilityLabel="Login"
           >
             <Text style={[styles.tabText, isLogin ? styles.activeTabText : null]}>Login</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, !isLogin ? styles.activeTab : null]}
             onPress={() => setIsLogin(false)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: !isLogin }}
+            accessibilityLabel="Register"
           >
             <Text style={[styles.tabText, !isLogin ? styles.activeTabText : null]}>Register</Text>
           </TouchableOpacity>
@@ -164,47 +170,57 @@ const AuthPage = () => {
         <View style={styles.formContainer}>
           {isLogin ? (
             // Login Form
-            <View>
+            <View accessibilityRole="form" accessibilityLabel="Login form">
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Username</Text>
+                <Text style={styles.label} nativeID="login-username-label">Username</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your username"
                   value={loginUsername}
                   onChangeText={setLoginUsername}
                   autoCapitalize="none"
+                  accessibilityLabel="Username"
+                  accessibilityLabelledBy="login-username-label"
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password</Text>
+                <Text style={styles.label} nativeID="login-password-label">Password</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your password"
                   secureTextEntry
                   value={loginPassword}
                   onChangeText={setLoginPassword}
+                  accessibilityLabel="Password"
+                  accessibilityLabelledBy="login-password-label"
                 />
               </View>
-              
+
               <View style={styles.checkboxContainer}>
                 <TouchableOpacity
                   style={styles.checkboxWrapper}
                   onPress={() => setLoginDisclaimerAccepted(!loginDisclaimerAccepted)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: loginDisclaimerAccepted }}
+                  accessibilityLabel="I confirm I am at least 18 years old and accept the terms"
                 >
                   <View style={[styles.checkbox, loginDisclaimerAccepted ? styles.checkboxChecked : {}]}>
-                    {loginDisclaimerAccepted && <Check size={16} color={colors.onPrimary} />}
+                    {loginDisclaimerAccepted && <Check size={16} color={colors.onPrimary} aria-hidden="true" />}
                   </View>
                   <Text style={styles.checkboxText}>
                     I confirm I am at least 18 years old and understand I'm using alpha stage open source software meant for demonstration purposes only, provided under the MIT License. No support, services, or guarantee of this software existing in the future is made by setting up a test account for free.
                   </Text>
                 </TouchableOpacity>
               </View>
-              
+
               <TouchableOpacity
                 style={styles.button}
                 onPress={handleLogin}
                 disabled={loginMutation.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={loginMutation.isPending ? 'Logging in' : 'Login'}
+                accessibilityState={{ disabled: loginMutation.isPending }}
               >
                 <Text style={styles.buttonText}>
                   {loginMutation.isPending ? 'Logging in...' : 'Login'}
@@ -213,20 +229,22 @@ const AuthPage = () => {
             </View>
           ) : (
             // Registration Form
-            <View>
+            <View accessibilityRole="form" accessibilityLabel="Registration form">
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Username</Text>
+                <Text style={styles.label} nativeID="reg-username-label">Username</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Choose a username"
                   value={regUsername}
                   onChangeText={setRegUsername}
                   autoCapitalize="none"
+                  accessibilityLabel="Username"
+                  accessibilityLabelledBy="reg-username-label"
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email</Text>
+                <Text style={styles.label} nativeID="reg-email-label">Email</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your email"
@@ -234,52 +252,63 @@ const AuthPage = () => {
                   value={regEmail}
                   onChangeText={setRegEmail}
                   autoCapitalize="none"
+                  accessibilityLabel="Email"
+                  accessibilityLabelledBy="reg-email-label"
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Full Name</Text>
+                <Text style={styles.label} nativeID="reg-name-label">Full Name</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Enter your full name"
                   value={regName}
                   onChangeText={setRegName}
+                  accessibilityLabel="Full Name"
+                  accessibilityLabelledBy="reg-name-label"
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Password</Text>
+                <Text style={styles.label} nativeID="reg-password-label">Password</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Create a password"
                   secureTextEntry
                   value={regPassword}
                   onChangeText={setRegPassword}
+                  accessibilityLabel="Password"
+                  accessibilityLabelledBy="reg-password-label"
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Confirm Password</Text>
+                <Text style={styles.label} nativeID="reg-confirm-password-label">Confirm Password</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Confirm your password"
                   secureTextEntry
                   value={regConfirmPassword}
                   onChangeText={setRegConfirmPassword}
+                  accessibilityLabel="Confirm Password"
+                  accessibilityLabelledBy="reg-confirm-password-label"
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>You are registering as:</Text>
-                <View style={styles.roleSelector}>
+                <View style={styles.roleSelector} accessibilityRole="radiogroup" accessibilityLabel="Account type">
                   <TouchableOpacity
                     style={[
                       styles.roleOption,
                       styles.selectedRole
                     ]}
                     onPress={() => setRegRole('PARENT')}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: regRole === 'PARENT' }}
+                    accessibilityLabel="Parent"
                   >
-                    <User size={20} color={colors.onPrimary} />
+                    <User size={20} color={colors.onPrimary} aria-hidden="true" />
                     <Text style={[
                       styles.roleText,
                       styles.selectedRoleText
@@ -290,25 +319,31 @@ const AuthPage = () => {
                   As a parent, you can create and manage children's learning accounts.
                 </Text>
               </View>
-              
+
               <View style={styles.checkboxContainer}>
                 <TouchableOpacity
                   style={styles.checkboxWrapper}
                   onPress={() => setRegDisclaimerAccepted(!regDisclaimerAccepted)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: regDisclaimerAccepted }}
+                  accessibilityLabel="I confirm I am at least 18 years old and accept the terms"
                 >
                   <View style={[styles.checkbox, regDisclaimerAccepted ? styles.checkboxChecked : {}]}>
-                    {regDisclaimerAccepted && <Check size={16} color={colors.onPrimary} />}
+                    {regDisclaimerAccepted && <Check size={16} color={colors.onPrimary} aria-hidden="true" />}
                   </View>
                   <Text style={styles.checkboxText}>
                     I confirm I am at least 18 years old and understand I'm using alpha stage open source software meant for demonstration purposes only, provided under the MIT License. No support, services, or guarantee of this software existing in the future is made by setting up a test account for free.
                   </Text>
                 </TouchableOpacity>
               </View>
-              
+
               <TouchableOpacity
                 style={styles.button}
                 onPress={handleRegister}
                 disabled={registerMutation.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={registerMutation.isPending ? 'Registering' : 'Register'}
+                accessibilityState={{ disabled: registerMutation.isPending }}
               >
                 <Text style={styles.buttonText}>
                   {registerMutation.isPending ? 'Registering...' : 'Register'}
@@ -319,11 +354,11 @@ const AuthPage = () => {
         </View>
         
         <View style={styles.featuresContainer}>
-          <Text style={styles.featuresTitle}>Why Choose Sunschool?</Text>
-          
+          <Text style={styles.featuresTitle} accessibilityRole="header">Why Choose Sunschool?</Text>
+
           <View style={styles.featureItem}>
-            <View style={styles.featureIcon}>
-              <Book size={24} color={colors.primary} />
+            <View style={styles.featureIcon} aria-hidden="true">
+              <Book size={24} color={colors.primary} aria-hidden="true" />
             </View>
             <View style={styles.featureContent}>
               <Text style={styles.featureTitle}>Personalized Learning</Text>
@@ -332,10 +367,10 @@ const AuthPage = () => {
               </Text>
             </View>
           </View>
-          
+
           <View style={styles.featureItem}>
-            <View style={styles.featureIcon}>
-              <User size={24} color={colors.primary} />
+            <View style={styles.featureIcon} aria-hidden="true">
+              <User size={24} color={colors.primary} aria-hidden="true" />
             </View>
             <View style={styles.featureContent}>
               <Text style={styles.featureTitle}>Parent Involvement</Text>
@@ -344,10 +379,10 @@ const AuthPage = () => {
               </Text>
             </View>
           </View>
-          
+
           <View style={styles.featureItem}>
-            <View style={styles.featureIcon}>
-              <Shield size={24} color={colors.primary} />
+            <View style={styles.featureIcon} aria-hidden="true">
+              <Shield size={24} color={colors.primary} aria-hidden="true" />
             </View>
             <View style={styles.featureContent}>
               <Text style={styles.featureTitle}>Safe Environment</Text>

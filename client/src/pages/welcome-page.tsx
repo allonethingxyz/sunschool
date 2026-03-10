@@ -66,6 +66,8 @@ const SacredSunGraphic: React.FC = () => {
       height={size}
       viewBox={`0 0 ${size} ${size}`}
       style={{ overflow: 'visible' }}
+      aria-hidden="true"
+      focusable="false"
     >
       <defs>
         {/* Radial glow for center sun */}
@@ -185,10 +187,10 @@ const WelcomePage: React.FC = () => {
       <View style={styles.container}>
 
         {/* ── Navbar ── */}
-        <View style={styles.navbar}>
+        <View style={styles.navbar} accessibilityRole="navigation" accessibilityLabel="Main navigation">
           <View style={styles.navInner}>
             <View style={styles.logoWrap}>
-              <View style={styles.logoIcon}>
+              <View style={styles.logoIcon} aria-hidden="true">
                 <Text style={{ fontSize: 20 }}>&#9728;</Text>
               </View>
               <Text style={styles.logoText}>Sunschool</Text>
@@ -196,15 +198,15 @@ const WelcomePage: React.FC = () => {
             <View style={styles.navLinks}>
               {windowWidth >= 600 && (
                 <>
-                  <TouchableOpacity style={styles.navLink}>
+                  <TouchableOpacity style={styles.navLink} accessibilityRole="link">
                     <Text style={styles.navLinkText}>Features</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.navLink}>
+                  <TouchableOpacity style={styles.navLink} accessibilityRole="link">
                     <Text style={styles.navLinkText}>How It Works</Text>
                   </TouchableOpacity>
                 </>
               )}
-              <TouchableOpacity style={styles.navCta} onPress={goToAuth}>
+              <TouchableOpacity style={styles.navCta} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started">
                 <Text style={styles.navCtaText}>Get Started</Text>
               </TouchableOpacity>
             </View>
@@ -215,7 +217,7 @@ const WelcomePage: React.FC = () => {
         <View style={styles.hero}>
           <View style={styles.heroInner}>
             <View style={styles.heroLeft}>
-              <Text style={styles.heroTitle}>Where Learning{'\n'}Comes Alive</Text>
+              <Text style={styles.heroTitle} accessibilityRole="header">Where Learning{'\n'}Comes Alive</Text>
               <Text style={styles.heroSub}>
                 AI-powered lessons that adapt to your child.{'\n'}Fun for kids. Peace of mind for parents.
               </Text>
@@ -234,12 +236,12 @@ const WelcomePage: React.FC = () => {
               </View>
 
               <View style={styles.heroCtas}>
-                <TouchableOpacity style={styles.ctaPrimary} onPress={goToAuth}>
+                <TouchableOpacity style={styles.ctaPrimary} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started Free">
                   <Text style={styles.ctaPrimaryText}>Get Started Free</Text>
-                  <ArrowRight size={16} color={brand.white} style={{ marginLeft: 8 }} />
+                  <ArrowRight size={16} color={brand.white} style={{ marginLeft: 8 }} aria-hidden="true" />
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.ctaOutline} onPress={openGitHub}>
-                  <GitHub size={16} color={brand.white} />
+                <TouchableOpacity style={styles.ctaOutline} onPress={openGitHub} accessibilityRole="link" accessibilityLabel="View on GitHub (opens in new window)">
+                  <GitHub size={16} color={brand.white} aria-hidden="true" />
                   <Text style={styles.ctaOutlineText}>View on GitHub</Text>
                 </TouchableOpacity>
               </View>
@@ -274,7 +276,7 @@ const WelcomePage: React.FC = () => {
         {/* ── For Kids Section ── */}
         <View style={styles.sectionWhite}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle}>Kids Love Learning with Sunschool</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">Kids Love Learning with Sunschool</Text>
             <Text style={styles.sectionSub}>Interactive, personalized, and actually fun.</Text>
 
             <View style={styles.cardGrid}>
@@ -299,7 +301,7 @@ const WelcomePage: React.FC = () => {
         {/* ── For Parents Section ── */}
         <View style={styles.sectionTinted}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle}>Parents Love the Control</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">Parents Love the Control</Text>
             <Text style={styles.sectionSub}>Full visibility. Full ownership. Full peace of mind.</Text>
 
             <View style={styles.cardGrid}>
@@ -324,7 +326,7 @@ const WelcomePage: React.FC = () => {
         {/* ── How It Works ── */}
         <View style={styles.sectionWhite}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle}>How It Works</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">How It Works</Text>
             <Text style={styles.sectionSub}>Up and running in minutes.</Text>
 
             <View style={styles.stepsContainer}>
@@ -350,7 +352,7 @@ const WelcomePage: React.FC = () => {
         {/* ── Testimonial / Social Proof ── */}
         <View style={styles.sectionTinted}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle}>What Parents Are Saying</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">What Parents Are Saying</Text>
             <View style={styles.testimonialGrid}>
               {[
                 { quote: 'My daughter actually asks to do her lessons now. The AI adapts perfectly to her pace.', name: 'Sarah M.', detail: 'Parent of a 3rd grader', color: brand.primary },
@@ -370,35 +372,35 @@ const WelcomePage: React.FC = () => {
         {/* ── Final CTA ── */}
         <View style={styles.finalCta}>
           <View style={styles.finalCtaInner}>
-            <Text style={styles.finalCtaTitle}>Ready to Start Your Child's{'\n'}Learning Adventure?</Text>
-            <TouchableOpacity style={styles.finalCtaButton} onPress={goToAuth}>
+            <Text style={styles.finalCtaTitle} accessibilityRole="header">Ready to Start Your Child's{'\n'}Learning Adventure?</Text>
+            <TouchableOpacity style={styles.finalCtaButton} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started Free">
               <Text style={styles.finalCtaButtonText}>Get Started Free</Text>
-              <ArrowRight size={18} color={brand.white} style={{ marginLeft: 8 }} />
+              <ArrowRight size={18} color={brand.white} style={{ marginLeft: 8 }} aria-hidden="true" />
             </TouchableOpacity>
             <Text style={styles.finalCtaNote}>No credit card needed. Free forever for core features.</Text>
           </View>
         </View>
 
         {/* ── Footer ── */}
-        <View style={styles.footer}>
+        <View style={styles.footer} accessibilityRole="contentinfo">
           <View style={styles.footerInner}>
-            <View style={styles.footerBrand}>
+            <View style={styles.footerBrand} aria-hidden="true">
               <Text style={{ fontSize: 18 }}>&#9728;&#65039;</Text>
               <Text style={styles.footerLogo}>Sunschool</Text>
             </View>
             <Text style={styles.footerTagline}>AI-powered learning where parents own the prompt.</Text>
 
-            <View style={styles.footerLinks}>
-              <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.location.href = '/privacy'; }}>
+            <View style={styles.footerLinks} accessibilityRole="list">
+              <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.location.href = '/privacy'; }} accessibilityRole="link" accessibilityLabel="Privacy Policy">
                 <Text style={styles.footerLinkText}>Privacy Policy</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.location.href = '/terms'; }}>
+              <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.location.href = '/terms'; }} accessibilityRole="link" accessibilityLabel="Terms of Service">
                 <Text style={styles.footerLinkText}>Terms of Service</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={openGitHub}>
+              <TouchableOpacity onPress={openGitHub} accessibilityRole="link" accessibilityLabel="GitHub (opens in new window)">
                 <Text style={styles.footerLinkText}>GitHub</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open('mailto:info@sunschool.xyz'); }}>
+              <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open('mailto:info@sunschool.xyz'); }} accessibilityRole="link" accessibilityLabel="Contact via email">
                 <Text style={styles.footerLinkText}>Contact</Text>
               </TouchableOpacity>
             </View>

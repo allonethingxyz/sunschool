@@ -11,24 +11,69 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user, isLoading } = useAuth();
-  
-  // Don't show the header and footer for unauthenticated users
+
   if (!user && !isLoading) {
     return <>{children}</>;
   }
-  
-  // Also don't show when authentication is still loading
+
   if (isLoading) {
     return <>{children}</>;
   }
-  
+
   return (
-    <View style={styles.container}>
-      <SunschoolHeader />
-      <View style={styles.content}>
+    <View style={styles.container} accessibilityRole="none">
+      {/* Skip to main content link for keyboard users */}
+      <a
+        href="#main-content"
+        style={{
+          position: 'absolute',
+          left: '-9999px',
+          top: 'auto',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          zIndex: 9999,
+        }}
+        onFocus={(e) => {
+          const el = e.currentTarget;
+          el.style.position = 'fixed';
+          el.style.left = '8px';
+          el.style.top = '8px';
+          el.style.width = 'auto';
+          el.style.height = 'auto';
+          el.style.overflow = 'visible';
+          el.style.background = '#4A90D9';
+          el.style.color = '#fff';
+          el.style.padding = '8px 16px';
+          el.style.borderRadius = '4px';
+          el.style.fontSize = '14px';
+          el.style.fontWeight = '600';
+          el.style.textDecoration = 'none';
+        }}
+        onBlur={(e) => {
+          const el = e.currentTarget;
+          el.style.position = 'absolute';
+          el.style.left = '-9999px';
+          el.style.width = '1px';
+          el.style.height = '1px';
+          el.style.overflow = 'hidden';
+        }}
+      >
+        Skip to main content
+      </a>
+      <View accessibilityRole="banner" style={{ zIndex: 100 }}>
+        <SunschoolHeader />
+      </View>
+      <View
+        nativeID="main-content"
+        accessibilityRole="main"
+        style={styles.content}
+      >
         {children}
       </View>
-      <AppFooter />
+      <View accessibilityRole="contentinfo">
+        <AppFooter />
+      </View>
     </View>
   );
 };

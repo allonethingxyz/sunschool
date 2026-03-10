@@ -73,8 +73,10 @@ export function LearnerSelector({ subtle = false }: LearnerSelectorProps) {
           <TouchableOpacity
             style={styles.createButton}
             onPress={handleAddChild}
+            accessibilityRole="button"
+            accessibilityLabel="Add child"
           >
-            <Plus size={16} color="#ffffff" />
+            <Plus size={16} color="#ffffff" aria-hidden="true" />
             <Text style={styles.createButtonText}>Add Child</Text>
           </TouchableOpacity>
         </View>
@@ -100,21 +102,24 @@ export function LearnerSelector({ subtle = false }: LearnerSelectorProps) {
         style={[styles.selector, subtle && styles.selectorSubtle]}
         onPress={handleSelectorPress}
         disabled={isSwitching}
+        accessibilityRole="button"
+        accessibilityLabel={`Select learner. Current: ${selectedLearner?.name || 'none'}`}
+        accessibilityState={{ expanded: dropdownOpen }}
       >
         {isSwitching ? (
           <ActivityIndicator size="small" color="#6366F1" style={styles.switchingSpinner} />
         ) : (
-          <View style={styles.avatarContainer}>
-            <User size={18} color="#6366F1" />
+          <View style={styles.avatarContainer} aria-hidden="true">
+            <User size={18} color="#6366F1" aria-hidden="true" />
           </View>
         )}
         <Text style={styles.learnerName} numberOfLines={1}>
           {selectedLearner?.name || 'Select Learner'}
         </Text>
         {dropdownOpen ? (
-          <ChevronUp size={16} color="#6366F1" />
+          <ChevronUp size={16} color="#6366F1" aria-hidden="true" />
         ) : (
-          <ChevronDown size={16} color="#6366F1" />
+          <ChevronDown size={16} color="#6366F1" aria-hidden="true" />
         )}
       </TouchableOpacity>
 
@@ -129,7 +134,7 @@ export function LearnerSelector({ subtle = false }: LearnerSelectorProps) {
           />
 
           {/* Dropdown menu */}
-          <View style={styles.dropdown}>
+          <View style={styles.dropdown} accessibilityRole="list" accessibilityLabel="Learner options">
             <ScrollView
               style={styles.dropdownScroll}
               showsVerticalScrollIndicator={false}
@@ -145,6 +150,9 @@ export function LearnerSelector({ subtle = false }: LearnerSelectorProps) {
                       isSelected && styles.dropdownItemSelected,
                     ]}
                     onPress={() => handleSelectLearner(learner)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${learner.name}${(learner as any).gradeLevel != null ? `, Grade ${(learner as any).gradeLevel}` : ''}`}
+                    accessibilityState={{ selected: isSelected }}
                   >
                     <View style={styles.dropdownItemLeft}>
                       <View
@@ -152,8 +160,9 @@ export function LearnerSelector({ subtle = false }: LearnerSelectorProps) {
                           styles.dropdownAvatar,
                           isSelected && styles.dropdownAvatarSelected,
                         ]}
+                        aria-hidden="true"
                       >
-                        <User size={14} color={isSelected ? '#FFFFFF' : '#6366F1'} />
+                        <User size={14} color={isSelected ? '#FFFFFF' : '#6366F1'} aria-hidden="true" />
                       </View>
                       <View style={styles.dropdownItemInfo}>
                         <Text
@@ -175,7 +184,7 @@ export function LearnerSelector({ subtle = false }: LearnerSelectorProps) {
                       </View>
                     </View>
                     {isSelected && (
-                      <Check size={16} color="#6366F1" />
+                      <Check size={16} color="#6366F1" aria-hidden="true" />
                     )}
                   </TouchableOpacity>
                 );
@@ -189,8 +198,10 @@ export function LearnerSelector({ subtle = false }: LearnerSelectorProps) {
                 <TouchableOpacity
                   style={styles.addChildButton}
                   onPress={handleAddChild}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add child"
                 >
-                  <Plus size={16} color="#6366F1" />
+                  <Plus size={16} color="#6366F1" aria-hidden="true" />
                   <Text style={styles.addChildText}>Add Child</Text>
                 </TouchableOpacity>
               </>

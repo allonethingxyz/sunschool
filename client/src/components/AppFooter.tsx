@@ -16,16 +16,16 @@ const AppFooter: React.FC = () => {
           <Text style={styles.copyright}>
             &copy; {new Date().getFullYear()} SUNSCHOOL, LLC. All rights reserved.
           </Text>
-          <View style={styles.footerLinks}>
-            <TouchableOpacity onPress={() => navigate('/privacy')}>
+          <View style={styles.footerLinks} accessibilityRole="list">
+            <TouchableOpacity onPress={() => navigate('/privacy')} accessibilityRole="link" accessibilityLabel="Privacy Policy">
               <Text style={styles.footerLink}>Privacy</Text>
             </TouchableOpacity>
-            <Text style={styles.footerDivider}>|</Text>
-            <TouchableOpacity onPress={() => navigate('/terms')}>
+            <Text style={styles.footerDivider} aria-hidden="true">|</Text>
+            <TouchableOpacity onPress={() => navigate('/terms')} accessibilityRole="link" accessibilityLabel="Terms of Service">
               <Text style={styles.footerLink}>Terms</Text>
             </TouchableOpacity>
-            <Text style={styles.footerDivider}>|</Text>
-            <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open('https://allonething.xyz', '_blank'); }}>
+            <Text style={styles.footerDivider} aria-hidden="true">|</Text>
+            <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open('https://allonething.xyz', '_blank'); }} accessibilityRole="link" accessibilityLabel="All One Thing Labs (opens in new window)">
               <Text style={styles.footerLink}>All One Thing Labs</Text>
             </TouchableOpacity>
           </View>
@@ -33,8 +33,10 @@ const AppFooter: React.FC = () => {
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={() => logoutMutation.mutate()}
+          accessibilityRole="button"
+          accessibilityLabel="Logout"
         >
-          <LogOut size={16} color={colors.onPrimary} />
+          <LogOut size={16} color={colors.onPrimary} aria-hidden="true" />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>

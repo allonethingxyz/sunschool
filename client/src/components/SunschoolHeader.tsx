@@ -37,16 +37,18 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
   };
 
   return (
-    <View style={styles.header}>
+    <View style={styles.header} accessibilityRole="navigation" accessibilityLabel="Main navigation">
       <View style={styles.headerContent}>
         {/* Left: Logo + nav links */}
         <View style={styles.leftSection}>
           <TouchableOpacity
             style={styles.logoContainer}
             onPress={() => navigate(user?.role === 'LEARNER' ? '/learner' : '/dashboard')}
+            accessibilityRole="link"
+            accessibilityLabel="SUNSCHOOL home"
           >
-            <View style={styles.logoIcon}>
-              <svg width="28" height="28" viewBox="0 0 32 32">
+            <View style={styles.logoIcon} aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
                 <defs>
                   <linearGradient id="hbg" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#4A90D9"/>
@@ -74,16 +76,20 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
           </TouchableOpacity>
 
           {user && (
-            <View style={styles.navItems}>
+            <View style={styles.navItems} accessibilityRole="list">
               {getNavItems().map((item, index) => (
                 <TouchableOpacity
                   key={index}
                   style={[styles.navItem, isActive(item.path) && styles.activeNavItem]}
                   onPress={() => navigate(item.path)}
+                  accessibilityRole="link"
+                  accessibilityLabel={item.label}
+                  accessibilityState={{ selected: isActive(item.path) }}
                 >
                   <item.icon
                     size={16}
                     color={isActive(item.path) ? colors.secondary : colors.onPrimary}
+                    aria-hidden="true"
                   />
                   <Text style={[styles.navText, isActive(item.path) && styles.activeNavText]}>
                     {item.label}
@@ -98,8 +104,13 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
         {user && (
           <View style={styles.rightSection}>
             {isLearnerMode && isParentOrAdmin && (
-              <TouchableOpacity style={styles.backButton} onPress={toggleMode}>
-                <ArrowLeft size={14} color={colors.onPrimary} />
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={toggleMode}
+                accessibilityRole="button"
+                accessibilityLabel="Switch to parent view"
+              >
+                <ArrowLeft size={14} color={colors.onPrimary} aria-hidden="true" />
                 <Text style={styles.backButtonText}>Parent View</Text>
               </TouchableOpacity>
             )}
@@ -108,7 +119,11 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
               <LearnerSelector subtle={false} />
             )}
 
-            <View style={[styles.modeBadge, isLearnerMode ? styles.learnerBadge : styles.parentBadge]}>
+            <View
+              style={[styles.modeBadge, isLearnerMode ? styles.learnerBadge : styles.parentBadge]}
+              accessibilityRole="text"
+              accessibilityLabel={`Current mode: ${isLearnerMode ? 'Learner' : 'Parent'}`}
+            >
               <Text style={styles.modeBadgeText}>
                 {isLearnerMode ? 'LEARNER' : 'PARENT'}
               </Text>

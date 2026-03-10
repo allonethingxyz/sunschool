@@ -34,6 +34,16 @@ It works on a blue-light-free e-reader tablet that runs on solar and satellite �
 - **All your kids, one account** — Each child gets their own adaptive path. Add learners as your family grows.
 - **Open source, all the way down** — Read the code. Audit the prompts. Self-host if you want. Education you can verify, not just trust.
 
+### The parent owns the prompt.
+
+AI models are sensitive to steering. Small changes in a prompt — the instructions that tell the AI what to teach and how — can shift tone, difficulty, and emphasis in ways that aren't obvious from the output alone.
+
+If you don't know what's in the prompt, you don't really know what's in the lesson. Most ed-tech companies treat their prompts as proprietary. We think that's backwards. When it's your kid, you should be able to read every word the AI was told before it started teaching.
+
+- **Every prompt is visible** — Parents can see the full prompt, before and after the lesson.
+- **AI outputs change with small tweaks** — Transparency isn't optional. It's the only way to know what your child is actually being taught.
+- **The source is open** — The code is open. The prompts are open. Audit them, fork them, improve them.
+
 ### Up and running in minutes
 
 1. **Sign up** — Email and password. No credit card. No trial clock.

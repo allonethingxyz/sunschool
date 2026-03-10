@@ -1,42 +1,41 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { LogOut, ExternalLink } from 'react-feather';
-import { Linking } from 'react-native-web';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { LogOut } from 'react-feather';
 import { colors, typography } from '../styles/theme';
 import { useAuth } from '../hooks/use-auth';
+import { useLocation } from 'wouter';
 
-interface AppFooterProps {
-  // Add any props if needed
-}
-
-const AppFooter: React.FC<AppFooterProps> = () => {
+const AppFooter: React.FC = () => {
   const { logoutMutation } = useAuth();
+  const [, navigate] = useLocation();
 
   return (
     <View style={styles.footer}>
       <View style={styles.footerContent}>
         <View style={styles.footerLeft}>
-          <View>
-            <Text style={styles.footerTitle}>SUNSCHOOL™ AI TUTOR</Text>
-            <Text style={styles.footerCopyright}>All materials copyright Sean McDonald {new Date().getFullYear()}</Text>
+          <Text style={styles.copyright}>
+            &copy; {new Date().getFullYear()} SUNSCHOOL, LLC. All rights reserved.
+          </Text>
+          <View style={styles.footerLinks}>
+            <TouchableOpacity onPress={() => navigate('/privacy')}>
+              <Text style={styles.footerLink}>Privacy</Text>
+            </TouchableOpacity>
+            <Text style={styles.footerDivider}>|</Text>
+            <TouchableOpacity onPress={() => navigate('/terms')}>
+              <Text style={styles.footerLink}>Terms</Text>
+            </TouchableOpacity>
+            <Text style={styles.footerDivider}>|</Text>
+            <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open('https://allonething.xyz', '_blank'); }}>
+              <Text style={styles.footerLink}>All One Thing Labs</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity 
-            onPress={() => Linking.openURL('https://allonething.xyz')}
-            style={styles.footerLogoContainer}
-          >
-            <Image 
-              source={{ uri: '/aot-labs-logo.png' }} 
-              style={styles.footerLogo}
-              resizeMode="contain"
-            />
-          </TouchableOpacity>
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.logoutButton}
           onPress={() => logoutMutation.mutate()}
         >
-          <LogOut size={18} color={colors.onPrimary} style={styles.logoutIcon} />
-          <Text style={styles.logoutButtonText}>Logout</Text>
+          <LogOut size={16} color={colors.onPrimary} />
+          <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -46,60 +45,54 @@ const AppFooter: React.FC<AppFooterProps> = () => {
 const styles = StyleSheet.create({
   footer: {
     backgroundColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    boxShadow: '0 -4px 10px rgba(0, 0, 0, 0.1)',
   },
   footerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    maxWidth: 800,
+    maxWidth: 1200,
     marginHorizontal: 'auto',
     width: '100%',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   footerLeft: {
+    flexDirection: 'column',
+    gap: 4,
+  },
+  copyright: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  footerLinks: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  footerTitle: {
-    ...typography.subtitle2,
-    color: colors.onPrimary,
-    fontWeight: 'bold',
+  footerLink: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontWeight: '500',
   },
-  footerCopyright: {
-    ...typography.caption,
-    color: colors.onPrimary,
-    opacity: 0.8,
-    marginTop: 4,
-  },
-  footerLogoContainer: {
-    marginLeft: 20,
-  },
-  footerLogo: {
-    width: 120, 
-    height: 36,
+  footerDivider: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.3)',
   },
   logoutButton: {
     backgroundColor: colors.error,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 6,
     flexDirection: 'row',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    alignItems: 'center',
+    gap: 6,
   },
-  logoutIcon: {
-    marginRight: 8,
-  },
-  logoutButtonText: {
-    ...typography.button,
+  logoutText: {
+    fontSize: 13,
     color: colors.onPrimary,
     fontWeight: '600',
   },

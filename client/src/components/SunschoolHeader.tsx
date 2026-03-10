@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Home, Book, User, BarChart2, ArrowLeft } from 'react-feather';
+import { Home, BarChart2, User, ArrowLeft } from 'react-feather';
 import { colors, typography } from '../styles/theme';
 import { useLocation } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
@@ -17,97 +17,102 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
   const { isLearnerMode, toggleMode } = useMode();
 
   const isActive = (path: string) => location === path;
-
   const isParentOrAdmin = user?.role === 'PARENT' || user?.role === 'ADMIN';
 
   const getNavItems = () => {
     if (!user || !user.role) return [];
-
-    // When in learner mode (including parents viewing as child), show learner nav
     if (isLearnerMode) {
       return [
         { label: 'Home', path: '/learner', icon: Home },
         { label: 'Progress', path: '/progress', icon: BarChart2 },
       ];
     }
-
-    // Parent/Admin in grown-up mode
     const navItems = [
       { label: 'Dashboard', path: '/dashboard', icon: Home },
     ];
-
     if (user.role === 'ADMIN') {
       navItems.push({ label: 'Admin', path: '/admin', icon: User });
     }
-
     return navItems;
   };
 
   return (
     <View style={styles.header}>
       <View style={styles.headerContent}>
-        <TouchableOpacity
-        style={styles.titleContainer}
-        onPress={() => {
-          // Navigate to the appropriate authenticated home page
-          if (user?.role === 'LEARNER') {
-            navigate('/learner');
-          } else {
-            navigate('/dashboard');
-          }
-        }}
-      >
-        <View style={styles.titleRow}>
-          <Text style={styles.headerTitle}>SUNSCHOOL™</Text>
-          {/* Clear visual mode indicator badge */}
+        {/* Left: Logo + nav links */}
+        <View style={styles.leftSection}>
+          <TouchableOpacity
+            style={styles.logoContainer}
+            onPress={() => navigate(user?.role === 'LEARNER' ? '/learner' : '/dashboard')}
+          >
+            <View style={styles.logoIcon}>
+              <svg width="28" height="28" viewBox="0 0 32 32">
+                <defs>
+                  <linearGradient id="hbg" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#4A90D9"/>
+                    <stop offset="100%" stopColor="#2E6BB5"/>
+                  </linearGradient>
+                </defs>
+                <rect width="32" height="32" rx="6" fill="url(#hbg)"/>
+                <circle cx="16" cy="13" r="6" fill="#FFD93D"/>
+                <g stroke="#FFD93D" strokeWidth="1.5" strokeLinecap="round" opacity="0.7">
+                  <line x1="16" y1="4" x2="16" y2="2"/>
+                  <line x1="22" y1="7" x2="24" y2="5"/>
+                  <line x1="25" y1="13" x2="27" y2="13"/>
+                  <line x1="22" y1="19" x2="24" y2="21"/>
+                  <line x1="10" y1="7" x2="8" y2="5"/>
+                  <line x1="7" y1="13" x2="5" y2="13"/>
+                  <line x1="10" y1="19" x2="8" y2="21"/>
+                </g>
+                <g fill="#FFFFFF" opacity="0.95">
+                  <path d="M16 23 Q16 21.5 10 21 L7 20.7 Q6 20.6 6 21.5 L6 27 Q6 27.8 7 27.9 L10 28.2 Q16 29 16 27.5 Z"/>
+                  <path d="M16 23 Q16 21.5 22 21 L25 20.7 Q26 20.6 26 21.5 L26 27 Q26 27.8 25 27.9 L22 28.2 Q16 29 16 27.5 Z"/>
+                </g>
+              </svg>
+            </View>
+            <Text style={styles.logoText}>SUNSCHOOL</Text>
+          </TouchableOpacity>
+
           {user && (
-            <View style={[
-              styles.modeBadge,
-              isLearnerMode ? styles.learnerModeBadge : styles.grownUpModeBadge
-            ]}>
-              <Text style={styles.modeBadgeText}>
-                {isLearnerMode ? '👦 LEARNER MODE' : '👨 PARENT MODE'}
-              </Text>
+            <View style={styles.navItems}>
+              {getNavItems().map((item, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.navItem, isActive(item.path) && styles.activeNavItem]}
+                  onPress={() => navigate(item.path)}
+                >
+                  <item.icon
+                    size={16}
+                    color={isActive(item.path) ? colors.secondary : colors.onPrimary}
+                  />
+                  <Text style={[styles.navText, isActive(item.path) && styles.activeNavText]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </View>
-        <Text style={styles.headerSubtitle}>{subtitle || "AI Tutor"}</Text>
-      </TouchableOpacity>
 
+        {/* Right: Mode badge, learner selector, back button */}
         {user && (
-          <View style={styles.navigation}>
-            {/* Back to Parent button when a parent/admin is in learner mode */}
+          <View style={styles.rightSection}>
             {isLearnerMode && isParentOrAdmin && (
-              <TouchableOpacity
-                style={styles.backToParentButton}
-                onPress={toggleMode}
-              >
+              <TouchableOpacity style={styles.backButton} onPress={toggleMode}>
                 <ArrowLeft size={14} color={colors.onPrimary} />
-                <Text style={styles.backToParentText}>Parent View</Text>
+                <Text style={styles.backButtonText}>Parent View</Text>
               </TouchableOpacity>
             )}
 
-            {/* LearnerSelector only in learner mode for parents/admins */}
             {isLearnerMode && isParentOrAdmin && (
               <LearnerSelector subtle={false} />
             )}
 
-            {getNavItems().map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[styles.navItem, isActive(item.path) && styles.activeNavItem]}
-                onPress={() => navigate(item.path)}
-              >
-                <item.icon
-                  size={18}
-                  color={isActive(item.path) ? colors.secondary : colors.onPrimary}
-                  style={styles.navIcon}
-                />
-                <Text style={[styles.navText, isActive(item.path) && styles.activeNavText]}>
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <View style={[styles.modeBadge, isLearnerMode ? styles.learnerBadge : styles.parentBadge]}>
+              <Text style={styles.modeBadgeText}>
+                {isLearnerMode ? 'LEARNER' : 'PARENT'}
+              </Text>
+            </View>
           </View>
         )}
       </View>
@@ -118,16 +123,16 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
 const styles = StyleSheet.create({
   header: {
     backgroundColor: colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
     zIndex: 100,
     overflow: 'visible',
   },
   headerContent: {
-    maxWidth: 1000,
+    maxWidth: 1200,
     marginHorizontal: 'auto',
     width: '100%',
     flexDirection: 'row',
@@ -135,68 +140,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'visible',
   },
-  titleContainer: {
-    flexDirection: 'column',
-  },
-  titleRow: {
+  leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
-  headerTitle: {
-    ...typography.h2,
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logoIcon: {
+    width: 28,
+    height: 28,
+  },
+  logoText: {
+    fontSize: 18,
+    fontWeight: '800',
     color: colors.onPrimary,
-    fontWeight: 'bold',
-    marginBottom: 0,
-  },
-  headerSubtitle: {
-    ...typography.subtitle1,
-    color: colors.onPrimary + 'CC',
-    marginTop: 4,
-  },
-  modeBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 2,
-  },
-  learnerModeBadge: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#66BB6A',
-  },
-  grownUpModeBadge: {
-    backgroundColor: '#2196F3',
-    borderColor: '#42A5F5',
-  },
-  modeBadgeText: {
-    ...typography.caption,
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 11,
     letterSpacing: 0.5,
   },
-  navigation: {
+  navItems: {
     flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 1000,
-    overflow: 'visible',
+    marginLeft: 24,
+    gap: 4,
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 24,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 20,
+    borderRadius: 6,
+    gap: 6,
   },
   activeNavItem: {
-    backgroundColor: colors.onPrimary + '22',
-  },
-  navIcon: {
-    marginRight: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   navText: {
-    ...typography.body2,
+    fontSize: 14,
     color: colors.onPrimary,
     fontWeight: '500',
   },
@@ -204,22 +186,44 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     fontWeight: '600',
   },
-  backToParentButton: {
+  rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginRight: 8,
+    gap: 8,
+    zIndex: 1000,
+    overflow: 'visible',
   },
-  backToParentText: {
-    ...typography.body2,
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    gap: 4,
+  },
+  backButtonText: {
+    fontSize: 12,
     color: colors.onPrimary,
     fontWeight: '600',
-    marginLeft: 6,
-    fontSize: 12,
-  }
+  },
+  modeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  learnerBadge: {
+    backgroundColor: '#4CAF50',
+  },
+  parentBadge: {
+    backgroundColor: '#2196F3',
+  },
+  modeBadgeText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 10,
+    letterSpacing: 1,
+  },
 });
 
 export default SunschoolHeader;

@@ -403,7 +403,7 @@ const WelcomePage: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.footerCopy}>&copy; 2025 Sunschool. Open source education for all.</Text>
+            <Text style={styles.footerCopy}>&copy; {new Date().getFullYear()} SUNSCHOOL, LLC. A product of All One Thing Labs (allonething.xyz).</Text>
           </View>
         </View>
 

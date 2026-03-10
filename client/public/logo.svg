@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFD93D" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#FF8C42" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4A90D9"/>
+      <stop offset="100%" stop-color="#2E6BB5"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#skyGrad)"/>
+  <!-- Sun glow -->
+  <circle cx="256" cy="220" r="160" fill="url(#sunGlow)"/>
+  <!-- Sun rays -->
+  <g stroke="#FFD93D" stroke-width="3" stroke-linecap="round" opacity="0.6">
+    <line x1="256" y1="110" x2="256" y2="80"/>
+    <line x1="326" y1="130" x2="346" y2="106"/>
+    <line x1="366" y1="190" x2="396" y2="180"/>
+    <line x1="366" y1="250" x2="396" y2="260"/>
+    <line x1="326" y1="310" x2="346" y2="334"/>
+    <line x1="186" y1="130" x2="166" y2="106"/>
+    <line x1="146" y1="190" x2="116" y2="180"/>
+    <line x1="146" y1="250" x2="116" y2="260"/>
+    <line x1="186" y1="310" x2="166" y2="334"/>
+  </g>
+  <!-- Sun core -->
+  <circle cx="256" cy="220" r="64" fill="#FFD93D"/>
+  <circle cx="256" cy="220" r="48" fill="#FF8C42" opacity="0.3"/>
+  <!-- Seed of life pattern inside sun -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.5">
+    <circle cx="256" cy="220" r="24"/>
+    <circle cx="256" cy="196" r="24"/>
+    <circle cx="277" cy="208" r="24"/>
+    <circle cx="277" cy="232" r="24"/>
+    <circle cx="256" cy="244" r="24"/>
+    <circle cx="235" cy="232" r="24"/>
+    <circle cx="235" cy="208" r="24"/>
+  </g>
+  <!-- Open book base -->
+  <g fill="#FFFFFF" opacity="0.95">
+    <!-- Left page -->
+    <path d="M256 340 Q256 320 180 310 L130 305 Q120 304 120 314 L120 390 Q120 400 130 401 L180 406 Q256 416 256 396 Z"/>
+    <!-- Right page -->
+    <path d="M256 340 Q256 320 332 310 L382 305 Q392 304 392 314 L392 390 Q392 400 382 401 L332 406 Q256 416 256 396 Z"/>
+  </g>
+  <!-- Book spine -->
+  <line x1="256" y1="336" x2="256" y2="400" stroke="#4A90D9" stroke-width="2" opacity="0.4"/>
+  <!-- Page lines left -->
+  <g stroke="#4A90D9" stroke-width="1" opacity="0.2">
+    <line x1="150" y1="330" x2="240" y2="350"/>
+    <line x1="150" y1="345" x2="240" y2="362"/>
+    <line x1="150" y1="360" x2="240" y2="374"/>
+    <line x1="150" y1="375" x2="240" y2="386"/>
+  </g>
+  <!-- Page lines right -->
+  <g stroke="#4A90D9" stroke-width="1" opacity="0.2">
+    <line x1="272" y1="350" x2="362" y2="330"/>
+    <line x1="272" y1="362" x2="362" y2="345"/>
+    <line x1="272" y1="374" x2="362" y2="360"/>
+    <line x1="272" y1="386" x2="362" y2="375"/>
+  </g>
+</svg>

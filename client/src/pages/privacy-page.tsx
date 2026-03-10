@@ -8,7 +8,7 @@ const PrivacyPage: React.FC = () => {
       <View style={styles.container}>
         <View style={styles.content}>
           <Text style={styles.title}>SUNSCHOOL Privacy Policy</Text>
-          <Text style={styles.effectiveDate}>Effective Date: August 31, 2025</Text>
+          <Text style={styles.effectiveDate}>Effective Date: March 9, 2026</Text>
           
           <Text style={styles.sectionTitle}>What We Do</Text>
           <Text style={styles.paragraph}>
@@ -84,9 +84,14 @@ const PrivacyPage: React.FC = () => {
             Questions? Email us at: <Text style={styles.boldText}>info@sunschool.xyz</Text>
           </Text>
 
+          <Text style={styles.sectionTitle}>Governing Law</Text>
+          <Text style={styles.paragraph}>
+            This privacy policy is governed by the laws of the State of Arizona. Any disputes will be resolved in the courts of Arizona.
+          </Text>
+
           <View style={styles.divider} />
           <Text style={styles.footer}>
-            This policy covers the basics of how we handle your data. By using SUNSCHOOL, you agree to these terms.
+            &copy; {new Date().getFullYear()} SUNSCHOOL, LLC. All rights reserved. A product of All One Thing Labs (allonething.xyz).
           </Text>
         </View>
       </View>

@@ -8,7 +8,7 @@ const TermsPage: React.FC = () => {
       <View style={styles.container}>
         <View style={styles.content}>
           <Text style={styles.title}>SUNSCHOOL Terms of Service</Text>
-          <Text style={styles.effectiveDate}>Effective Date: August 31, 2025</Text>
+          <Text style={styles.effectiveDate}>Effective Date: March 9, 2026</Text>
           
           <Text style={styles.sectionTitle}>Agreement to Terms</Text>
           <Text style={styles.paragraph}>
@@ -73,6 +73,11 @@ const TermsPage: React.FC = () => {
             Our liability is limited to the amount you've paid for the service. We're not liable for indirect, special, or consequential damages.
           </Text>
 
+          <Text style={styles.sectionTitle}>Governing Law</Text>
+          <Text style={styles.paragraph}>
+            These terms are governed by the laws of the State of Arizona. Any disputes arising from or relating to these terms will be resolved exclusively in the state or federal courts located in Arizona.
+          </Text>
+
           <Text style={styles.sectionTitle}>Changes to Terms</Text>
           <Text style={styles.paragraph}>
             We may update these terms occasionally. We'll notify you of significant changes by email. Continued use means you accept the updated terms.
@@ -85,7 +90,7 @@ const TermsPage: React.FC = () => {
 
           <View style={styles.divider} />
           <Text style={styles.footer}>
-            Thank you for using SUNSCHOOL to support your child's education.
+            &copy; {new Date().getFullYear()} SUNSCHOOL, LLC. All rights reserved. A product of All One Thing Labs (allonething.xyz).
           </Text>
         </View>
       </View>

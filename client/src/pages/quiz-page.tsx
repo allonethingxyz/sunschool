@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
-  Switch,
   Modal,
 } from 'react-native';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -50,8 +49,11 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
-  const [doubleOrLoss, setDoubleOrLoss] = useState(false);
   const [showDelegation, setShowDelegation] = useState(false);
+  // Per-question double-or-loss: tracks which question indices the kid chose to double
+  const [doubleQuestions, setDoubleQuestions] = useState<Set<number>>(new Set());
+  // Tracks which 3rd questions the kid has decided on (chosen double or skip)
+  const [doubleDecided, setDoubleDecided] = useState<Set<number>>(new Set());
   const [quizScore, setQuizScore] = useState<{
     score: number;
     correctCount: number;
@@ -60,6 +62,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     pointsAwarded: number;
     pointsDeducted: number;
     doubleOrLoss: boolean;
+    doubleQuestionIndices?: number[];
     newBalance: number;
     newAchievements: any[];
   } | null>(null);
@@ -96,7 +99,10 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
   // Submit answers mutation
   const submitAnswersMutation = useMutation({
     mutationFn: (answers: number[]) => {
-      return apiRequest('POST', `/api/lessons/${lessonId}/answer`, { answers, doubleOrLoss }).then(res => res.data);
+      return apiRequest('POST', `/api/lessons/${lessonId}/answer`, {
+        answers,
+        doubleQuestionIndices: Array.from(doubleQuestions),
+      }).then(res => res.data);
     },
     onSuccess: (data) => {
       setQuizSubmitted(true);
@@ -289,7 +295,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* ── Pre-quiz screen (double-or-loss toggle) ── */}
+      {/* ── Pre-quiz screen ── */}
       {!quizStarted && !quizSubmitted && (
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={[styles.preQuizCard, { backgroundColor: theme.colors.surfaceColor }]}>
@@ -301,26 +307,21 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
             </Text>
 
             {dolAllowedByParent && (
-              <View style={[styles.dolCard, { borderColor: doubleOrLoss ? '#FF8F00' : theme.colors.divider }]}>
+              <View style={[styles.dolCard, { borderColor: '#FF8F00' }]}>
                 <View style={styles.dolHeader}>
                   <Zap size={20} color="#FF8F00" />
-                  <Text style={[styles.dolTitle, { color: theme.colors.textPrimary }]}>Double-or-Loss Mode</Text>
-                  <Switch value={doubleOrLoss} onValueChange={setDoubleOrLoss} trackColor={{ true: '#FF8F00' }} />
+                  <Text style={[styles.dolTitle, { color: theme.colors.textPrimary }]}>Double-or-Nothing Active</Text>
                 </View>
                 <Text style={[styles.dolDesc, { color: theme.colors.textSecondary }]}>
-                  {doubleOrLoss
-                    ? '⚡ ON — 2× points for correct, −1 point for wrong!'
-                    : 'OFF — Standard scoring (1 point per correct answer)'}
+                  Every 3rd question you can go for double points — or skip and play it safe!
                 </Text>
               </View>
             )}
 
             <TouchableOpacity
-              style={[styles.startBtn, { backgroundColor: doubleOrLoss ? '#FF8F00' : theme.colors.primary }]}
+              style={[styles.startBtn, { backgroundColor: theme.colors.primary }]}
               onPress={handleStartQuiz}>
-              <Text style={styles.startBtnText}>
-                {doubleOrLoss ? '⚡ Start Double-or-Loss!' : 'Start Quiz →'}
-              </Text>
+              <Text style={styles.startBtnText}>Start Quiz</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -416,16 +417,24 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
 
             <View style={styles.reviewSection}>
               <Text style={[styles.reviewTitle, { color: theme.colors.textPrimary }]}>Let's Review</Text>
-              {displayQuestions.map((question, index) => (
-                <QuizComponent
-                  key={index}
-                  question={question}
-                  selectedAnswer={selectedAnswers[index]}
-                  showAnswers={true}
-                  onSelectAnswer={() => {}}
-
-                />
-              ))}
+              {displayQuestions.map((question, index) => {
+                const wasDoubled = quizScore?.doubleQuestionIndices?.includes(index);
+                return (
+                  <View key={index}>
+                    {wasDoubled && (
+                      <View style={[styles.dolBadge, { backgroundColor: '#FFF3E0', marginBottom: 4 }]}>
+                        <Text style={styles.dolBadgeText}><Zap size={12} color="#FF8F00" /> Double-or-Nothing</Text>
+                      </View>
+                    )}
+                    <QuizComponent
+                      question={question}
+                      selectedAnswer={selectedAnswers[index]}
+                      showAnswers={true}
+                      onSelectAnswer={() => {}}
+                    />
+                  </View>
+                );
+              })}
             </View>
 
             <TouchableOpacity style={[styles.continueButton, { backgroundColor: theme.colors.success }]} onPress={handleContinue}>
@@ -442,20 +451,71 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
               Let's see what you learned! Answer each question below.
             </Text>
 
-            {displayQuestions.map((question, index) => (
-              <View key={index} style={styles.questionContainer}>
-                <Text style={[styles.questionNumber, { color: theme.colors.textSecondary }]}>
-                  Question {index + 1} of {displayQuestions.length}
-                </Text>
-                <QuizComponent
-                  question={question}
-                  selectedAnswer={selectedAnswers[index]}
-                  showAnswers={false}
-                  onSelectAnswer={(answerIndex) => handleSelectAnswer(index, answerIndex)}
+            {displayQuestions.map((question, index) => {
+              const isDoubleEligible = dolAllowedByParent && (index + 1) % 3 === 0;
+              const hasDecided = doubleDecided.has(index);
+              const isDoubled = doubleQuestions.has(index);
 
-                />
-              </View>
-            ))}
+              return (
+                <View key={index} style={styles.questionContainer}>
+                  <Text style={[styles.questionNumber, { color: theme.colors.textSecondary }]}>
+                    Question {index + 1} of {displayQuestions.length}
+                    {isDoubled && ' — 2x'}
+                  </Text>
+
+                  {/* Double-or-nothing prompt on every 3rd question */}
+                  {isDoubleEligible && !hasDecided && (
+                    <View style={styles.dolPrompt}>
+                      <View style={styles.dolPromptHeader}>
+                        <Zap size={18} color="#FF8F00" />
+                        <Text style={styles.dolPromptTitle}>Double or Nothing?</Text>
+                      </View>
+                      <Text style={styles.dolPromptDesc}>
+                        Get 2x points if correct, lose 1 point if wrong.
+                      </Text>
+                      <View style={styles.dolPromptButtons}>
+                        <TouchableOpacity
+                          style={styles.dolGoBtn}
+                          onPress={() => {
+                            setDoubleQuestions(prev => new Set(prev).add(index));
+                            setDoubleDecided(prev => new Set(prev).add(index));
+                          }}
+                        >
+                          <Zap size={14} color="#fff" />
+                          <Text style={styles.dolGoBtnText}>Go for it!</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.dolSkipBtn}
+                          onPress={() => {
+                            setDoubleDecided(prev => new Set(prev).add(index));
+                          }}
+                        >
+                          <Text style={styles.dolSkipBtnText}>Play it safe</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Show badge after decision */}
+                  {isDoubleEligible && hasDecided && (
+                    <View style={[styles.dolBadge, { backgroundColor: isDoubled ? '#FFF3E0' : theme.colors.background }]}>
+                      {isDoubled ? (
+                        <Text style={styles.dolBadgeText}><Zap size={12} color="#FF8F00" /> Double-or-Nothing!</Text>
+                      ) : (
+                        <Text style={[styles.dolBadgeText, { color: theme.colors.textSecondary }]}>Playing it safe</Text>
+                      )}
+                    </View>
+                  )}
+
+                  <QuizComponent
+                    question={question}
+                    selectedAnswer={selectedAnswers[index]}
+                    showAnswers={false}
+                    onSelectAnswer={(answerIndex) => handleSelectAnswer(index, answerIndex)}
+                  />
+                </View>
+              );
+            })}
 
             <TouchableOpacity
               style={[styles.submitButton, {
@@ -691,6 +751,75 @@ const styles = StyleSheet.create({
   delegationFill: { height: '100%', borderRadius: 4 },
   skipDelegation: {
     borderWidth: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 8,
+  },
+  // Double-or-nothing per-question prompt
+  dolPrompt: {
+    backgroundColor: '#FFF8E1',
+    borderWidth: 2,
+    borderColor: '#FF8F00',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  dolPromptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  dolPromptTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#E65100',
+  },
+  dolPromptDesc: {
+    fontSize: 13,
+    color: '#795548',
+    marginBottom: 10,
+  },
+  dolPromptButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  dolGoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FF8F00',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+  },
+  dolGoBtnText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  dolSkipBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#BDBDBD',
+  },
+  dolSkipBtnText: {
+    color: '#757575',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  dolBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  dolBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E65100',
   },
 });
 

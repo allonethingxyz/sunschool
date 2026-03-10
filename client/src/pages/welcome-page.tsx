@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Dimensions } from 'react-native';
 import { useLocation, Redirect } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
-import { GitHub, BookOpen, Eye, Shield, Users, Award, BarChart2, Star, ArrowRight, Zap, Lock, Globe, Map } from 'react-feather';
+import { GitHub, BookOpen, Eye, Shield, Users, Award, BarChart2, Star, ArrowRight, Zap, Lock, Globe, Map, Code, AlertTriangle } from 'react-feather';
 
 const windowWidth = Dimensions.get('window').width;
 
@@ -249,6 +249,34 @@ const WelcomePage: React.FC = () => {
           </View>
         </View>
 
+        {/* ── The parent owns the prompt ── */}
+        <View style={styles.promptSection}>
+          <View style={styles.promptInner}>
+            <View style={styles.promptIconWrap} aria-hidden="true">
+              <Code size={40} color={brand.amber} aria-hidden="true" />
+            </View>
+            <Text style={styles.promptTitle} accessibilityRole="header">The parent owns the prompt.</Text>
+            <Text style={styles.promptBody}>
+              AI models are sensitive to steering. Small changes in a prompt {'\u2014'} the instructions that tell the AI what to teach and how {'\u2014'} can shift tone, difficulty, and emphasis in ways that aren{'\u2019'}t obvious from the output alone.
+            </Text>
+            <Text style={styles.promptBody}>
+              If you don{'\u2019'}t know what{'\u2019'}s in the prompt, you don{'\u2019'}t really know what{'\u2019'}s in the lesson. Most ed-tech companies treat their prompts as proprietary. We think that{'\u2019'}s backwards. When it{'\u2019'}s your kid, you should be able to read every word the AI was told before it started teaching.
+            </Text>
+            <View style={styles.promptHighlights}>
+              {[
+                { icon: <Eye size={18} color={brand.primary} aria-hidden="true" />, text: 'Every prompt is visible to the parent, in full, before and after the lesson.' },
+                { icon: <AlertTriangle size={18} color={brand.secondary} aria-hidden="true" />, text: 'AI outputs change with small prompt tweaks. Transparency isn\u2019t optional \u2014 it\u2019s the only way to know what your child is actually being taught.' },
+                { icon: <Code size={18} color={brand.green} aria-hidden="true" />, text: 'The source code is open. The prompts are open. Audit them, fork them, improve them.' },
+              ].map((h, i) => (
+                <View key={i} style={styles.promptHighlightRow}>
+                  <View style={styles.promptHighlightIcon}>{h.icon}</View>
+                  <Text style={styles.promptHighlightText}>{h.text}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+
         {/* ── How It Works ── */}
         <View style={styles.sectionTinted}>
           <View style={styles.sectionWrap}>
@@ -298,7 +326,7 @@ const WelcomePage: React.FC = () => {
         <View style={styles.finalCta}>
           <View style={styles.finalCtaInner}>
             <Text style={styles.finalCtaTitle} accessibilityRole="header">
-              School starts when{'\n'}the sun does.
+              School {'\u2014'} anywhere{'\n'}under the sun.
             </Text>
             <Text style={styles.finalCtaNote}>Free forever for core features. No credit card needed.</Text>
             <TouchableOpacity style={styles.finalCtaButton} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started Free">
@@ -494,6 +522,68 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     maxWidth: 720,
     marginHorizontal: 'auto',
+  },
+
+  /* Parent owns the prompt */
+  promptSection: {
+    backgroundColor: brand.text,
+    paddingVertical: windowWidth < 768 ? 60 : 80,
+    paddingHorizontal: 20,
+  },
+  promptInner: {
+    maxWidth: 720,
+    marginHorizontal: 'auto',
+    alignItems: 'center',
+  },
+  promptIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(245, 166, 35, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  promptTitle: {
+    fontSize: windowWidth < 768 ? 26 : 34,
+    fontWeight: '800',
+    color: brand.white,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  promptBody: {
+    fontSize: windowWidth < 768 ? 16 : 18,
+    lineHeight: windowWidth < 768 ? 26 : 30,
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  promptHighlights: {
+    marginTop: 24,
+    width: '100%',
+  },
+  promptHighlightRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 18,
+    paddingHorizontal: 8,
+  },
+  promptHighlightIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  promptHighlightText: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 24,
+    color: 'rgba(255,255,255,0.85)',
   },
 
   /* Trust Bar */

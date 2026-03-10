@@ -1,120 +1,99 @@
-# SUNSCHOOL
+<p align="center">
+  <img src="client/public/logo.svg" alt="SUNSCHOOL" width="400">
+</p>
+
+<h3 align="center">School — anywhere under the sun.</h3>
 
 <p align="center">
-  <img src="generated-icon.png" alt="SUNSCHOOL Logo" width="120" height="120">
+  An AI tutor that adapts to your child. Open source, so you can see exactly how it works.
 </p>
 
 <p align="center">
-  An AI-powered educational platform for personalized learning experiences.
+  <a href="https://sunschool.xyz">sunschool.xyz</a> · <a href="https://github.com/allonethingxyz/sunschool/issues">Issues</a> · <a href="#contributing">Contribute</a> · <a href="https://allonething.xyz">All One Thing Labs</a>
 </p>
 
-## Overview
+---
 
-SUNSCHOOL is a web-based educational platform that provides AI-generated lessons and achievement tracking for learners. The platform supports role-based access with three user types: administrators, parents, and learners.
+## Your child's tutor. Their pace. Their place.
 
-## Table of Contents
+Sunschool is an AI-powered tutor that meets your kid where they are — grade level, learning style, speed. Every lesson adapts in real time. No two kids get the same experience.
 
-- [Features](#features)
-- [Technology Stack](#technology-stack)
-- [Installation](#installation)
-- [Database Setup](#database-setup)
-- [Running the Application](#running-the-application)
-- [Admin Onboarding](#admin-onboarding)
-- [User Roles](#user-roles)
-- [API Endpoints](#api-endpoints)
-- [Development](#development)
-- [Contributing](#contributing)
-- [License](#license)
+It works on a blue-light-free e-reader tablet that runs on solar and satellite — no Wi-Fi, no outlet, no classroom required. Backyard. Beach. Backseat. If the sun's out, school's on.
 
-## Features
+### What kids experience
 
-### Implemented Features
+- **Lessons that feel like theirs** — The AI adjusts to how your child actually learns, not a grade-wide average.
+- **Play, not homework** — Quizzes feel like games. Challenges feel like puzzles. They'll ask to do more.
+- **Trophies and streaks** — Badges and milestones keep momentum going. Progress they can see and celebrate.
+- **A map of everything they know** — Subjects connect visually. Kids see where they've been and what's next.
 
-- **AI-Generated Lessons**: Content created using OpenRouter API with grade-specific prompts (K-2, 3-4, 5-6, 7-8, 9+) and age-appropriate validation
-- **SVG & Image Integration**: Lessons include dynamically generated SVG illustrations and OpenRouter image model support
-- **Parent-as-Learner Mode**: Parents can switch to learner mode to view and generate lessons for their children
-- **Quiz Analytics & Tracking**: Individual answer storage with concept tagging and question deduplication
-- **Concept Mastery System**: Track learner performance across specific concepts (addition, subtraction, etc.)
-- **Adaptive Learning**: Question-level analytics to identify strengths and weaknesses, with spaced repetition
-- **Gamification & Rewards**: Points-based token economy with parent-managed rewards shop, goal setting, and reward redemption with approval workflow
-- **Achievement System**: Gamified learning with badges, token rewards, and recognition
-- **User Management**: Three-tier system with ADMIN, PARENT, and LEARNER roles
-- **Parent-Child Relationships**: Parents can manage multiple learner accounts
-- **Database Synchronization**: Parents can configure external PostgreSQL database connections for data backup
-- **Progress Tracking**: Comprehensive lesson completion, scoring, and points history
-- **Multi-Provider AI**: Support for OpenRouter (primary) and Bittensor Subnet 1 (experimental) with automatic fallback
-- **Cross-Platform Web App**: Works on desktop and mobile browsers
-- **Automatic Database Migrations**: Schema updates applied automatically on server startup
-- **End-to-End Testing**: Comprehensive Playwright test suite covering the full child lesson flow
+### What parents get
+
+- **See everything, in real time** — Live progress on strengths, gaps, and growth. Not a report card — a dashboard.
+- **Your data stays yours** — Nothing gets sold. Nothing trains a model. Export or delete anytime.
+- **All your kids, one account** — Each child gets their own adaptive path. Add learners as your family grows.
+- **Open source, all the way down** — Read the code. Audit the prompts. Self-host if you want. Education you can verify, not just trust.
+
+### Up and running in minutes
+
+1. **Sign up** — Email and password. No credit card. No trial clock.
+2. **Add your child** — Name, grade, interests. The AI takes it from there.
+3. **Start learning** — Hand them the tablet. Go pour your coffee.
+
+---
+
+## Technical Overview
+
+### Stack
+
+| Layer | Tech |
+|-------|------|
+| Frontend | React 19 + TypeScript, React Native Web, React Query, Wouter, Vite |
+| Backend | Node.js 22, Express.js 5, JWT auth, Drizzle ORM |
+| Database | PostgreSQL (Neon serverless) |
+| AI | OpenRouter API (primary), Bittensor Subnet 1 (experimental), Perplexity API |
+| Deployment | Railway (NIXPACKS), auto-deploy on push to `main` |
+| Testing | Jest (unit), Playwright (e2e) |
+
+### Architecture
+
+```
+client/          React frontend (Vite)
+server/          Express.js API with JWT auth
+shared/          TypeScript schemas and types
+scripts/         Database and utility scripts
+drizzle/         Migration files
+tests/           Playwright e2e tests
+```
+
+### Key Features
+
+- **AI-Generated Lessons** — Grade-specific prompts (K-2, 3-4, 5-6, 7-8, 9+) with age-appropriate validation
+- **SVG Illustrations** — Dynamically generated subject-specific educational graphics
+- **Parent-as-Learner Mode** — Parents switch to learner view to see what their kids see
+- **Concept Mastery** — Track performance across specific concepts with spaced repetition
+- **Gamification** — Points economy, parent-managed rewards shop, goal setting, redemption approval workflow
+- **Multi-Provider AI** — OpenRouter primary with Bittensor fallback
+- **Database Sync** — Optional external PostgreSQL connections for data backup
+- **Auto Migrations** — Schema updates applied on server startup
 
 ### User Roles
 
-**Administrators:**
-- Full system access
-- User management capabilities
-- System-wide data access
+| Role | Access |
+|------|--------|
+| **Admin** | Full system access, user management, all data |
+| **Parent** | Manage children, view progress, configure sync, manage rewards |
+| **Learner** | Access lessons, take quizzes, view achievements, redeem rewards |
 
-**Parents:**
-- Manage their children's learner accounts
-- View children's progress and achievements
-- Configure database synchronization settings
-- Access to personal family data only
-
-**Learners:**
-- Access assigned lessons
-- View personal achievements
-- Complete lessons and submit answers
-
-## Technology Stack
-
-### Frontend
-- **React 19.1.0** with TypeScript
-- **React Native Web** for cross-platform compatibility
-- **React Query** for data fetching and caching
-- **Wouter** for client-side routing
-- **Vite** for build tooling
-
-### Backend
-- **Node.js** with **Express.js 5.1.0**
-- **TypeScript** for type safety
-- **JWT authentication** with role-based access control
-- **PostgreSQL** (Neon serverless) with **Drizzle ORM**
-
-### AI Integration
-- **OpenRouter API** for lesson content generation and image models
-- **Perplexity API** for enhanced knowledge context
-- **SVG Generation** for subject-specific educational illustrations
-
-### Development Tools
-- **Jest** for unit testing
-- **Playwright** for end-to-end testing
-- **Drizzle Kit** for database migrations
-
-## Architecture
-
-### Core Components
-
-- **Web Frontend**: React application served via Express.js
-- **REST API**: Express.js backend with JWT authentication
-- **Database**: PostgreSQL with Drizzle ORM for schema management
-- **Session Management**: Express sessions with database storage
-
-### Data Flow
-
-1. **Authentication**: JWT-based login with role verification
-2. **Lesson Creation**: AI-generated content via OpenRouter API
-3. **Progress Tracking**: Lesson completion and achievement awards
-4. **Data Sync**: Optional external PostgreSQL database connections
-
-## Installation
+## Self-Hosting
 
 ### Prerequisites
 
-- Node.js (v20.x or newer, v22 recommended)
-- PostgreSQL database (local or cloud)
-- npm package manager
+- Node.js v20+ (v22 recommended)
+- PostgreSQL database
+- npm
 
-### Clone and Setup
+### Setup
 
 ```bash
 git clone https://github.com/allonethingxyz/sunschool.git
@@ -122,11 +101,9 @@ cd sunschool
 npm install
 ```
 
-## Database Setup
+### Environment
 
-### Environment Configuration
-
-Create a `.env` file with required variables:
+Create `.env`:
 
 ```env
 DATABASE_URL=postgresql://user:password@host:port/database
@@ -137,197 +114,108 @@ PERPLEXITY_API_KEY=your-perplexity-key
 PORT=5000
 ```
 
-### Database Initialization
-
-The application automatically runs migrations on startup. For manual migration:
+### Run
 
 ```bash
-# Run migrations manually
-npm run migrate
-
-# Or push schema changes during development
-npm run db:push
-
-# Optional: Seed with sample data
-npm run db:seed
-```
-
-**Note**: Database migrations are automatically applied when the server starts in production.
-
-## Running the Application
-
-### Development
-
-```bash
+# Development
 npm run dev
-```
 
-Starts the server at http://localhost:5000 (or configured PORT).
-
-### Production
-
-```bash
+# Production
 npm run build
 npm start
 ```
 
-### Railway Deployment
+The first user to register is auto-promoted to Admin.
 
-The app is configured for Railway with NIXPACKS (Node 22). Push to `main` triggers automatic deployment.
+### Database
 
-```json
-// railway.json
-{
-  "build": { "builder": "NIXPACKS" },
-  "deploy": {
-    "startCommand": "NODE_ENV=production node dist/server/index.js",
-    "healthcheckPath": "/api/healthcheck"
-  }
-}
-```
-
-## Admin Setup
-
-The first user to register is automatically promoted to the ADMIN role. After that, new registrations default to the LEARNER role.
-
-### Manual Admin Creation
+Migrations run automatically on startup. Manual commands:
 
 ```bash
-ts-node scripts/admin-onboard.ts
+npm run migrate        # Run migrations
+npm run db:push        # Push schema changes
+npm run db:seed        # Seed with test data
 ```
 
-## User Roles
+### Railway
 
-### ADMIN
-- Full system access and user management
-- Can view all data across the platform
+Push to `main` triggers auto-deploy. Health check at `/api/healthcheck`.
 
-### PARENT
-- Manage their children's learner accounts
-- View children's progress and achievements
-- Configure database synchronization
+## API Reference
 
-### LEARNER
-- Access assigned lessons
-- Complete lessons and view achievements
+<details>
+<summary>Authentication</summary>
 
-## API Endpoints
+- `POST /login` — User login
+- `POST /register` — User registration
+- `POST /logout` — User logout
+- `GET /user` — Current user info
+</details>
 
-### Authentication
-- `POST /login` - User login
-- `POST /register` - User registration
-- `POST /logout` - User logout
-- `GET /user` - Get current user info
+<details>
+<summary>Users & Learners</summary>
 
-### User Management
-- `GET /api/parents` - List parents (ADMIN only)
-- `GET /api/learners` - List learners (PARENT, ADMIN)
-- `POST /api/learners` - Create learner (PARENT, ADMIN)
-- `DELETE /api/learners/:id` - Delete learner (PARENT, ADMIN)
-- `GET /api/learner-profile/:userId` - Get learner profile
-- `PUT /api/learner-profile/:userId` - Update learner profile (PARENT, ADMIN)
+- `GET /api/parents` — List parents (Admin)
+- `GET /api/learners` — List learners (Parent, Admin)
+- `POST /api/learners` — Create learner (Parent, Admin)
+- `DELETE /api/learners/:id` — Delete learner (Parent, Admin)
+- `GET /api/learner-profile/:userId` — Get learner profile
+- `PUT /api/learner-profile/:userId` — Update learner profile
+</details>
 
-### Lessons
-- `POST /api/lessons/create` - Create lesson
-- `GET /api/lessons/active` - Get active lesson
-- `GET /api/lessons/:lessonId` - Get lesson details
-- `GET /api/lessons` - List lessons
-- `POST /api/lessons/:lessonId/answer` - Submit lesson answers
+<details>
+<summary>Lessons & Quizzes</summary>
 
-### Analytics & Performance
-- `GET /api/learner/:learnerId/concept-performance` - Get concept mastery data
-- `GET /api/learner/:learnerId/recent-answers` - Get recent quiz answers
-- `GET /api/learner/:learnerId/points-history` - Get points history
+- `POST /api/lessons/create` — Create lesson
+- `GET /api/lessons/active` — Get active lesson
+- `GET /api/lessons/:lessonId` — Get lesson details
+- `GET /api/lessons` — List lessons
+- `POST /api/lessons/:lessonId/answer` — Submit answers
+</details>
 
-### Achievements
-- `GET /api/achievements` - Get user achievements
+<details>
+<summary>Analytics & Progress</summary>
 
-### Database Sync
-- `GET /api/sync-configs` - List sync configurations (PARENT)
-- `POST /api/sync-configs` - Create sync configuration (PARENT)
-- `GET /api/sync-configs/:id` - Get sync config (PARENT)
-- `PUT /api/sync-configs/:id` - Update sync config (PARENT)
-- `DELETE /api/sync-configs/:id` - Delete sync config (PARENT)
-- `POST /api/sync-configs/:id/push` - Trigger sync (PARENT)
+- `GET /api/learner/:learnerId/concept-performance` — Concept mastery data
+- `GET /api/learner/:learnerId/recent-answers` — Recent quiz answers
+- `GET /api/learner/:learnerId/points-history` — Points history
+- `GET /api/achievements` — User achievements
+</details>
 
-### Gamification & Rewards
-- `GET /api/points/balance` - Get learner's point balance
-- `GET /api/learner/:learnerId/points-history` - Get points history
-- `GET /api/rewards/available` - List available rewards (LEARNER)
-- `POST /api/rewards/redeem/:rewardId` - Request reward redemption (LEARNER)
-- `GET /api/rewards` - List rewards (PARENT)
-- `POST /api/rewards` - Create reward (PARENT)
-- `PUT /api/rewards/:id` - Update reward (PARENT)
-- `DELETE /api/rewards/:id` - Delete reward (PARENT)
-- `GET /api/rewards/redemptions` - View pending redemptions (PARENT)
-- `POST /api/rewards/redemptions/:id/approve` - Approve redemption (PARENT)
+<details>
+<summary>Rewards & Gamification</summary>
 
-### Other
-- `GET /api/reports` - Get reports
-- `GET /api/export` - Export data (PARENT, ADMIN)
-- `GET /api/healthcheck` - Health check
+- `GET /api/points/balance` — Point balance (Learner)
+- `GET /api/rewards/available` — Available rewards (Learner)
+- `POST /api/rewards/redeem/:rewardId` — Request redemption (Learner)
+- `GET /api/rewards` — List rewards (Parent)
+- `POST /api/rewards` — Create reward (Parent)
+- `PUT /api/rewards/:id` — Update reward (Parent)
+- `DELETE /api/rewards/:id` — Delete reward (Parent)
+- `GET /api/rewards/redemptions` — Pending redemptions (Parent)
+- `POST /api/rewards/redemptions/:id/approve` — Approve redemption (Parent)
+</details>
 
-## Development
+<details>
+<summary>Data & Sync</summary>
 
-### Project Structure
-- `client/` - React frontend
-- `server/` - Express.js backend
-- `shared/` - TypeScript schemas and types
-- `scripts/` - Database and utility scripts
+- `GET /api/sync-configs` — List sync configs (Parent)
+- `POST /api/sync-configs` — Create sync config (Parent)
+- `POST /api/sync-configs/:id/push` — Trigger sync (Parent)
+- `GET /api/reports` — Get reports
+- `GET /api/export` — Export data (Parent, Admin)
+- `GET /api/healthcheck` — Health check
+</details>
 
-### Development Commands
-- `npm run dev` - Start development server
-- `npm run db:push` - Update database schema
-- `npm run db:seed` - Seed database with test data
-- `npm run migrate` - Run database migrations
-- `npm test` - Run unit tests
-- `npx playwright test` - Run e2e tests
-- `PLAYWRIGHT_BASE_URL=https://sunschool.xyz npx playwright test` - Run e2e tests against production
+## Testing
 
-### E2E Test Suite
+```bash
+npm test                          # Unit tests
+npx playwright test               # E2E tests (local)
+PLAYWRIGHT_BASE_URL=https://sunschool.xyz npx playwright test  # E2E against production
+```
 
-The Playwright test at `tests/e2e/child-lesson-flow.spec.ts` covers the complete user flow:
-
-1. **Parent Registration** - Register a new parent account (API fallback + UI login)
-2. **Add Child Learner** - Create a child with grade level selection
-3. **Switch to Learner Mode** - Navigate from parent dashboard to learner view
-4. **Generate Lesson** - Click "Random Lesson" and wait for AI lesson generation
-5. **View Lesson** - Verify lesson content with SVG illustrations, Key Concepts, Examples, Practice sections
-6. **Take Quiz** - Answer 3 multiple-choice questions with DOM-based option selection
-7. **Submit & Review** - Submit answers and verify quiz results
-8. **Return Home** - Navigate back to learner home
-
-Screenshots are saved to `tests/e2e/screenshots/` for visual verification.
-
-## Troubleshooting
-
-### Common Issues
-
-**Database Connection Errors**
-- Ensure `DATABASE_URL` is properly set in `.env`
-- For Neon databases, the WebSocket constructor is configured automatically
-- Check connection pooling settings in `server/db.ts`
-
-**Migration Failures**
-- Migrations run automatically on startup
-- If migrations fail, the server will still start (prevents deployment failures)
-- Run `npm run migrate` manually to debug migration issues
-- Check `drizzle/migrations/` folder for migration files
-
-**Quiz Submission Errors**
-- Ensure `quiz_answers` table exists (requires migrations)
-- Check browser console for detailed error messages
-- Verify learner has an active lesson before submitting
-
-**TypeScript Compilation Errors**
-- Run `npx tsc --noEmit` to check for type errors
-- Ensure all dependencies are installed: `npm install`
-- Clear build cache: `rm -rf client/dist server/dist`
-
-**Keep-Alive Logging**
-- Keep-alive pings occur every 2 minutes
-- Only logged in development mode (`NODE_ENV=development`)
-- Production mode silences these logs
+The e2e suite covers: parent registration, add child, switch to learner mode, generate lesson, take quiz, submit answers, review results.
 
 ## Contributing
 
@@ -336,6 +224,14 @@ Screenshots are saved to `tests/e2e/screenshots/` for visual verification.
 3. Make your changes
 4. Submit a pull request
 
+All PRs require review before merging to `main`.
+
 ## License
 
 MIT License
+
+---
+
+<p align="center">
+  <sub>A product of <a href="https://allonething.xyz">All One Thing Labs</a>. Open source education for all.</sub>
+</p>

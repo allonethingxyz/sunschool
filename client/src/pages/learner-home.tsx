@@ -123,11 +123,13 @@ const LearnerHome = () => {
     enabled: !!selectedLearner?.id,
   });
 
-  // Generate a new lesson
+  // Generate a new lesson (retries automatically on 503 from server)
     const generateLessonMutation = useMutation({
     mutationFn: (data: { learnerId: number, topic: string, gradeLevel: number, subject: string, category: string, difficulty: 'beginner' | 'intermediate' | 'advanced' }) => {
       return apiRequest('POST', '/api/lessons/create', data).then(res => res.data);
     },
+    retry: 2,
+    retryDelay: 1000,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/lessons/active', selectedLearner?.id] });
     },

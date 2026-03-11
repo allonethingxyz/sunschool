@@ -41,7 +41,7 @@ export interface IStorage {
   getLearnerLessons(learnerId: string): Promise<Lesson[]>;
   getLessonHistory(learnerId: string, limit?: number): Promise<Lesson[]>;
   updateLessonStatus(id: string, status: "QUEUED" | "ACTIVE" | "DONE", score?: number): Promise<Lesson | undefined>;
-  updateLessonImages(id: string, enhancedSpec: any, imagePaths: any): Promise<void>;
+  updateLessonImages(id: string, spec: any, imagePaths: any): Promise<void>;
 
   // Achievement operations
   createAchievement(achievement: InsertAchievement): Promise<Achievement>;
@@ -507,48 +507,11 @@ export class DatabaseStorage implements IStorage {
 
   async getLessonById(id: string): Promise<Lesson | undefined> {
     try {
-      // Try to get the full lesson first
-      try {
-        const result = await db.select().from(lessons).where(eq(lessons.id, id));
-        const lessonList = Array.isArray(result) ? result : [result];
-        if (lessonList.length > 0) {
-          return lessonList[0] as Lesson;
-        }
-      } catch (e) {
-        // Fall back to basic query below
-      }
-
-      // Fallback to a more specific query to avoid "column does not exist" errors
-      const result = await db
-        .select({
-          id: lessons.id,
-          learnerId: lessons.learnerId,
-          moduleId: lessons.moduleId,
-          status: lessons.status,
-          spec: lessons.spec,
-          score: lessons.score,
-          createdAt: lessons.createdAt,
-          completedAt: lessons.completedAt,
-        })
-        .from(lessons)
-        .where(eq(lessons.id, id));
-
+      const result = await db.select().from(lessons).where(eq(lessons.id, id));
       const lessonList = Array.isArray(result) ? result : [result];
-
       if (lessonList.length > 0) {
-        // Return a lesson with default values for potentially missing columns
-        const baseLesson = lessonList[0];
-        const fullLesson = {
-          ...baseLesson,
-          enhancedSpec: null,
-          subject: null, 
-          category: null,
-          difficulty: 'beginner' as const,
-          imagePaths: null
-        };
-        return fullLesson as Lesson;
+        return lessonList[0] as Lesson;
       }
-
       return undefined;
     } catch (error) {
       console.error('Error in getLessonById:', error);
@@ -558,57 +521,17 @@ export class DatabaseStorage implements IStorage {
 
   async getActiveLesson(learnerId: string | number): Promise<Lesson | undefined> {
     try {
-      // Try to get the full lesson first
-      try {
-        const result = await db.select()
-          .from(lessons)
-          .where(and(eq(lessons.learnerId, Number(Number(learnerId))), eq(lessons.status, "ACTIVE")))
-          .orderBy(desc(lessons.createdAt))
-          .limit(1);
-        const lessonList = Array.isArray(result) ? result : [result];
-        if (lessonList.length > 0) {
-          return lessonList[0] as Lesson;
-        }
-      } catch (e) {
-        // Fall back to basic query below
-      }
-
-      // Fallback to a more specific query to avoid "column does not exist" errors
-      const result = await db
-        .select({
-          id: lessons.id,
-          learnerId: lessons.learnerId,
-          moduleId: lessons.moduleId,
-          status: lessons.status,
-          spec: lessons.spec,
-          score: lessons.score,
-          createdAt: lessons.createdAt,
-          completedAt: lessons.completedAt,
-        })
+      const result = await db.select()
         .from(lessons)
         .where(and(eq(lessons.learnerId, Number(Number(learnerId))), eq(lessons.status, "ACTIVE")))
         .orderBy(desc(lessons.createdAt))
         .limit(1);
-
       const lessonList = Array.isArray(result) ? result : [result];
-
       if (lessonList.length > 0) {
-        // Return a lesson with default values for potentially missing columns
-        const baseLesson = lessonList[0];
-        const fullLesson = {
-          ...baseLesson,
-          enhancedSpec: null,
-          subject: null,
-          category: null,
-          difficulty: 'beginner' as const,
-          imagePaths: null
-        };
-        return fullLesson as Lesson;
+        return lessonList[0] as Lesson;
       }
-
       return undefined;
     } catch (error) {
-      // Log the error but don't crash
       console.error("Error in getActiveLesson:", error);
       return undefined;
     }
@@ -636,52 +559,15 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getLessonHistory(learnerId: string | number | number | number | number | number | number | number | number | number | number | number | number | number | number, limit: number = 10): Promise<Lesson[]> {
+  async getLessonHistory(learnerId: string | number, limit: number = 10): Promise<Lesson[]> {
     try {
-      // Try to get the full lesson history first
-      try {
-        const result = await db
-          .select()
-          .from(lessons)
-          .where(eq(lessons.learnerId, Number(Number(learnerId))))
-          .orderBy(desc(lessons.createdAt))
-          .limit(limit);
-        return Array.isArray(result) ? result.map(lesson => lesson as Lesson) : [result as Lesson];
-      } catch (e) {
-        // Fall back to basic query below
-      }
-
-      // Fallback to a more specific query to avoid "column does not exist" errors
       const result = await db
-        .select({
-          id: lessons.id,
-          learnerId: lessons.learnerId,
-          moduleId: lessons.moduleId,
-          status: lessons.status,
-          subject: lessons.subject,
-          category: lessons.category,
-          difficulty: lessons.difficulty,
-          spec: lessons.spec,
-          enhancedSpec: lessons.enhancedSpec,
-          imagePaths: lessons.imagePaths,
-          score: lessons.score,
-          createdAt: lessons.createdAt,
-          completedAt: lessons.completedAt,
-        })
+        .select()
         .from(lessons)
         .where(eq(lessons.learnerId, Number(Number(learnerId))))
         .orderBy(desc(lessons.createdAt))
         .limit(limit);
-
-      // Add default values for potentially missing columns
-      return result.map(baseLesson => ({
-        ...baseLesson,
-        enhancedSpec: baseLesson.enhancedSpec || null,
-        subject: baseLesson.subject || null,
-        category: baseLesson.category || null,
-        difficulty: baseLesson.difficulty || 'beginner' as const,
-        imagePaths: baseLesson.imagePaths || null
-      })) as Lesson[];
+      return Array.isArray(result) ? result.map(lesson => lesson as Lesson) : [result as Lesson];
     } catch (error) {
       console.error('Error in getLessonHistory:', error);
       return [];
@@ -697,51 +583,16 @@ export class DatabaseStorage implements IStorage {
         updateData.completedAt = new Date();
       }
 
-      // Try to update only the specific fields we know exist in the database
-      try {
-        const result = await db
-          .update(lessons)
-          .set(updateData)
-          .where(eq(lessons.id, id))
-          .returning({
-            id: lessons.id,
-            learnerId: lessons.learnerId,
-            moduleId: lessons.moduleId,
-            status: lessons.status,
-            spec: lessons.spec,
-            score: lessons.score,
-            createdAt: lessons.createdAt,
-            completedAt: lessons.completedAt,
-          });
+      const result = await db
+        .update(lessons)
+        .set(updateData)
+        .where(eq(lessons.id, id))
+        .returning();
 
-        const lessonList = Array.isArray(result) ? result : [result];
-
-        if (lessonList.length > 0) {
-          // Return a lesson with default values for potentially missing columns
-          const baseLesson = lessonList[0];
-          const fullLesson = {
-            ...baseLesson,
-            enhancedSpec: null,
-            subject: null,
-            category: null,
-            difficulty: 'beginner' as const,
-            imagePaths: null
-          };
-          return fullLesson as Lesson;
-        }
-      } catch (e) {
-        console.error('Error updating lesson status with full returning:', e);
-
-        // Fallback: Update without returning all fields
-        await db
-          .update(lessons)
-          .set(updateData)
-          .where(eq(lessons.id, id));
-
-        // Fetch the updated lesson separately
-        return this.getLessonById(id);
+      const lessonList = Array.isArray(result) ? result : [result];
+      if (lessonList.length > 0) {
+        return lessonList[0] as Lesson;
       }
-
       return undefined;
     } catch (error) {
       console.error('Error in updateLessonStatus:', error);
@@ -749,11 +600,11 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateLessonImages(id: string, enhancedSpec: any, imagePaths: any): Promise<void> {
+  async updateLessonImages(id: string, spec: any, imagePaths: any): Promise<void> {
     try {
       await db
         .update(lessons)
-        .set({ enhancedSpec, imagePaths })
+        .set({ spec, imagePaths })
         .where(eq(lessons.id, id));
     } catch (error) {
       console.error('Error in updateLessonImages:', error);

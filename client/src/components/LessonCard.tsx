@@ -27,18 +27,18 @@ const LessonCard: React.FC<LessonCardProps> = ({
   const isDone = lesson.status === 'DONE';
   const isQueued = lesson.status === 'QUEUED';
 
-  // Use rich MediaLessonCard when the lesson has an enhanced spec with media
-  if (lesson.enhancedSpec && (lesson.enhancedSpec.images?.length > 0 || lesson.enhancedSpec.diagrams?.length > 0)) {
+  // Use rich MediaLessonCard when the lesson has a spec with media
+  if (lesson.spec && (lesson.spec.images?.length > 0 || lesson.spec.diagrams?.length > 0)) {
     return (
       <MediaLessonCard
-        title={lesson.enhancedSpec.title ?? lesson.spec?.title ?? ''}
-        subtitle={lesson.enhancedSpec.subtitle}
+        title={lesson.spec.title ?? ''}
+        subtitle={lesson.spec.subtitle}
         subject={lesson.subject}
-        gradeLevel={lesson.enhancedSpec.targetGradeLevel}
-        estimatedDuration={lesson.enhancedSpec.estimatedDuration}
-        difficultyLevel={lesson.enhancedSpec.difficultyLevel ?? lesson.difficulty}
-        featuredImage={lesson.enhancedSpec.featuredImage}
-        images={lesson.enhancedSpec.images ?? []}
+        gradeLevel={lesson.spec.targetGradeLevel}
+        estimatedDuration={lesson.spec.estimatedDuration}
+        difficultyLevel={lesson.spec.difficultyLevel ?? lesson.difficulty}
+        featuredImage={lesson.spec.featuredImage}
+        images={lesson.spec.images ?? []}
         onPress={onPress}
         status={lesson.status}
       />

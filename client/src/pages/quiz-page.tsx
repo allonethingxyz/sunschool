@@ -135,12 +135,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     setSelectedAnswers(newAnswers);
   };
 
-  // Use enhancedSpec questions when available, fall back to spec.questions
-  const displayQuestions: QuizQuestion[] = (() => {
-    if (!lesson) return [];
-    if (lesson.enhancedSpec?.questions?.length) return lesson.enhancedSpec.questions;
-    return lesson.spec?.questions ?? [];
-  })();
+  const displayQuestions: QuizQuestion[] = lesson?.spec?.questions ?? [];
 
   const handleStartQuiz = () => setQuizStarted(true);
 
@@ -195,7 +190,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     );
   }
 
-  if (!lesson || (!lesson.spec?.questions && !lesson.enhancedSpec?.questions)) {
+  if (!lesson || !lesson.spec?.questions?.length) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
@@ -445,7 +440,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
           // Quiz Questions View
           <View>
             <Text style={[styles.quizTitle, { color: theme.colors.textPrimary }]}>
-              {(lesson.enhancedSpec?.title ?? lesson.spec?.title ?? '')} Challenge
+              {(lesson.spec?.title ?? '')} Challenge
             </Text>
             <Text style={[styles.quizDescription, { color: theme.colors.textSecondary }]}>
               Let's see what you learned! Answer each question below.

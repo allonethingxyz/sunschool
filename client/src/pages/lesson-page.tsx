@@ -13,7 +13,6 @@ import { useTheme, colors as defaultColors, typography as defaultTypography, com
 import { ChevronRight, ArrowLeft } from 'react-feather';
 import SunschoolHeader from '../components/SunschoolHeader';
 import EnhancedLessonContent from '../components/EnhancedLessonContent';
-import DirectHtmlRenderer from '../components/DirectHtmlRenderer';
 import FunLoader from '../components/FunLoader';
 
 // Static stylesheet references
@@ -115,15 +114,7 @@ const LessonPage = ({ route, navigation }: any) => {
         <View style={styles.lessonContent}>
           <Text style={styles.lessonTitle}>{lesson.spec.title}</Text>
           
-          {/* Check if we have enhanced content */}
-          {lesson.enhancedSpec ? (
-            <EnhancedLessonContent enhancedSpec={lesson.enhancedSpec} />
-          ) : (
-            <DirectHtmlRenderer 
-              content={lesson.spec.content}
-              images={lesson.spec.images}
-            />
-          )}
+          <EnhancedLessonContent enhancedSpec={lesson.spec} />
         </View>
 
         <View style={[styles.quizPrompt, { backgroundColor: theme.colors.primary + '20', borderLeftWidth: 4, borderLeftColor: theme.colors.primary }]}>

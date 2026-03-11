@@ -151,7 +151,7 @@ export type EnhancedLessonSpec = {
 export const lessons = pgTable("lessons", {
   id: text("id").primaryKey().notNull(),
   learnerId: integer("learner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  moduleId: text("module_id").notNull(),
+  moduleId: text("module_id"),
   status: lessonStatusEnum("status").notNull().default("QUEUED"),
   subject: text("subject"),
   category: text("category"),
@@ -161,27 +161,7 @@ export const lessons = pgTable("lessons", {
     alt: string;
     description: string;
   }[]>(),
-  spec: json("spec").$type<{
-    title: string;
-    content: string;
-    questions: {
-      text: string;
-      options: string[];
-      correctIndex: number;
-      explanation: string;
-    }[];
-    graph?: {
-      nodes: {
-        id: string;
-        label: string;
-      }[];
-      edges: {
-        source: string;
-        target: string;
-      }[];
-    };
-  }>(),
-  enhancedSpec: json("enhanced_spec").$type<EnhancedLessonSpec>(),
+  spec: json("spec").$type<EnhancedLessonSpec>(),
   score: integer("score"),
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),

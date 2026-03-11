@@ -114,7 +114,7 @@ async function main() {
       learnerPassword
     ]
   );
-  const learner = learnerResult[0];
+  const learner = learnerResult.rows[0];
   console.log(`Learner created with ID: ${learner.id}`);
 
   // Create learner profile

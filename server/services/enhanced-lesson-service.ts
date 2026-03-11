@@ -4,6 +4,7 @@ import { EnhancedLessonSpec, LessonSection, LessonImage, LessonDiagram } from '.
 import { saveBase64Image } from './image-storage';
 import { generateEducationalSVG } from './svg-llm-service';
 import { LESSON_PROMPTS, IMAGE_PROMPTS, getReadingLevelInstructions, getMathematicalNotationRules } from '../prompts';
+import { validateLessonSpec } from './lesson-validator';
 
 // Create a simple ID generator since nanoid is causing ESM issues
 function generateId(length: number = 10): string {
@@ -426,17 +427,67 @@ export async function generateEnhancedLesson(
       console.error('Error generating quiz questions for enhanced lesson:', quizError);
     }
 
-    // Reject lessons with no real questions — caller will retry
+    // Reject lessons with no real questions — throw so caller can retry
     if (!enhancedLesson.questions || enhancedLesson.questions.length < 2) {
-      console.warn('[EnhancedLesson] Generated lesson has insufficient questions, returning null');
-      return null;
+      throw new Error(`Generated lesson has insufficient questions (${enhancedLesson.questions?.length ?? 0})`);
     }
 
     return enhancedLesson;
   } catch (error) {
-    console.error('Error generating enhanced lesson:', error);
-    return null;
+    // Re-throw instead of swallowing — let caller decide what to do
+    throw error instanceof Error ? error : new Error(String(error));
   }
+}
+
+/**
+ * Generate a lesson with retry and validation.
+ * This is the ONLY function any route or background job should call.
+ * Throws if all attempts fail.
+ */
+export async function generateLessonWithRetry(
+  gradeLevel: number,
+  topic: string,
+  options: {
+    withImages?: boolean;
+    subject?: string;
+    difficulty?: 'beginner' | 'intermediate' | 'advanced';
+    maxRetries?: number;
+  } = {}
+): Promise<EnhancedLessonSpec> {
+  const {
+    withImages = false,
+    subject,
+    difficulty = 'beginner',
+    maxRetries = 3,
+  } = options;
+
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const spec = await generateEnhancedLesson(
+        gradeLevel,
+        topic,
+        withImages,
+        subject,
+        difficulty
+      );
+
+      if (!spec) {
+        throw new Error('generateEnhancedLesson returned null');
+      }
+
+      // Validate the spec — throws if invalid
+      validateLessonSpec(spec);
+
+      return spec;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`[LessonRetry] Attempt ${attempt}/${maxRetries} failed: ${lastError.message}`);
+    }
+  }
+
+  throw new Error(`Lesson generation failed after ${maxRetries} attempts: ${lastError?.message}`);
 }
 
 /**

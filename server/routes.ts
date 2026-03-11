@@ -2,7 +2,7 @@ import express, { Express, Request, Response, NextFunction, RequestHandler } fro
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { generateLesson, checkForAchievements } from "./utils";
+import { checkForAchievements } from "./utils";
 import { asyncHandler, authenticateJwt, hasRoleMiddleware, AuthRequest, comparePasswords, generateToken, hashPassword } from "./middleware/auth";
 import { synchronizeToExternalDatabase } from "./sync-utils";
 import { InsertDbSyncConfig } from "../shared/schema";
@@ -11,7 +11,7 @@ import { db, pool, withRetry } from "./db";
 import { sql, count } from "drizzle-orm";
 import crypto from "crypto";
 import { users } from "../shared/schema";
-import { getSubjectSVG, generateLessonContent, generateQuizQuestions } from "./content-generator";
+// content-generator used by image-generation-router, not directly by routes
 import { pointsService } from "./services/points-service";
 import { activityService } from "./services/activity-service";
 
@@ -28,7 +28,7 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction): void 
 
 // Import services
 import('./services/subject-recommendation');
-import('./services/enhanced-lesson-service');
+import { generateLessonWithRetry, generateLessonImages } from './services/enhanced-lesson-service';
 import { storeQuizAnswers, extractConceptTags } from './services/quiz-tracking-service';
 import { bulkUpdateMasteryFromAnswers, getConceptsNeedingReinforcement } from './services/mastery-service';
 import { storeQuestionHashes, getRecentQuestions } from './services/question-deduplication';
@@ -43,6 +43,13 @@ function hasRole(roles: string[]) {
       hasRoleMiddleware(roles)(req as AuthRequest, res, next);
     });
   };
+}
+
+function backgroundTask(name: string, fn: () => Promise<void>) {
+  setImmediate(async () => {
+    try { await fn(); }
+    catch (err) { console.error(`[BG] ${name} failed:`, err); }
+  });
 }
 
 export function registerRoutes(app: Express): Server {
@@ -804,23 +811,8 @@ export function registerRoutes(app: Express): Server {
       // Use learnerId query param if provided (parent viewing as child), otherwise use auth user
       const learnerId = (req.query.learnerId as string) || req.user.id;
 
-      let activeLesson = await storage.getActiveLesson(learnerId);
+      const activeLesson = await storage.getActiveLesson(learnerId);
 
-      // If the active lesson is a stub/placeholder, retire it so the learner can generate a real one
-      if (activeLesson) {
-        const isStub = !activeLesson.spec?.questions ||
-          activeLesson.spec.questions.length < 2 ||
-          activeLesson.spec.questions.some((q: any) => q.text === "What is this lesson about?") ||
-          (activeLesson.spec.content && /^#.*\n\nThis is a lesson about /.test(activeLesson.spec.content));
-
-        if (isStub) {
-          console.warn(`[Lesson] Retiring stub lesson ${activeLesson.id} for learner ${learnerId}`);
-          await storage.updateLessonStatus(activeLesson.id, "DONE", 0);
-          activeLesson = null;
-        }
-      }
-
-      // Just return the active lesson if found without auto-generating
       if (activeLesson) {
         return res.json(activeLesson);
       }
@@ -834,17 +826,6 @@ export function registerRoutes(app: Express): Server {
   }));
 
   // Create a custom lesson for a learner
-  // Validate that a generated lesson has real content, not a stub/placeholder
-  function isValidLessonSpec(spec: any): boolean {
-    if (!spec) return false;
-    if (!spec.questions || spec.questions.length < 2) return false;
-    // Reject placeholder questions
-    if (spec.questions.some((q: any) => q.text === "What is this lesson about?")) return false;
-    // Reject placeholder content
-    if (spec.content && /^#.*\n\nThis is a lesson about /.test(spec.content)) return false;
-    return true;
-  }
-
   app.post("/api/lessons/create", isAuthenticated, asyncHandler(async (req: AuthRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -854,7 +835,6 @@ export function registerRoutes(app: Express): Server {
       topic = '',
       gradeLevel,
       learnerId,
-      enhanced = true,
       subject = '',
       category = '',
       difficulty = 'beginner'
@@ -881,12 +861,6 @@ export function registerRoutes(app: Express): Server {
     }
 
     try {
-      // Retire any existing ACTIVE lesson so the new one becomes current
-      const previousLesson = await storage.getActiveLesson(targetLearnerId);
-      if (previousLesson) {
-        await storage.updateLessonStatus(previousLesson.id, "DONE", 0);
-      }
-
       // Get learner profile
       const learnerProfile = await storage.getLearnerProfile(targetLearnerId);
       if (!learnerProfile) {
@@ -896,52 +870,55 @@ export function registerRoutes(app: Express): Server {
       // Determine the subject if not provided
       let finalSubject = subject;
       if (!finalSubject && learnerProfile.subjects && learnerProfile.subjects.length > 0) {
-        // Use a subject from the learner's profile
         finalSubject = learnerProfile.subjects[Math.floor(Math.random() * learnerProfile.subjects.length)];
       }
 
       // Get subject category if not provided
       let finalCategory = category;
       if (!finalCategory && finalSubject) {
-        // Import on demand to avoid circular dependencies
         const { getSubjectCategory } = await import('./services/subject-recommendation');
         finalCategory = getSubjectCategory(finalSubject);
       }
 
-      // Retry enhanced lesson generation up to 3 times
-      const MAX_RETRIES = 3;
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          const { generateEnhancedLesson } = await import('./services/enhanced-lesson-service');
+      // Single generation path with retry and validation
+      let spec;
+      try {
+        spec = await generateLessonWithRetry(gradeLevel, topic, {
+          subject: finalSubject,
+          difficulty: difficulty as 'beginner' | 'intermediate' | 'advanced',
+        });
+      } catch (genErr) {
+        console.error('[Lesson] Generation failed:', genErr);
+        return res.status(503).json({ error: "Lesson generation failed after multiple attempts. Please try again." });
+      }
 
-          const enhancedSpec = await generateEnhancedLesson(
-            gradeLevel,
-            topic,
-            false, // NO images — return fast
-            finalSubject,
-            difficulty as 'beginner' | 'intermediate' | 'advanced'
-          );
+      // Retire any existing ACTIVE lesson — handle unique index conflict
+      const previousLesson = await storage.getActiveLesson(targetLearnerId);
+      if (previousLesson) {
+        await storage.updateLessonStatus(previousLesson.id, "DONE", 0);
+      }
 
-          if (!enhancedSpec) {
-            console.warn(`[Lesson] Enhanced generation returned null (attempt ${attempt}/${MAX_RETRIES})`);
-            continue;
+      let newLesson;
+      try {
+        newLesson = await storage.createLesson({
+          id: crypto.randomUUID(),
+          learnerId: Number(targetLearnerId),
+          moduleId: "custom-" + Date.now(),
+          status: "ACTIVE",
+          subject: finalSubject,
+          category: finalCategory,
+          difficulty,
+          spec,
+          imagePaths: []
+        });
+      } catch (insertErr: any) {
+        // Handle unique index conflict (23505) — another ACTIVE lesson snuck in
+        if (insertErr?.code === '23505') {
+          const conflicting = await storage.getActiveLesson(targetLearnerId);
+          if (conflicting) {
+            await storage.updateLessonStatus(conflicting.id, "DONE", 0);
           }
-
-          const lessonSpec = {
-            title: enhancedSpec.title,
-            content: `# ${enhancedSpec.title}\n\n${enhancedSpec.summary}\n\n${enhancedSpec.sections.map(s =>
-              `## ${s.title}\n\n${s.content}`).join('\n\n')}`,
-            questions: enhancedSpec.questions,
-            graph: enhancedSpec.graph
-          };
-
-          if (!isValidLessonSpec(lessonSpec)) {
-            console.warn(`[Lesson] Generated spec failed validation (attempt ${attempt}/${MAX_RETRIES}): ${lessonSpec.questions?.length || 0} questions`);
-            continue;
-          }
-
-          // Valid lesson — save it
-          const newLesson = await storage.createLesson({
+          newLesson = await storage.createLesson({
             id: crypto.randomUUID(),
             learnerId: Number(targetLearnerId),
             moduleId: "custom-" + Date.now(),
@@ -949,40 +926,32 @@ export function registerRoutes(app: Express): Server {
             subject: finalSubject,
             category: finalCategory,
             difficulty,
-            spec: lessonSpec,
-            enhancedSpec,
+            spec,
             imagePaths: []
           });
-
-          // Background image generation (non-blocking)
-          const lessonId = newLesson.id;
-          setImmediate(async () => {
-            try {
-              const { generateLessonImages } = await import('./services/enhanced-lesson-service');
-              const { images, diagrams } = await generateLessonImages(
-                enhancedSpec, topic, gradeLevel, finalSubject
-              );
-              if (images?.length) {
-                const imgPaths = images
-                  .filter((img: any) => img.path)
-                  .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
-                const mergedSpec = { ...enhancedSpec, images, diagrams: diagrams || [] };
-                await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
-                console.log(`[BG] Images generated for lesson ${lessonId}`);
-              }
-            } catch (bgErr) {
-              console.error(`[BG] Image generation failed for lesson ${lessonId}:`, bgErr);
-            }
-          });
-
-          return res.json(newLesson);
-        } catch (enhancedError) {
-          console.error(`[Lesson] Generation error (attempt ${attempt}/${MAX_RETRIES}):`, enhancedError);
+        } else {
+          throw insertErr;
         }
       }
 
-      // All retries exhausted — tell the client to retry
-      return res.status(503).json({ error: "Lesson generation failed after multiple attempts. Please try again." });
+      // Background image generation
+      const lessonId = newLesson.id;
+      const savedSpec = spec;
+      backgroundTask(`images-${lessonId}`, async () => {
+        const { images, diagrams } = await generateLessonImages(
+          savedSpec, topic, gradeLevel, finalSubject
+        );
+        if (images?.length) {
+          const imgPaths = images
+            .filter((img: any) => img.path)
+            .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
+          const mergedSpec = { ...savedSpec, images, diagrams: diagrams || [] };
+          await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
+          console.log(`[BG] Images generated for lesson ${lessonId}`);
+        }
+      });
+
+      return res.json(newLesson);
     } catch (error) {
       console.error('Error creating custom lesson:', error);
       return res.status(500).json({ error: "Failed to generate lesson content" });
@@ -1218,56 +1187,36 @@ export function registerRoutes(app: Express): Server {
     });
 
     // ── Background pre-generation: queue next lesson so one is always ready ──
-    setImmediate(async () => {
-      try {
-        // Check if learner already has a QUEUED or ACTIVE lesson
-        const existingActive = await storage.getActiveLesson(String(learnerId));
-        if (existingActive) return; // already has one ready
+    backgroundTask(`pregen-learner-${learnerId}`, async () => {
+      // Check if learner already has an ACTIVE lesson
+      const existingActive = await storage.getActiveLesson(String(learnerId));
+      if (existingActive) return; // already has one ready
 
-        const profile = await storage.getLearnerProfile(String(learnerId));
-        if (!profile || !profile.subjects?.length) return;
+      const profile = await storage.getLearnerProfile(String(learnerId));
+      if (!profile || !profile.subjects?.length) return;
 
-        const nextSubject = profile.subjects[Math.floor(Math.random() * profile.subjects.length)];
-        const { getSubjectCategory } = await import('./services/subject-recommendation');
-        const nextCategory = getSubjectCategory(nextSubject);
-        const { generateEnhancedLesson } = await import('./services/enhanced-lesson-service');
+      const nextSubject = profile.subjects[Math.floor(Math.random() * profile.subjects.length)];
+      const { getSubjectCategory } = await import('./services/subject-recommendation');
+      const nextCategory = getSubjectCategory(nextSubject);
 
-        // Generate text-only (fast) so a lesson is immediately available
-        const spec = await generateEnhancedLesson(
-          profile.gradeLevel, nextSubject, false, nextSubject, 'beginner'
-        );
-        if (!spec) return;
+      // Use the single generation path with retry+validation
+      const spec = await generateLessonWithRetry(profile.gradeLevel, nextSubject, {
+        subject: nextSubject,
+        difficulty: 'beginner',
+      });
 
-        const lessonSpec = {
-          title: spec.title,
-          content: `# ${spec.title}\n\n${spec.summary}\n\n${spec.sections.map(s =>
-            `## ${s.title}\n\n${s.content}`).join('\n\n')}`,
-          questions: spec.questions,
-          graph: spec.graph
-        };
-
-        // Don't save stub/invalid lessons
-        if (!isValidLessonSpec(lessonSpec)) {
-          console.warn(`[BG] Pre-generated lesson failed validation, discarding`);
-          return;
-        }
-
-        const queued = await storage.createLesson({
-          id: crypto.randomUUID(),
-          learnerId: Number(learnerId),
-          moduleId: "auto-" + Date.now(),
-          status: "ACTIVE",
-          subject: nextSubject,
-          category: nextCategory,
-          difficulty: 'beginner',
-          spec: lessonSpec,
-          enhancedSpec: spec,
-          imagePaths: []
-        });
-        console.log(`[BG] Pre-generated lesson ${queued.id} for learner ${learnerId}`);
-      } catch (bgErr) {
-        console.error('[BG] Pre-generation failed:', bgErr);
-      }
+      const queued = await storage.createLesson({
+        id: crypto.randomUUID(),
+        learnerId: Number(learnerId),
+        moduleId: "auto-" + Date.now(),
+        status: "ACTIVE",
+        subject: nextSubject,
+        category: nextCategory,
+        difficulty: 'beginner',
+        spec,
+        imagePaths: []
+      });
+      console.log(`[BG] Pre-generated lesson ${queued.id} for learner ${learnerId}`);
     });
   }));
 

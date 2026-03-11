@@ -13,7 +13,6 @@ import { useLocation } from 'wouter';
 import { apiRequest } from '../lib/queryClient';
 import { colors, typography, commonStyles } from '../styles/theme';
 import { ChevronRight, ArrowLeft } from 'react-feather';
-import SimpleMarkdownRenderer from '../components/SimpleMarkdownRenderer';
 import EnhancedLessonContent from '../components/EnhancedLessonContent';
 import { useMode } from '../context/ModeContext';
 
@@ -131,15 +130,7 @@ const ActiveLessonPage = () => {
         <View style={styles.lessonContent}>
           <Text style={styles.lessonTitle}>{lesson.spec.title}</Text>
           
-          {/* Use EnhancedLessonContent when enhancedSpec is available (has SVG images & diagrams) */}
-          {lesson.enhancedSpec ? (
-            <EnhancedLessonContent enhancedSpec={lesson.enhancedSpec} />
-          ) : (
-            <SimpleMarkdownRenderer
-              content={lesson.spec.content}
-              images={lesson.spec.images || []}
-            />
-          )}
+          <EnhancedLessonContent enhancedSpec={lesson.spec} />
         </View>
 
         <View style={styles.quizPrompt}>

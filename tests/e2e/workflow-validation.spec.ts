@@ -87,21 +87,34 @@ async function setAuthAndNavigate(page: Page, token: string, path: string) {
   }
 }
 
-/** API helper — makes authenticated requests from browser context */
+/** API helper — makes authenticated requests from browser context with timeout */
 async function apiCall(page: Page, method: string, url: string, body?: any): Promise<any> {
-  return page.evaluate(async ({ method, url, body, token }) => {
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-    const text = await res.text();
-    try { return { status: res.status, data: JSON.parse(text) }; }
-    catch { return { status: res.status, data: text }; }
-  }, { method, url, body, token: authToken });
+  try {
+    return await page.evaluate(async ({ method, url, body, token }) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          signal: controller.signal,
+          ...(body ? { body: JSON.stringify(body) } : {}),
+        });
+        clearTimeout(timeoutId);
+        const text = await res.text();
+        try { return { status: res.status, data: JSON.parse(text) }; }
+        catch { return { status: res.status, data: text }; }
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        return { status: 0, data: `fetch error: ${err.message}` };
+      }
+    }, { method, url, body, token: authToken });
+  } catch (err: any) {
+    return { status: 0, data: `evaluate error: ${err.message}` };
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -336,25 +349,26 @@ test.describe('Parent & Learner Workflows', () => {
     }
     expect(lessonId).toBeTruthy();
 
-    // Wait for background image generation (poll API up to 90s)
+    // Wait for background image generation (poll API up to 60s)
     let hasImages = false;
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 12; i++) {
       await page.waitForTimeout(5000);
       const lessonResult = await apiCall(page, 'GET', `/api/lessons/${lessonId}`);
-      if (lessonResult.status === 200) {
-        const spec = lessonResult.data.spec;
-        const images = spec?.images || [];
+      if (lessonResult.status === 200 && lessonResult.data?.spec) {
+        const images = lessonResult.data.spec.images || [];
         const realImages = images.filter((img: any) => img.svgData || img.base64Data || img.path);
         console.log(`Poll ${i + 1}: ${realImages.length}/${images.length} images ready`);
         if (realImages.length > 0) {
           hasImages = true;
           break;
         }
+      } else {
+        console.log(`Poll ${i + 1}: API returned status=${lessonResult.status}`);
       }
     }
 
     if (!hasImages) {
-      console.log('WARNING: Images did not generate within 90s — testing with placeholders');
+      console.log('WARNING: Images did not generate within 60s — testing with placeholders');
     }
 
     // Navigate to lesson page
@@ -624,34 +638,42 @@ test.describe('SVG Rendering Validation', () => {
     const svgLessonId = lessonResult.id;
     console.log(`SVG test lesson: ${svgLessonId}`);
 
-    // Poll for images to generate (up to 2 minutes)
+    // Poll for images to generate (up to 90s)
     let imageData: any = null;
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 18; i++) {
       await page.waitForTimeout(5000);
-      const check = await page.evaluate(async ({ token, id }) => {
-        const res = await fetch(`/api/lessons/${id}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!res.ok) return null;
-        const lesson = await res.json();
-        const images = lesson.spec?.images || [];
-        const diagrams = lesson.spec?.diagrams || [];
-        return {
-          imageCount: images.length,
-          realImages: images.filter((i: any) => i.svgData || i.base64Data || i.path).length,
-          diagramCount: diagrams.length,
-          realDiagrams: diagrams.filter((d: any) => d.svgData).length,
-          sampleImage: images[0],
-          sampleDiagram: diagrams[0],
-        };
-      }, { token, id: svgLessonId });
+      try {
+        const check = await page.evaluate(async ({ token, id }) => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          try {
+            const res = await fetch(`/api/lessons/${id}`, {
+              headers: { 'Authorization': `Bearer ${token}` },
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+            if (!res.ok) return null;
+            const lesson = await res.json();
+            const images = lesson.spec?.images || [];
+            const diagrams = lesson.spec?.diagrams || [];
+            return {
+              imageCount: images.length,
+              realImages: images.filter((i: any) => i.svgData || i.base64Data || i.path).length,
+              diagramCount: diagrams.length,
+              realDiagrams: diagrams.filter((d: any) => d.svgData).length,
+            };
+          } catch { clearTimeout(timeoutId); return null; }
+        }, { token, id: svgLessonId });
 
-      if (check && check.realImages > 0) {
-        imageData = check;
-        console.log(`Images ready after ${(i + 1) * 5}s: ${check.realImages} images, ${check.realDiagrams} diagrams`);
-        break;
+        if (check && check.realImages > 0) {
+          imageData = check;
+          console.log(`Images ready after ${(i + 1) * 5}s: ${check.realImages} images, ${check.realDiagrams} diagrams`);
+          break;
+        }
+        if (i % 4 === 0) console.log(`Waiting for images... (${(i + 1) * 5}s)`);
+      } catch {
+        console.log(`Poll ${i + 1} failed (network error)`);
       }
-      if (i % 6 === 0) console.log(`Waiting for images... (${(i + 1) * 5}s)`);
     }
 
     // Navigate to lesson page

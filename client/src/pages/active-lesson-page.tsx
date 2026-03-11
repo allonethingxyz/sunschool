@@ -40,6 +40,13 @@ const ActiveLessonPage = () => {
     queryFn: () => apiRequest('GET', `/api/lessons/active?learnerId=${learnerId}`).then(res => res.data),
     enabled: !!learnerId,
     retry: 1,
+    // Re-poll every 5s while images are still being generated in the background
+    refetchInterval: (query) => {
+      const d = query.state.data as any;
+      if (!d?.spec?.images?.length) return 5000;
+      const hasReal = d.spec.images.some((img: any) => img.svgData || img.base64Data || img.path);
+      return hasReal ? false : 5000;
+    },
   });
 
   useEffect(() => {

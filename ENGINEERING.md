@@ -1,6 +1,6 @@
 # SUNSCHOOL Engineering Documentation
 
-Technical reference for the SUNSCHOOL platform. For setup and API reference, see [README.md](README.md). For UX roadmap, see [PLAN.md](PLAN.md).
+Technical reference for the SUNSCHOOL platform. For setup and API reference, see [README.md](README.md). For UX roadmap, see [PLAN.md](PLAN.md). For user workflows, see [workflows.md](workflows.md).
 
 ## Architecture
 
@@ -8,6 +8,7 @@ Technical reference for the SUNSCHOOL platform. For setup and API reference, see
 **Backend:** Node.js + Express.js 5.1.0, TypeScript, JWT auth, Drizzle ORM
 **Database:** PostgreSQL (Neon serverless), JSONB fields for complex data
 **Deployment:** Railway with NIXPACKS (Node 22), auto-deploy on push to `main`
+**Live URL:** https://sunschool.xyz
 
 ### Project Structure
 
@@ -19,7 +20,7 @@ server/              Express.js backend
   config/            Environment vars (env.ts) and feature flags (flags.ts)
   bittensor.ts       Bittensor Subnet 1 client
 shared/              TypeScript schemas and types (schema.ts)
-drizzle/migrations/  Database migration SQL files (0000-0007)
+drizzle/migrations/  Database migration SQL files (0000-0008)
 scripts/             Admin onboarding, password reset, migrations
 tests/e2e/           Playwright end-to-end tests
 ```
@@ -36,9 +37,10 @@ users (id, email, username, name, role, password, parent_id, created_at)
 learner_profiles (id, user_id, grade_level, graph, subjects, subject_performance,
                   recommended_subjects, struggling_areas, created_at)
 
--- AI-generated lessons
+-- AI-generated lessons (single unified spec column)
 lessons (id, learner_id, module_id, status[QUEUED|ACTIVE|DONE], subject, category,
-         difficulty, image_paths, spec, enhanced_spec, score, created_at, completed_at)
+         difficulty, image_paths, spec, score, created_at, completed_at)
+-- Constraint: idx_one_active_per_learner (partial unique on learner_id WHERE status='ACTIVE')
 
 -- Quiz answer tracking with concept tagging
 quiz_answers (id, learner_id, lesson_id, question_index, question_text, question_hash,
@@ -97,15 +99,36 @@ Provider selection is handled by `server/services/ai.ts` with automatic fallback
 - `ENABLE_BITTENSOR_SUBNET_1` — Master switch for Bittensor
 - `BITTENSOR_FALLBACK_ENABLED` — Auto-fallback to OpenRouter on failure
 - `USE_AI` — Enable/disable AI features entirely (set `0` for static fallback content)
+- `ENABLE_SVG_LLM` — SVG illustration generation (default: on)
+- `ENABLE_OPENROUTER_IMAGES` — OpenRouter raster image generation (default: on)
+
+### Image Generation
+
+`IMAGE_PROVIDER` env var controls the primary image strategy:
+
+| Value | Behavior |
+|-------|----------|
+| `svg-llm` (default) | Generate SVG illustrations via LLM (Gemini 3.1) |
+| `openrouter` | Generate raster images via OpenRouter multimodal models |
+| `stability` | Use Stability AI API |
+
+Model fallback chain: primary model (`OPENROUTER_SVG_MODEL`) → fallbacks from `SVG_MODEL_FALLBACKS` env → built-in defaults (`gemini-3.1-flash-lite-preview`, `gemini-3-flash-preview`). Models returning 402 (insufficient credits) or 404 are automatically skipped.
 
 ### Lesson Generation Pipeline
 
 1. Frontend sends `POST /api/lessons/create` with subject, category, grade level, learnerId
 2. Server validates parent-child permissions
-3. AI generates lesson content (Key Concepts, Examples, Practice) using grade-specific prompts
-4. Quiz questions (3 multiple-choice, 4 options each) generated with concept tags
-5. SVG illustrations generated via `svg-llm-service.ts` (sanitized with DOMPurify)
-6. Lesson stored with status `ACTIVE`
+3. `generateLessonWithRetry()` calls AI up to 3 times with grade-specific prompts
+4. `validateLessonSpec()` rejects placeholder/stub content — generation failures return 503 (never save stubs)
+5. Single `EnhancedLessonSpec` stored as `spec` column with status `ACTIVE`
+6. Background task generates SVG illustrations via `svg-llm-service.ts` (sanitized server-side)
+7. Client polls via `refetchInterval` until images arrive
+
+Key files:
+- `server/services/enhanced-lesson-service.ts` — `generateLessonWithRetry()`, single generation path
+- `server/services/lesson-validator.ts` — `validateLessonSpec()`, rejects stubs
+- `server/services/svg-llm-service.ts` — SVG generation + sanitization
+- `server/services/image-generation-router.ts` — image generation with fallback chain
 
 ### Content Validation (`server/services/content-validator.ts`)
 
@@ -174,7 +197,7 @@ BITTENSOR_WALLET_HOTKEY=...
 - Neon serverless PostgreSQL with WebSocket connections
 - Connection pooling (max 10), keep-alive pings every 2 min
 - Migrations auto-run on startup; failures don't block server start
-- Migration folder: `drizzle/migrations/` (0000-0007)
+- Migration folder: `drizzle/migrations/` (0000-0008)
 - First registered user auto-promoted to ADMIN
 
 ## Security Notes
@@ -188,7 +211,7 @@ From SAST scan (Bandit + Semgrep, Feb 2026):
 | MEDIUM | Path traversal in `image-storage.ts` | Add resolved path validation |
 | LOW | SVG innerHTML rendering | Server-side DOMPurify mitigates; consider client-side pass |
 
-SVG content is sanitized via DOMPurify in `server/services/svg-llm-service.ts` before storage. LLM prompts explicitly prohibit scripts, styles, and external references.
+SVG content is sanitized via a lightweight regex-based sanitizer in `server/services/svg-llm-service.ts` before storage (replaced isomorphic-dompurify to avoid CJS/ESM issues on Railway/Node 22). Sanitizer strips forbidden tags (script, style, iframe, etc.), event handlers (on*), and javascript:/data: URIs. LLM prompts explicitly prohibit scripts, styles, and external references.
 
 ## Testing
 
@@ -196,7 +219,14 @@ SVG content is sanitized via DOMPurify in `server/services/svg-llm-service.ts` b
 - `npx playwright test` — E2E tests (auto-starts local server)
 - `PLAYWRIGHT_BASE_URL=https://sunschool.xyz npx playwright test` — E2E against production
 
-E2E test (`tests/e2e/child-lesson-flow.spec.ts`) covers: parent registration, child creation, learner mode switch, lesson generation, quiz completion, results review. Timeout: 10 min (AI generation). Screenshots saved to `tests/e2e/screenshots/`.
+E2E test suites:
+
+| Test File | Coverage |
+|-----------|----------|
+| `child-lesson-flow.spec.ts` | Parent registration, child creation, learner mode, lesson generation, quiz, results |
+| `workflow-validation.spec.ts` | All 24 workflows: public pages, parent dashboard, learner mode, lesson + SVG validation, quiz, progress, goals, reports, rewards |
+
+Timeout: 10 min per test (AI generation). Screenshots saved to `tests/e2e/screenshots/`. See [workflows.md](workflows.md) for full workflow list.
 
 ## Troubleshooting
 

@@ -78,8 +78,8 @@ tests/           Playwright e2e tests
 
 ### Key Features
 
-- **AI-Generated Lessons** — Grade-specific prompts (K-2, 3-4, 5-6, 7-8, 9+) with age-appropriate validation
-- **SVG Illustrations** — Dynamically generated subject-specific educational graphics
+- **AI-Generated Lessons** — Grade-specific prompts (K-2, 3-4, 5-6, 7-8, 9+) with validation that rejects placeholder content
+- **SVG Illustrations** — LLM-generated educational graphics via Gemini 3.1 with model fallback chains
 - **Parent-as-Learner Mode** — Parents switch to learner view to see what their kids see
 - **Concept Mastery** — Track performance across specific concepts with spaced repetition
 - **Gamification** — Points economy, parent-managed rewards shop, goal setting, redemption approval workflow
@@ -225,7 +225,7 @@ npx playwright test               # E2E tests (local)
 PLAYWRIGHT_BASE_URL=https://sunschool.xyz npx playwright test  # E2E against production
 ```
 
-The e2e suite covers: parent registration, add child, switch to learner mode, generate lesson, take quiz, submit answers, review results.
+The e2e suite covers all 24 workflows: public pages, parent registration, add child, learner mode, lesson generation with SVG illustration validation, quiz flow, progress, goals, reports, and rewards. See [workflows.md](workflows.md) for the full list.
 
 ## Contributing
 

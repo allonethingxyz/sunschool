@@ -254,18 +254,29 @@ test.describe('Child Lesson Flow', () => {
     }
     await screenshot(page, '09-dashboard');
 
-    // Click "GO TO SUNSCHOOL LEARNER MODE" button on dashboard
-    const goToLearnerBtn = page.getByText(/GO TO SUNSCHOOL LEARNER MODE/i);
-    if (await goToLearnerBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await goToLearnerBtn.click();
+    // Click "Start Learning as <childName>" button on dashboard
+    // Note: CSS text-transform:uppercase makes it APPEAR uppercase, but DOM text is title-case
+    const startLearningBtn = page.getByText(new RegExp(`Start Learning as ${childName}`, 'i'));
+    if (await startLearningBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+      console.log('Found "Start Learning as..." button, clicking...');
+      await startLearningBtn.click();
       await page.waitForTimeout(3000);
     } else {
-      // Try the ModeToggle in the top-right corner
-      const modeToggleContainer = page.locator('div[style*="position: fixed"][style*="right"]').first();
-      const toggleClickable = modeToggleContainer.locator('*[role="button"], *[tabindex]').first();
-      if (await toggleClickable.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await toggleClickable.click();
+      // Fallback: try any "Start Learning" text
+      const anyStartBtn = page.getByText(/Start Learning as/i).first();
+      if (await anyStartBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        console.log('Found generic "Start Learning as..." button');
+        await anyStartBtn.click();
         await page.waitForTimeout(3000);
+      } else {
+        console.log('No "Start Learning" button found, trying mode toggle...');
+        // Last resort: try the ModeToggle in the top-right corner
+        const modeToggleContainer = page.locator('div[style*="position: fixed"][style*="right"]').first();
+        const toggleClickable = modeToggleContainer.locator('*[role="button"], *[tabindex]').first();
+        if (await toggleClickable.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await toggleClickable.click();
+          await page.waitForTimeout(3000);
+        }
       }
     }
 
@@ -335,19 +346,19 @@ test.describe('Child Lesson Flow', () => {
     await screenshot(page, '12-generating-lesson');
 
     // Poll for lesson to appear (up to 5 minutes - AI lesson generation can be slow)
-    // Check for "Let's Go!" text from LessonCard (active lesson indicator)
+    // The learner home shows "Current Lesson" header when an active lesson exists
     console.log('Waiting for lesson generation to complete...');
     let lessonReady = false;
     for (let i = 0; i < 60; i++) {
       await page.waitForTimeout(5000);
 
-      // Check if FunLoader is gone and lesson card appeared
-      const hasLetsGo = await page.getByText("Let's Go!").isVisible({ timeout: 1000 }).catch(() => false);
+      // Check if lesson card appeared (shows "Current Lesson" header)
+      const hasCurrentLesson = await page.getByText('Current Lesson').isVisible({ timeout: 1000 }).catch(() => false);
       const noActiveLesson = await page.getByText("You don't have an active lesson").isVisible({ timeout: 1000 }).catch(() => false);
       const isStillLoading = await funLoaderText.isVisible({ timeout: 500 }).catch(() => false);
 
-      if (hasLetsGo) {
-        console.log(`Lesson ready after ${(i + 1) * 5} seconds (Let's Go! visible)`);
+      if (hasCurrentLesson) {
+        console.log(`Lesson ready after ${(i + 1) * 5} seconds`);
         lessonReady = true;
         break;
       }
@@ -395,11 +406,17 @@ test.describe('Child Lesson Flow', () => {
       await route.continue();
     });
 
-    // When active, LessonCard shows "Let's Go!" and is clickable
-    const letsGoBtn = page.getByText("Let's Go!");
-    if (await letsGoBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      // Click the LessonCard (clicking "Let's Go!" or the card area)
-      await letsGoBtn.click();
+    // Click the lesson card to view it (card shows lesson title with a › chevron)
+    const currentLessonHeader = page.getByText('Current Lesson');
+    if (await currentLessonHeader.isVisible({ timeout: 5000 }).catch(() => false)) {
+      // Click the card area (the first clickable element after "Current Lesson")
+      const lessonCard = currentLessonHeader.locator('..').locator('..').locator('[tabindex="0"], [role="button"]').first();
+      if (await lessonCard.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await lessonCard.click();
+      } else {
+        // Fallback: click the › chevron or any link in the card area
+        await currentLessonHeader.locator('..').locator('..').click();
+      }
       await page.waitForTimeout(1000);
     } else {
       // Fallback: navigate to lesson page directly
@@ -461,6 +478,16 @@ test.describe('Child Lesson Flow', () => {
     }
 
     await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
+    await screenshot(page, '17-quiz-pre-start');
+
+    // Quiz page has a "Get Ready!" pre-screen with its own "Start Quiz" button
+    const quizStartBtn = page.getByText('Start Quiz');
+    if (await quizStartBtn.isVisible({ timeout: 10000 }).catch(() => false)) {
+      console.log('Found quiz "Start Quiz" button, clicking...');
+      await quizStartBtn.click();
+      await page.waitForTimeout(2000);
+    }
 
     // Wait for quiz to finish loading (FunLoader disappears, question headers appear)
     const quizQuestion1 = page.getByText(/^Question 1 of \d+$/);

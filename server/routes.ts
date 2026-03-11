@@ -806,6 +806,20 @@ export function registerRoutes(app: Express): Server {
 
       let activeLesson = await storage.getActiveLesson(learnerId);
 
+      // If the active lesson is a stub/placeholder, retire it so the learner can generate a real one
+      if (activeLesson) {
+        const isStub = !activeLesson.spec?.questions ||
+          activeLesson.spec.questions.length < 2 ||
+          activeLesson.spec.questions.some((q: any) => q.text === "What is this lesson about?") ||
+          (activeLesson.spec.content && /^#.*\n\nThis is a lesson about /.test(activeLesson.spec.content));
+
+        if (isStub) {
+          console.warn(`[Lesson] Retiring stub lesson ${activeLesson.id} for learner ${learnerId}`);
+          await storage.updateLessonStatus(activeLesson.id, "DONE", 0);
+          activeLesson = null;
+        }
+      }
+
       // Just return the active lesson if found without auto-generating
       if (activeLesson) {
         return res.json(activeLesson);
@@ -820,15 +834,26 @@ export function registerRoutes(app: Express): Server {
   }));
 
   // Create a custom lesson for a learner
+  // Validate that a generated lesson has real content, not a stub/placeholder
+  function isValidLessonSpec(spec: any): boolean {
+    if (!spec) return false;
+    if (!spec.questions || spec.questions.length < 2) return false;
+    // Reject placeholder questions
+    if (spec.questions.some((q: any) => q.text === "What is this lesson about?")) return false;
+    // Reject placeholder content
+    if (spec.content && /^#.*\n\nThis is a lesson about /.test(spec.content)) return false;
+    return true;
+  }
+
   app.post("/api/lessons/create", isAuthenticated, asyncHandler(async (req: AuthRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { 
-      topic = '', 
-      gradeLevel, 
-      learnerId, 
+    const {
+      topic = '',
+      gradeLevel,
+      learnerId,
       enhanced = true,
       subject = '',
       category = '',
@@ -883,15 +908,12 @@ export function registerRoutes(app: Express): Server {
         finalCategory = getSubjectCategory(finalSubject);
       }
 
-      let lessonSpec;
-      let imagePaths: any[] = [];
-
-      if (USE_AI && enhanced) {
+      // Retry enhanced lesson generation up to 3 times
+      const MAX_RETRIES = 3;
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          // Import on demand to avoid circular dependencies
           const { generateEnhancedLesson } = await import('./services/enhanced-lesson-service');
 
-          // Phase 1: Generate text + questions WITHOUT images (fast — ~5s)
           const enhancedSpec = await generateEnhancedLesson(
             gradeLevel,
             topic,
@@ -900,93 +922,67 @@ export function registerRoutes(app: Express): Server {
             difficulty as 'beginner' | 'intermediate' | 'advanced'
           );
 
-          if (enhancedSpec) {
-            // Create a regular spec from the enhanced one for backward compatibility
-            lessonSpec = {
-              title: enhancedSpec.title,
-              content: `# ${enhancedSpec.title}\n\n${enhancedSpec.summary}\n\n${enhancedSpec.sections.map(s =>
-                `## ${s.title}\n\n${s.content}`).join('\n\n')}`,
-              questions: enhancedSpec.questions,
-              graph: enhancedSpec.graph
-            };
-
-            // Create the lesson immediately (no images yet)
-            const newLesson = await storage.createLesson({
-              id: crypto.randomUUID(),
-              learnerId: Number(targetLearnerId),
-              moduleId: "custom-" + Date.now(),
-              status: "ACTIVE",
-              subject: finalSubject,
-              category: finalCategory,
-              difficulty,
-              spec: lessonSpec,
-              enhancedSpec,
-              imagePaths: []
-            });
-
-            // Phase 2: Generate ONLY images in the BACKGROUND (non-blocking)
-            // Uses the existing lesson spec — no duplicate text generation
-            const lessonId = newLesson.id;
-            setImmediate(async () => {
-              try {
-                const { generateLessonImages } = await import('./services/enhanced-lesson-service');
-                const { images, diagrams } = await generateLessonImages(
-                  enhancedSpec, topic, gradeLevel, finalSubject
-                );
-                if (images?.length) {
-                  const imgPaths = images
-                    .filter((img: any) => img.path)
-                    .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
-                  const mergedSpec = { ...enhancedSpec, images, diagrams: diagrams || [] };
-                  await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
-                  console.log(`[BG] Images generated for lesson ${lessonId}`);
-                }
-              } catch (bgErr) {
-                console.error(`[BG] Image generation failed for lesson ${lessonId}:`, bgErr);
-              }
-            });
-
-            return res.json(newLesson);
+          if (!enhancedSpec) {
+            console.warn(`[Lesson] Enhanced generation returned null (attempt ${attempt}/${MAX_RETRIES})`);
+            continue;
           }
+
+          const lessonSpec = {
+            title: enhancedSpec.title,
+            content: `# ${enhancedSpec.title}\n\n${enhancedSpec.summary}\n\n${enhancedSpec.sections.map(s =>
+              `## ${s.title}\n\n${s.content}`).join('\n\n')}`,
+            questions: enhancedSpec.questions,
+            graph: enhancedSpec.graph
+          };
+
+          if (!isValidLessonSpec(lessonSpec)) {
+            console.warn(`[Lesson] Generated spec failed validation (attempt ${attempt}/${MAX_RETRIES}): ${lessonSpec.questions?.length || 0} questions`);
+            continue;
+          }
+
+          // Valid lesson — save it
+          const newLesson = await storage.createLesson({
+            id: crypto.randomUUID(),
+            learnerId: Number(targetLearnerId),
+            moduleId: "custom-" + Date.now(),
+            status: "ACTIVE",
+            subject: finalSubject,
+            category: finalCategory,
+            difficulty,
+            spec: lessonSpec,
+            enhancedSpec,
+            imagePaths: []
+          });
+
+          // Background image generation (non-blocking)
+          const lessonId = newLesson.id;
+          setImmediate(async () => {
+            try {
+              const { generateLessonImages } = await import('./services/enhanced-lesson-service');
+              const { images, diagrams } = await generateLessonImages(
+                enhancedSpec, topic, gradeLevel, finalSubject
+              );
+              if (images?.length) {
+                const imgPaths = images
+                  .filter((img: any) => img.path)
+                  .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
+                const mergedSpec = { ...enhancedSpec, images, diagrams: diagrams || [] };
+                await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
+                console.log(`[BG] Images generated for lesson ${lessonId}`);
+              }
+            } catch (bgErr) {
+              console.error(`[BG] Image generation failed for lesson ${lessonId}:`, bgErr);
+            }
+          });
+
+          return res.json(newLesson);
         } catch (enhancedError) {
-          console.error('Error creating enhanced lesson:', enhancedError);
-          // Fall back to basic lesson if enhanced fails
+          console.error(`[Lesson] Generation error (attempt ${attempt}/${MAX_RETRIES}):`, enhancedError);
         }
       }
 
-      // Fallback to basic lesson if enhanced fails or is disabled
-
-      // Create a simple lesson without enhanced spec
-      lessonSpec = {
-        title: topic || `${finalSubject || 'Sample'} Lesson`,
-        content: `# ${topic || finalSubject || 'Sample'} Lesson\n\nThis is a lesson about ${topic || finalSubject || 'a sample topic'}`,
-        questions: [{
-          text: "What is this lesson about?",
-          options: [
-            topic || finalSubject || 'A sample topic',
-            "Something else",
-            "I don't know",
-            "None of the above"
-          ],
-          correctIndex: 0,
-          explanation: "This lesson is designed to teach you about the selected topic."
-        }]
-      };
-
-      // Create the lesson with basic spec
-      const newLesson = await storage.createLesson({
-        id: crypto.randomUUID(),
-        learnerId: Number(targetLearnerId),
-        moduleId: "custom-" + Date.now(),
-        status: "ACTIVE",
-        subject: finalSubject,
-        category: finalCategory,
-        difficulty,
-        spec: lessonSpec,
-        imagePaths
-      });
-
-      return res.json(newLesson);
+      // All retries exhausted — tell the client to retry
+      return res.status(503).json({ error: "Lesson generation failed after multiple attempts. Please try again." });
     } catch (error) {
       console.error('Error creating custom lesson:', error);
       return res.status(500).json({ error: "Failed to generate lesson content" });
@@ -1249,6 +1245,12 @@ export function registerRoutes(app: Express): Server {
           questions: spec.questions,
           graph: spec.graph
         };
+
+        // Don't save stub/invalid lessons
+        if (!isValidLessonSpec(lessonSpec)) {
+          console.warn(`[BG] Pre-generated lesson failed validation, discarding`);
+          return;
+        }
 
         const queued = await storage.createLesson({
           id: crypto.randomUUID(),

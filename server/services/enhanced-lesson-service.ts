@@ -426,6 +426,12 @@ export async function generateEnhancedLesson(
       console.error('Error generating quiz questions for enhanced lesson:', quizError);
     }
 
+    // Reject lessons with no real questions — caller will retry
+    if (!enhancedLesson.questions || enhancedLesson.questions.length < 2) {
+      console.warn('[EnhancedLesson] Generated lesson has insufficient questions, returning null');
+      return null;
+    }
+
     return enhancedLesson;
   } catch (error) {
     console.error('Error generating enhanced lesson:', error);

@@ -10,10 +10,10 @@ function getSvgModelChain(): string[] {
   return [OPENROUTER_SVG_MODEL, ...fallbacks];
 }
 
-/** Returns true for errors that indicate the model itself is unavailable */
+/** Returns true for errors that indicate the model should be skipped (unavailable or over budget) */
 function isModelUnavailable(error: any): boolean {
   const msg = error?.message || '';
-  return msg.includes('404') || msg.includes('No endpoints found') || msg.includes('not available');
+  return msg.includes('404') || msg.includes('402') || msg.includes('No endpoints found') || msg.includes('not available') || msg.includes('credits') || msg.includes('afford');
 }
 
 /**
@@ -166,7 +166,7 @@ export async function generateEducationalSVG(
         messages,
         model,
         temperature: 0.3,
-        max_tokens: 4000,
+        max_tokens: 1500,
       });
 
       const rawSvg = response.choices[0]?.message?.content;
@@ -224,7 +224,7 @@ export async function generateDiagramSVG(
         messages,
         model,
         temperature: 0.3,
-        max_tokens: 4000,
+        max_tokens: 1500,
       });
 
       const rawSvg = response.choices[0]?.message?.content;

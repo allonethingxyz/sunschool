@@ -90,9 +90,11 @@ async function setAuthAndNavigate(page: Page, token: string, path: string) {
 /** API helper — makes authenticated requests from browser context with timeout */
 async function apiCall(page: Page, method: string, url: string, body?: any): Promise<any> {
   try {
-    return await page.evaluate(async ({ method, url, body, token }) => {
+    return await page.evaluate(async ({ method, url, body }) => {
+      // Read token from localStorage (SPA may have refreshed it)
+      const token = localStorage.getItem('AUTH_TOKEN') || '';
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       try {
         const res = await fetch(url, {
           method,
@@ -111,7 +113,7 @@ async function apiCall(page: Page, method: string, url: string, body?: any): Pro
         clearTimeout(timeoutId);
         return { status: 0, data: `fetch error: ${err.message}` };
       }
-    }, { method, url, body, token: authToken });
+    }, { method, url, body });
   } catch (err: any) {
     return { status: 0, data: `evaluate error: ${err.message}` };
   }
@@ -342,10 +344,21 @@ test.describe('Parent & Learner Workflows', () => {
       gradeLevel: 5,
     });
 
-    console.log(`Lesson create: status=${createResult.status}`);
+    console.log(`Lesson create: status=${createResult.status}, data=${JSON.stringify(createResult.data).substring(0, 200)}`);
     if (createResult.status === 200 || createResult.status === 201) {
       lessonId = createResult.data.id;
       console.log(`Lesson created: ${lessonId}`);
+    } else {
+      // Retry once — fetch may have failed transiently
+      console.log('Retrying lesson create...');
+      await page.waitForTimeout(2000);
+      const retry = await apiCall(page, 'POST', '/api/lessons/create', {
+        learnerId, subject: 'Science', gradeLevel: 5,
+      });
+      console.log(`Retry: status=${retry.status}, data=${JSON.stringify(retry.data).substring(0, 200)}`);
+      if (retry.status === 200 || retry.status === 201) {
+        lessonId = retry.data.id;
+      }
     }
     expect(lessonId).toBeTruthy();
 

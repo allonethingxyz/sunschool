@@ -290,7 +290,7 @@ const EnhancedLessonContent: React.FC<EnhancedLessonContentProps> = ({ enhancedS
           key={index}
           title={section.title}
           icon={getSectionIcon(section.type)}
-          defaultExpanded={index === 0}
+          defaultExpanded={true}
           accentColor={theme.colors.primary}
         >
           {/* Section Images */}

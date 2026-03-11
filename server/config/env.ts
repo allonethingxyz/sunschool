@@ -57,7 +57,7 @@ export const BITTENSOR_WALLET_HOTKEY = process.env.BITTENSOR_WALLET_HOTKEY;
 export const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || '';
 
 // Image Generation Configuration
-export const IMAGE_PROVIDER = process.env.IMAGE_PROVIDER || 'openrouter'; // 'openrouter' | 'svg-llm' | 'stability'
+export const IMAGE_PROVIDER = process.env.IMAGE_PROVIDER || 'svg-llm'; // 'svg-llm' | 'openrouter' | 'stability'
 export const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-pro-preview';
 export const OPENROUTER_SVG_MODEL = process.env.OPENROUTER_SVG_MODEL || 'google/gemini-3.1-pro-preview';
 export const IMAGE_GENERATION_TIMEOUT = parseInt(process.env.IMAGE_GENERATION_TIMEOUT || '15000');

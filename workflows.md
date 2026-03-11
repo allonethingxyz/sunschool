@@ -75,4 +75,4 @@ Tests in `tests/e2e/` verify these workflows against the live deployment:
 |-----------|------------------|
 | `auth.spec.ts` | #2 (login form, error handling) |
 | `child-lesson-flow.spec.ts` | #2, #14, #16, #6, #7, #8, #9 (full parent→learner flow) |
-| `workflow-validation.spec.ts` | All 25 workflows with SVG rendering validation |
+| `workflow-validation.spec.ts` | All 24 workflows with SVG rendering validation (17 tests) |

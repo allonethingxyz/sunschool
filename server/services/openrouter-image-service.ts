@@ -96,8 +96,9 @@ export async function generateEducationalImage(
 
       console.warn(`[OpenRouter Image] Model ${model} returned no image data, trying next`);
     } catch (error: any) {
-      const is404 = axios.isAxiosError(error) && error.response?.status === 404;
-      const isUnavailable = is404 || (error.message || '').includes('No endpoints found');
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      const msg = error.message || '';
+      const isUnavailable = status === 404 || status === 402 || msg.includes('No endpoints found') || msg.includes('not available') || msg.includes('credits') || msg.includes('afford');
 
       if (isUnavailable && model !== models[models.length - 1]) {
         console.warn(`[OpenRouter Image] Model ${model} unavailable, trying next fallback`);

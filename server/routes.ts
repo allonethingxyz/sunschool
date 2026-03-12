@@ -84,15 +84,34 @@ export function registerRoutes(app: Express): Server {
         userId = decoded.id ? parseInt(decoded.id, 10) : null;
       }
     } catch { /* no auth — that's fine */ }
-    await withRetry(async () => {
-      const client = await pool.connect();
-      try {
+    const client = await pool.connect();
+    try {
+      await client.query(
+        'INSERT INTO feedback_submissions (message, email, user_id, user_agent, page) VALUES ($1, $2, $3, $4, $5)',
+        [message.trim(), email?.trim() || null, userId, userAgent, page || null]
+      );
+    } catch (err: any) {
+      // Table may not exist yet — create it and retry
+      if (err.code === '42P01') {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS feedback_submissions (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            message TEXT NOT NULL,
+            email VARCHAR(255),
+            user_id INTEGER,
+            user_agent TEXT,
+            page VARCHAR(512),
+            created_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
         await client.query(
           'INSERT INTO feedback_submissions (message, email, user_id, user_agent, page) VALUES ($1, $2, $3, $4, $5)',
           [message.trim(), email?.trim() || null, userId, userAgent, page || null]
         );
-      } finally { client.release(); }
-    });
+      } else {
+        throw err;
+      }
+    } finally { client.release(); }
     res.json({ ok: true });
   }));
 

@@ -824,7 +824,7 @@ test.describe('Navigation Elements', () => {
   });
 
   test('Authenticated nav has Docs and Support', async ({ page }) => {
-    // Register and login
+    // Register via API
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
     const gotIt = page.getByText('Got it, thanks!');
@@ -832,19 +832,27 @@ test.describe('Navigation Elements', () => {
 
     const navTs = Date.now();
     const navUser = { username: `navtest_${navTs}`, email: `navtest_${navTs}@test.com`, password: 'TestPassword123!', name: 'Nav Test', role: 'PARENT' };
-    const result = await page.evaluate(async (u) => {
+    await page.evaluate(async (u) => {
       const res = await fetch('/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
       return res.json();
     }, navUser);
-    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), result.token);
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+
+    // Login through UI to establish proper SPA auth state
+    await page.getByText('Login', { exact: true }).first().click();
+    await page.waitForTimeout(500);
+    await page.locator('input[placeholder="Enter your username"]').fill(navUser.username);
+    await page.locator('input[placeholder="Enter your password"]').fill(navUser.password);
+    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
+    await page.getByText('Login', { exact: true }).last().click();
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
     await page.waitForTimeout(2000);
 
-    // Check for docs link and support button in authenticated header
-    const docsLink = page.getByRole('link', { name: /documentation/i }).first();
+    // Check for docs and support in authenticated header — use accessible label text
+    // On desktop, the BookOpen icon has aria-label "Documentation (opens in new window)"
+    const docsLink = page.getByLabel(/documentation/i).first();
     await expect(docsLink).toBeVisible({ timeout: 10000 });
-    const supportBtn = page.getByRole('button', { name: /support/i }).first();
+    const supportBtn = page.getByLabel(/support and feedback/i).first();
     await expect(supportBtn).toBeVisible();
 
     await screenshot(page, '21-nav-with-docs-support');

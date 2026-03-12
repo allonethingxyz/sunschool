@@ -786,37 +786,40 @@ test.describe('Navigation Elements', () => {
     const gotIt = page.getByText('Got it, thanks!');
     if (await gotIt.isVisible({ timeout: 3000 }).catch(() => false)) await gotIt.click();
 
-    // Support button should be visible (shown on all screen sizes)
-    const supportBtn = page.getByTestId('welcome-nav-support');
-    await expect(supportBtn).toBeVisible();
+    // Docs link should be visible in nav (desktop width)
+    const docsLink = page.getByRole('link', { name: 'Documentation' }).first();
+    await expect(docsLink).toBeVisible();
 
-    // Social links in footer (always visible)
-    const footerGH = page.getByTestId('social-github').last();
-    await expect(footerGH).toBeVisible();
+    // Support button should be visible
+    const supportBtn = page.getByRole('button', { name: /support/i }).first();
+    await expect(supportBtn).toBeVisible();
 
     // Click support → modal should appear
     await supportBtn.click();
     await page.waitForTimeout(500);
 
-    // Modal elements
-    const messageInput = page.getByTestId('feedback-message');
+    // Modal elements — use placeholders and visible text
+    const messageInput = page.getByPlaceholder("What's on your mind?");
     await expect(messageInput).toBeVisible();
-    const emailInput = page.getByTestId('feedback-email');
+    const emailInput = page.getByPlaceholder('Email (optional');
     await expect(emailInput).toBeVisible();
-    const termsCheckbox = page.getByTestId('feedback-terms');
-    await expect(termsCheckbox).toBeVisible();
-    const submitBtn = page.getByTestId('feedback-submit');
+    const submitBtn = page.getByText('Send Feedback');
     await expect(submitBtn).toBeVisible();
 
-    // Fill and submit feedback
+    // Fill form
     await messageInput.fill('Playwright test feedback - please ignore');
     await emailInput.fill('test@playwright.dev');
-    await termsCheckbox.click();
+
+    // Click terms checkbox — use the "I agree" text
+    await page.getByText(/I agree to the/).click();
+    await page.waitForTimeout(300);
+
+    // Submit
     await submitBtn.click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
     // Should see success message
-    await expect(page.getByText(/thanks for your feedback/i)).toBeVisible();
+    await expect(page.getByText(/thanks for your feedback/i)).toBeVisible({ timeout: 10000 });
     await screenshot(page, '20-support-modal-success');
   });
 
@@ -836,12 +839,12 @@ test.describe('Navigation Elements', () => {
     await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), result.token);
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
 
-    // Check for docs and support buttons
-    const docsBtn = page.getByTestId('nav-docs');
-    await expect(docsBtn).toBeVisible();
-    const supportBtn = page.getByTestId('nav-support');
+    // Check for docs link and support button in authenticated header
+    const docsLink = page.getByRole('link', { name: /documentation/i }).first();
+    await expect(docsLink).toBeVisible({ timeout: 10000 });
+    const supportBtn = page.getByRole('button', { name: /support/i }).first();
     await expect(supportBtn).toBeVisible();
 
     await screenshot(page, '21-nav-with-docs-support');

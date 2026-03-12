@@ -772,3 +772,89 @@ test.describe('SVG Rendering Validation', () => {
     }
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// NAV ELEMENTS: Docs, Support, Social Links
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Navigation Elements', () => {
+  test('Welcome page has Docs, Support, and social links', async ({ page }) => {
+    await page.goto('/welcome');
+    await page.waitForLoadState('networkidle');
+
+    // Dismiss modal if present
+    const gotIt = page.getByText('Got it, thanks!');
+    if (await gotIt.isVisible({ timeout: 3000 }).catch(() => false)) await gotIt.click();
+
+    // Docs link should be visible in nav (desktop width)
+    const docsLink = page.getByRole('link', { name: 'Documentation' }).first();
+    await expect(docsLink).toBeVisible();
+
+    // Support button should be visible
+    const supportBtn = page.getByRole('button', { name: /support/i }).first();
+    await expect(supportBtn).toBeVisible();
+
+    // Click support → modal should appear
+    await supportBtn.click();
+    await page.waitForTimeout(500);
+
+    // Modal elements — use placeholders and visible text
+    const messageInput = page.getByPlaceholder("What's on your mind?");
+    await expect(messageInput).toBeVisible();
+    const emailInput = page.getByPlaceholder('Email (optional');
+    await expect(emailInput).toBeVisible();
+    const submitBtn = page.getByText('Send Feedback');
+    await expect(submitBtn).toBeVisible();
+
+    // Fill form
+    await messageInput.fill('Playwright test feedback - please ignore');
+    await emailInput.fill('test@playwright.dev');
+
+    // Click terms checkbox — use the "I agree" text
+    await page.getByText(/I agree to the/).click();
+    await page.waitForTimeout(300);
+
+    // Submit
+    await submitBtn.click();
+    await page.waitForTimeout(3000);
+
+    // Should see success message
+    await expect(page.getByText(/thanks for your feedback/i)).toBeVisible({ timeout: 10000 });
+    await screenshot(page, '20-support-modal-success');
+  });
+
+  test('Authenticated nav has Docs and Support', async ({ page }) => {
+    // Register via API
+    await page.goto('/auth');
+    await page.waitForLoadState('networkidle');
+    const gotIt = page.getByText('Got it, thanks!');
+    if (await gotIt.isVisible({ timeout: 3000 }).catch(() => false)) await gotIt.click();
+
+    const navTs = Date.now();
+    const navUser = { username: `navtest_${navTs}`, email: `navtest_${navTs}@test.com`, password: 'TestPassword123!', name: 'Nav Test', role: 'PARENT' };
+    await page.evaluate(async (u) => {
+      const res = await fetch('/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
+      return res.json();
+    }, navUser);
+
+    // Login through UI to establish proper SPA auth state
+    await page.getByText('Login', { exact: true }).first().click();
+    await page.waitForTimeout(500);
+    await page.locator('input[placeholder="Enter your username"]').fill(navUser.username);
+    await page.locator('input[placeholder="Enter your password"]').fill(navUser.password);
+    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
+    await page.getByText('Login', { exact: true }).last().click();
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    // Check for docs and support in authenticated header — use accessible label text
+    // On desktop, the BookOpen icon has aria-label "Documentation (opens in new window)"
+    const docsLink = page.getByLabel(/documentation/i).first();
+    await expect(docsLink).toBeVisible({ timeout: 10000 });
+    const supportBtn = page.getByLabel(/support and feedback/i).first();
+    await expect(supportBtn).toBeVisible();
+
+    await screenshot(page, '21-nav-with-docs-support');
+  });
+});

@@ -4,6 +4,7 @@ import { LogOut } from 'react-feather';
 import { colors, typography } from '../styles/theme';
 import { useAuth } from '../hooks/use-auth';
 import { useLocation } from 'wouter';
+import SocialLinks from './SocialLinks';
 
 const AppFooter: React.FC = () => {
   const { logoutMutation } = useAuth();
@@ -28,7 +29,12 @@ const AppFooter: React.FC = () => {
             <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open('https://allonething.xyz', '_blank'); }} accessibilityRole="link" accessibilityLabel="All One Thing Labs (opens in new window)">
               <Text style={styles.footerLink}>All One Thing Labs</Text>
             </TouchableOpacity>
+            <Text style={styles.footerDivider} aria-hidden="true">|</Text>
+            <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open('https://docs.sunschool.xyz', '_blank'); }} accessibilityRole="link" accessibilityLabel="Documentation (opens in new window)">
+              <Text style={styles.footerLink}>Docs</Text>
+            </TouchableOpacity>
           </View>
+          <SocialLinks iconSize={14} color="rgba(255,255,255,0.5)" gap={10} />
         </View>
         <TouchableOpacity
           style={styles.logoutButton}

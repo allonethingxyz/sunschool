@@ -64,6 +64,20 @@
       "when": 1714577212747,
       "tag": "0007_rewards_system",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1714577212748,
+      "tag": "0008_unify_spec",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1714577212749,
+      "tag": "0009_feedback_submissions",
+      "breakpoints": true
     }
   ]
 }

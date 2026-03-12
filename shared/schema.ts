@@ -354,6 +354,20 @@ export type LearningGoal = {
   completedAt: string | null;
 };
 
+// Feedback submissions table
+export const feedbackSubmissions = pgTable("feedback_submissions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  message: text("message").notNull(),
+  email: varchar("email", { length: 255 }),
+  userId: integer("user_id"),
+  userAgent: text("user_agent"),
+  page: varchar("page", { length: 512 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type FeedbackSubmission = typeof feedbackSubmissions.$inferSelect;
+export type InsertFeedbackSubmission = typeof feedbackSubmissions.$inferInsert;
+
 /** Points ledger source types including new ones */
 export type PointsSourceType =
   | 'QUIZ_CORRECT'

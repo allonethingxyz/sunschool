@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Dimensions } from 'react-native';
 import { useLocation, Redirect } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
-import { GitHub, BookOpen, Eye, Shield, Users, Award, BarChart2, Star, ArrowRight, Zap, Lock, Globe, Map, Code, AlertTriangle } from 'react-feather';
+import { GitHub, BookOpen, Eye, Shield, Users, Award, BarChart2, Star, ArrowRight, Zap, Lock, Globe, Map, Code, AlertTriangle, MessageCircle } from 'react-feather';
+import SocialLinks from '../components/SocialLinks';
+import SupportModal from '../components/SupportModal';
 
 const windowWidth = Dimensions.get('window').width;
 
@@ -99,6 +101,7 @@ const HeroSunGraphic: React.FC = () => (
 const WelcomePage: React.FC = () => {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
+  const [showSupport, setShowSupport] = useState(false);
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : location;
 
   if (user && !isLoading && (location === '/welcome' || currentPath === '/welcome')) {
@@ -130,6 +133,28 @@ const WelcomePage: React.FC = () => {
               <Text style={styles.logoText}>SUNSCHOOL</Text>
             </View>
             <View style={styles.navLinks}>
+              {windowWidth >= 600 && (
+                <TouchableOpacity
+                  style={styles.navLink}
+                  onPress={() => { if (typeof window !== 'undefined') window.open('https://docs.sunschool.xyz', '_blank'); }}
+                  accessibilityRole="link"
+                  accessibilityLabel="Documentation"
+                  testID="welcome-nav-docs"
+                >
+                  <Text style={styles.navLinkText}>Docs</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.navLink}
+                onPress={() => setShowSupport(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Support and feedback"
+                testID="welcome-nav-support"
+              >
+                <MessageCircle size={14} color={brand.textLight} />
+                {windowWidth >= 480 && <Text style={styles.navLinkText}>Support</Text>}
+              </TouchableOpacity>
+              {windowWidth >= 600 && <SocialLinks iconSize={14} color={brand.textLight} gap={6} />}
               <TouchableOpacity style={styles.navCta} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started">
                 <Text style={styles.navCtaText}>Get Started</Text>
               </TouchableOpacity>
@@ -352,6 +377,9 @@ const WelcomePage: React.FC = () => {
               <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.location.href = '/terms'; }} accessibilityRole="link" accessibilityLabel="Terms of Service">
                 <Text style={styles.footerLinkText}>Terms of Service</Text>
               </TouchableOpacity>
+              <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.open('https://docs.sunschool.xyz', '_blank'); }} accessibilityRole="link" accessibilityLabel="Documentation">
+                <Text style={styles.footerLinkText}>Docs</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={openGitHub} accessibilityRole="link" accessibilityLabel="GitHub (opens in new window)">
                 <Text style={styles.footerLinkText}>GitHub</Text>
               </TouchableOpacity>
@@ -360,11 +388,16 @@ const WelcomePage: React.FC = () => {
               </TouchableOpacity>
             </View>
 
+            <View style={{ marginBottom: 16 }}>
+              <SocialLinks iconSize={16} color={brand.textLight} gap={14} />
+            </View>
+
             <Text style={styles.footerCopy}>&copy; {new Date().getFullYear()} SUNSCHOOL, LLC. A product of All One Thing Labs (allonething.xyz).</Text>
           </View>
         </View>
 
       </View>
+      <SupportModal isVisible={showSupport} onClose={() => setShowSupport(false)} />
     </ScrollView>
   );
 };
@@ -415,11 +448,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  navLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  navLinkText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: brand.textLight,
+  },
   navCta: {
     backgroundColor: brand.secondary,
     paddingVertical: 10,
     paddingHorizontal: 22,
     borderRadius: 24,
+    marginLeft: 6,
   },
   navCtaText: {
     color: brand.white,

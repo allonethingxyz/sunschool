@@ -772,3 +772,78 @@ test.describe('SVG Rendering Validation', () => {
     }
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// NAV ELEMENTS: Docs, Support, Social Links
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.describe('Navigation Elements', () => {
+  test('Welcome page has Docs, Support, and social links', async ({ page }) => {
+    await page.goto('/welcome');
+    await page.waitForLoadState('networkidle');
+
+    // Dismiss modal if present
+    const gotIt = page.getByText('Got it, thanks!');
+    if (await gotIt.isVisible({ timeout: 3000 }).catch(() => false)) await gotIt.click();
+
+    // Support button should be visible (shown on all screen sizes)
+    const supportBtn = page.getByTestId('welcome-nav-support');
+    await expect(supportBtn).toBeVisible();
+
+    // Social links in footer (always visible)
+    const footerGH = page.getByTestId('social-github').last();
+    await expect(footerGH).toBeVisible();
+
+    // Click support → modal should appear
+    await supportBtn.click();
+    await page.waitForTimeout(500);
+
+    // Modal elements
+    const messageInput = page.getByTestId('feedback-message');
+    await expect(messageInput).toBeVisible();
+    const emailInput = page.getByTestId('feedback-email');
+    await expect(emailInput).toBeVisible();
+    const termsCheckbox = page.getByTestId('feedback-terms');
+    await expect(termsCheckbox).toBeVisible();
+    const submitBtn = page.getByTestId('feedback-submit');
+    await expect(submitBtn).toBeVisible();
+
+    // Fill and submit feedback
+    await messageInput.fill('Playwright test feedback - please ignore');
+    await emailInput.fill('test@playwright.dev');
+    await termsCheckbox.click();
+    await submitBtn.click();
+    await page.waitForTimeout(2000);
+
+    // Should see success message
+    await expect(page.getByText(/thanks for your feedback/i)).toBeVisible();
+    await screenshot(page, '20-support-modal-success');
+  });
+
+  test('Authenticated nav has Docs and Support', async ({ page }) => {
+    // Register and login
+    await page.goto('/auth');
+    await page.waitForLoadState('networkidle');
+    const gotIt = page.getByText('Got it, thanks!');
+    if (await gotIt.isVisible({ timeout: 3000 }).catch(() => false)) await gotIt.click();
+
+    const navTs = Date.now();
+    const navUser = { username: `navtest_${navTs}`, email: `navtest_${navTs}@test.com`, password: 'TestPassword123!', name: 'Nav Test', role: 'PARENT' };
+    const result = await page.evaluate(async (u) => {
+      const res = await fetch('/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
+      return res.json();
+    }, navUser);
+    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), result.token);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1500);
+
+    // Check for docs and support buttons
+    const docsBtn = page.getByTestId('nav-docs');
+    await expect(docsBtn).toBeVisible();
+    const supportBtn = page.getByTestId('nav-support');
+    await expect(supportBtn).toBeVisible();
+
+    await screenshot(page, '21-nav-with-docs-support');
+  });
+});

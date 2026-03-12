@@ -61,6 +61,41 @@ export function registerRoutes(app: Express): Server {
     res.json({ status: "ok", message: "Server is running" });
   });
 
+  // Feedback / support submission (no auth required)
+  app.post("/api/feedback", asyncHandler(async (req: Request, res: Response) => {
+    const { message, email, page } = req.body;
+    if (!message || typeof message !== 'string' || message.trim().length < 2) {
+      return res.status(400).json({ error: "Message is required (min 2 characters)" });
+    }
+    if (message.length > 5000) {
+      return res.status(400).json({ error: "Message too long (max 5000 characters)" });
+    }
+    if (email && typeof email === 'string' && email.length > 255) {
+      return res.status(400).json({ error: "Email too long" });
+    }
+    const userAgent = req.headers['user-agent'] || null;
+    // Try to get userId from auth token if present
+    let userId: number | null = null;
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        const jwt = await import('jsonwebtoken');
+        const decoded: any = jwt.default.verify(authHeader.slice(7), process.env.JWT_SECRET || 'sunschool-secret');
+        userId = decoded.id ? parseInt(decoded.id, 10) : null;
+      }
+    } catch { /* no auth — that's fine */ }
+    await withRetry(async () => {
+      const client = await pool.connect();
+      try {
+        await client.query(
+          'INSERT INTO feedback_submissions (message, email, user_id, user_agent, page) VALUES ($1, $2, $3, $4, $5)',
+          [message.trim(), email?.trim() || null, userId, userAgent, page || null]
+        );
+      } finally { client.release(); }
+    });
+    res.json({ ok: true });
+  }));
+
   // Root-level registration handler
   app.post("/register", asyncHandler(async (req: Request, res: Response) => {
     // Ensure proper headers

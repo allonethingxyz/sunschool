@@ -1,11 +1,15 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Home, BarChart2, User, ArrowLeft } from 'react-feather';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+
+const windowWidth = Dimensions.get('window').width;
+import { Home, BarChart2, User, ArrowLeft, BookOpen, MessageCircle } from 'react-feather';
 import { colors, typography } from '../styles/theme';
 import { useLocation } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
 import { useMode } from '../context/ModeContext';
 import { LearnerSelector } from './LearnerSelector';
+import SocialLinks from './SocialLinks';
+import SupportModal from './SupportModal';
 
 interface SunschoolHeaderProps {
   subtitle?: string;
@@ -15,6 +19,7 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
   const { isLearnerMode, toggleMode } = useMode();
+  const [showSupport, setShowSupport] = useState(false);
 
   const isActive = (path: string) => location === path;
   const isParentOrAdmin = user?.role === 'PARENT' || user?.role === 'ADMIN';
@@ -96,6 +101,31 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
               ))}
             </View>
           )}
+
+          {/* Docs, Support, Social */}
+          <View style={styles.utilLinks}>
+            <TouchableOpacity
+              style={styles.navItem}
+              onPress={() => { if (typeof window !== 'undefined') window.open('https://docs.sunschool.xyz', '_blank'); }}
+              accessibilityRole="link"
+              accessibilityLabel="Documentation (opens in new window)"
+              testID="nav-docs"
+            >
+              <BookOpen size={14} color={colors.onPrimary} />
+              {windowWidth >= 768 && <Text style={styles.navText}>Docs</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.supportButton}
+              onPress={() => setShowSupport(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Support and feedback"
+              testID="nav-support"
+            >
+              <MessageCircle size={14} color={colors.onPrimary} />
+              {windowWidth >= 768 && <Text style={styles.navText}>Support</Text>}
+            </TouchableOpacity>
+            {windowWidth >= 640 && <SocialLinks iconSize={14} color="rgba(255,255,255,0.6)" gap={6} />}
+          </View>
         </View>
 
         {/* Right: Mode badge, learner selector, back button */}
@@ -129,6 +159,7 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
           </View>
         )}
       </View>
+      <SupportModal isVisible={showSupport} onClose={() => setShowSupport(false)} />
     </View>
   );
 };
@@ -236,6 +267,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 10,
     letterSpacing: 1,
+  },
+  utilLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 8,
+  },
+  supportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    gap: 5,
   },
 });
 

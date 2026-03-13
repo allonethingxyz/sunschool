@@ -83,29 +83,23 @@ test.describe('Learner: Content Display', () => {
 
     // Count visual elements using getByRole('img') — the semantic way
     // This matches <img> elements and SVGs with role="img"
-    const semanticImgCount = await page.getByRole('img').count();
+    const imgElements = page.getByRole('img');
+    const semanticImgCount = await imgElements.count();
 
-    // Inline SVG illustrations often lack ARIA roles, so we supplement
-    // with a structural size check. This is intentionally non-semantic
-    // because there is no ARIA role for "decorative SVG illustration" —
-    // we are asserting that large visual content exists on the page.
-    const largeVisualCount = await page.evaluate(() => {
-      let count = 0;
-      const imgs = document.querySelectorAll('img');
-      for (const img of Array.from(imgs)) {
-        const rect = img.getBoundingClientRect();
-        if (rect.width > 50 && rect.height > 50) count++;
-      }
-      const svgs = document.querySelectorAll('svg');
-      for (const svg of Array.from(svgs)) {
-        const rect = svg.getBoundingClientRect();
-        if (rect.width > 50 && rect.height > 50) count++;
-      }
-      return count;
-    });
+    // Lessons should include visual content (images or illustrations)
+    expect(semanticImgCount).toBeGreaterThanOrEqual(1);
 
-    // Lessons should include visual content
-    expect(semanticImgCount + largeVisualCount).toBeGreaterThanOrEqual(1);
+    // Verify at least one image is substantive (not just a tiny icon)
+    // by checking bounding box dimensions via Playwright's semantic API
+    let hasLargeVisual = false;
+    for (let i = 0; i < semanticImgCount; i++) {
+      const box = await imgElements.nth(i).boundingBox();
+      if (box && box.width > 50 && box.height > 50) {
+        hasLargeVisual = true;
+        break;
+      }
+    }
+    expect(hasLargeVisual).toBe(true);
   });
 
   test('lesson content is rendered at appropriate grade level', async ({ page }) => {

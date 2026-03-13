@@ -350,3 +350,26 @@ export async function pollForVisibleText(
 
   return found;
 }
+
+/**
+ * Create a reward goal via API (as parent).
+ * Returns the goal ID if successful, null otherwise.
+ */
+export async function createRewardGoal(
+  page: Page,
+  title: string,
+  cost: number
+): Promise<number | null> {
+  const learnerId = await page.evaluate(() =>
+    Number(localStorage.getItem('selectedLearnerId'))
+  );
+  const result = await apiCall(page, 'POST', '/api/rewards', {
+    learnerId,
+    title,
+    cost,
+    emoji: '🎮',
+    color: '#4CAF50',
+  });
+
+  return result.data?.id || null;
+}

@@ -146,9 +146,9 @@ export async function selfHealingLocator(
   testName: string,
   options: {
     role?: string;
-    name?: string;
+    name?: string | RegExp;
     label?: string;
-    text?: string;
+    text?: string | RegExp;
     testId?: string;
     exact?: boolean;
   }
@@ -213,7 +213,8 @@ export async function selfHealingLocator(
       const snapshot = await page.accessibility.snapshot();
       if (snapshot) {
         const axRole = mapRole(role);
-        const match = findInAXTree(snapshot as AXNode, axRole, name);
+        const nameStr = typeof name === 'string' ? name : name.source;
+        const match = findInAXTree(snapshot as AXNode, axRole, nameStr);
         if (match && match.confidence >= 0.5) {
           // Found a fuzzy match — try to locate it
           const resolvedLocator = page.getByRole(role as any, { name: match.node.name });

@@ -103,8 +103,8 @@ test.describe('Learner: Points & Rewards', () => {
         // Look for save points or progress indicator
         const { locator: saveBtn } = await selfHealingLocator(page, 'save-points-btn', {
           role: 'button',
-          name: 'Save Points',
-          text: 'Save Points',
+          name: '💰 Save Points',
+          text: '💰 Save Points',
         });
 
         const hasSaveBtn = await saveBtn.isVisible({ timeout: 5000 }).catch(() => false);

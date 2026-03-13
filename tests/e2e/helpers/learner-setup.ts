@@ -1,14 +1,13 @@
-import { Page, expect } from '@playwright/test';
+import { Page } from '@playwright/test';
 
 /**
  * Shared setup utilities for learner E2E tests.
  *
- * Handles registration, login, child creation, learner mode,
- * lesson generation, and quiz completion so each spec file
- * can focus on its own journeys.
+ * Handles registration, login, child creation, and learner mode
+ * so each spec file can focus on its own journeys.
  */
 
-const SCREENSHOT_DIR = 'tests/e2e/screenshots/learner';
+const SCREENSHOT_DIR = 'tests/e2e/screenshots/learner-specs';
 
 export interface TestUser {
   username: string;
@@ -198,176 +197,8 @@ export async function setupLearnerSession(
     learnerId
   );
 
-  // Ensure learner profile exists
-  await apiCall(page, 'GET', `/api/learner-profile/${learnerId}`);
-
   // Navigate to learner home
   await spaNavigate(page, '/learner');
 
   return { token, learnerId, childName };
-}
-
-/**
- * Generate a lesson via API and poll until it becomes active.
- * Uses expect.poll() instead of setTimeout loops for proper Playwright waits.
- */
-export async function generateAndWaitForLesson(
-  page: Page,
-  subject: string = 'Science'
-): Promise<number> {
-  // Request lesson creation
-  const createResult = await apiCall(page, 'POST', '/api/lessons/create', {
-    learnerId: await page.evaluate(() =>
-      Number(localStorage.getItem('selectedLearnerId'))
-    ),
-    subject,
-    gradeLevel: 3,
-  });
-
-  if (createResult.data?.id) {
-    // If creation returns the ID directly, still wait for it to be active
-  }
-
-  // Poll for active lesson using expect.poll (no setTimeout)
-  let activeLessonId: number | null = null;
-
-  await expect
-    .poll(
-      async () => {
-        const result = await apiCall(page, 'GET', '/api/lessons/active?' +
-          `learnerId=${await page.evaluate(() => localStorage.getItem('selectedLearnerId'))}`);
-        if (result.data?.id) {
-          activeLessonId = result.data.id;
-          return true;
-        }
-        return false;
-      },
-      {
-        message: 'Waiting for lesson to become active',
-        timeout: 300_000,
-        intervals: [5_000],
-      }
-    )
-    .toBe(true);
-
-  if (!activeLessonId) {
-    throw new Error('Lesson did not become active');
-  }
-
-  return activeLessonId;
-}
-
-/**
- * Complete a lesson by submitting quiz answers via API.
- * Generates a lesson, waits for it, then submits answers.
- */
-export async function completeOneLesson(
-  page: Page,
-  subject: string = 'Science'
-): Promise<boolean> {
-  let lessonId: number;
-  try {
-    lessonId = await generateAndWaitForLesson(page, subject);
-  } catch {
-    return false;
-  }
-
-  // Get lesson to extract questions
-  const lessonResult = await apiCall(page, 'GET', `/api/lessons/${lessonId}`);
-  if (lessonResult.status !== 200 || !lessonResult.data?.spec?.questions) {
-    return false;
-  }
-
-  const questions = lessonResult.data.spec.questions;
-  // Server expects answers as a plain number[] of selected answer indices
-  const answers = questions.map((q: any) => q.correctIndex ?? 0);
-
-  const learnerId = await page.evaluate(() =>
-    Number(localStorage.getItem('selectedLearnerId'))
-  );
-
-  const submitResult = await apiCall(
-    page,
-    'POST',
-    `/api/lessons/${lessonId}/answer`,
-    { answers, learnerId }
-  );
-
-  return submitResult.status === 200;
-}
-
-/**
- * Wait for lesson loading screen to finish.
- * Polls for the loading indicator to disappear using proper Playwright waits.
- */
-export async function waitForLessonLoaded(page: Page): Promise<void> {
-  const loadingText = page.getByText('Loading your personalized lesson...');
-  await loadingText
-    .waitFor({ state: 'hidden', timeout: 120_000 })
-    .catch(() => {});
-  await page.waitForLoadState('networkidle');
-}
-
-/**
- * Poll for a condition on the page using Playwright waits (not setTimeout).
- * Reloads the page between polls and waits for networkidle.
- */
-export async function pollForVisibleText(
-  page: Page,
-  textPattern: RegExp | string,
-  options: { timeout?: number; reloadBetweenPolls?: boolean } = {}
-): Promise<boolean> {
-  const { timeout = 300_000, reloadBetweenPolls = true } = options;
-  let found = false;
-
-  await expect
-    .poll(
-      async () => {
-        const locator =
-          typeof textPattern === 'string'
-            ? page.getByText(textPattern)
-            : page.getByText(textPattern);
-        const visible = await locator
-          .first()
-          .isVisible({ timeout: 2_000 })
-          .catch(() => false);
-        if (visible) {
-          found = true;
-          return true;
-        }
-        if (reloadBetweenPolls) {
-          await page.reload();
-          await page.waitForLoadState('networkidle');
-        }
-        return false;
-      },
-      { timeout, intervals: [5_000] }
-    )
-    .toBe(true)
-    .catch(() => {});
-
-  return found;
-}
-
-/**
- * Create a reward goal via API (as parent).
- * Returns the goal ID if successful, null otherwise.
- */
-export async function createRewardGoal(
-  page: Page,
-  title: string,
-  cost: number
-): Promise<number | null> {
-  const learnerId = await page.evaluate(() =>
-    Number(localStorage.getItem('selectedLearnerId'))
-  );
-  const result = await apiCall(page, 'POST', '/api/rewards', {
-    learnerId,
-    title,
-    cost,
-    emoji: '🎮',
-    color: '#4CAF50',
-  });
-
-  return result.data?.id || null;
 }

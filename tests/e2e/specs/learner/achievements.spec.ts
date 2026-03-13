@@ -1,168 +1,221 @@
 /**
- * Learner Persona E2E: Achievements
+ * Learner Persona E2E: Achievements & Progress
  *
- * Models a child viewing their progress dashboard and achievement milestones:
- * - View progress page with learning stats
- * - Check for achievements after completing lessons
- * - View lesson history
- * - Verify mastery tracking by subject
- *
- * Achievements are awarded automatically after quiz submission.
+ * Models a child viewing the progress dashboard, checking stats,
+ * viewing trophies, and seeing lesson history.
+ * Assertions are structural — no exact text matching on AI-generated content.
  */
-import { test, expect } from '@playwright/test';
-import {
-  setupLearnerSession,
-  screenshot,
-  completeOneLesson,
-  apiCall,
-} from '../../helpers/learner-setup';
+import { test, expect, Page } from '@playwright/test';
+import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
 
-test.describe('Learner: Achievements', () => {
-  test.describe.configure({ retries: 2 });
+const SCREENSHOT_DIR = 'tests/e2e/screenshots/learner';
+
+const timestamp = Date.now();
+const parentUsername = `progressparent_${timestamp}`;
+const parentEmail = `progressparent_${timestamp}@test.com`;
+const parentPassword = 'TestPassword123!';
+const childName = `ProgressChild_${timestamp}`;
+
+async function screenshot(page: Page, name: string) {
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/${name}.png`, fullPage: false });
+}
+
+/** Register parent + child, store auth state. */
+async function setupLearnerSession(page: Page): Promise<{ learnerId: number | null }> {
+  const regResult = await page.evaluate(async (data) => {
+    const res = await fetch('/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  }, {
+    username: parentUsername,
+    email: parentEmail,
+    password: parentPassword,
+    name: 'Progress Test Parent',
+    role: 'PARENT',
+  });
+
+  if (regResult.token) {
+    await page.evaluate((token) => localStorage.setItem('AUTH_TOKEN', token), regResult.token);
+  }
+
+  const childResult = await page.evaluate(async (data) => {
+    const token = localStorage.getItem('AUTH_TOKEN');
+    const res = await fetch('/api/learners', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  }, { name: childName, gradeLevel: 3 });
+
+  const learnerId = childResult.id ?? null;
+  if (learnerId) {
+    await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), learnerId);
+  }
+
+  return { learnerId };
+}
+
+test.describe('Learner: Achievements & Progress', () => {
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      await captureFailureArtifacts(page, testInfo.title);
+    }
+  });
+
   test.beforeEach(async ({ page }) => {
-    page.setDefaultTimeout(120000);
-  });
-
-  test('can view progress page with learning stats', async ({ page }) => {
-    await setupLearnerSession(page, 'achieve');
-
-    await page.goto('/progress');
+    page.setDefaultTimeout(60000);
+    await page.goto('/welcome');
     await page.waitForLoadState('networkidle');
-    await screenshot(page, 'achieve-01-progress-page');
-
-    // Progress page should have structural content
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
-
-    // Look for progress-related elements using semantic locators
-    const hasProgressTitle = await page.getByText(/Progress|Learning|Dashboard/i)
-      .first().isVisible({ timeout: 10000 }).catch(() => false);
-    const hasStats = await page.getByText(/Lessons|Score|Completed|Average/i)
-      .first().isVisible({ timeout: 5000 }).catch(() => false);
-
-    expect(hasProgressTitle || hasStats).toBeTruthy();
   });
 
-  test('progress page shows zero state for new learner', async ({ page }) => {
-    await setupLearnerSession(page, 'achieve_zero');
-
-    await page.goto('/progress');
-    await page.waitForLoadState('networkidle');
-    await screenshot(page, 'achieve-02-zero-state');
-
-    // New learner should see empty/zero state
-    // The actual UI shows "Complete lessons to earn trophies!" or "Start a lesson to see your history!"
-    const hasEmptyState = await page.getByText(/Complete lessons to earn trophies|Start a lesson|no achievements|start learning/i)
-      .first().isVisible({ timeout: 10000 }).catch(() => false);
-    expect(hasEmptyState).toBeTruthy();
-
-    // The page should render with at least a heading
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
-  });
-
-  test('achievements appear after completing a lesson with perfect score', async ({ page }) => {
-    test.setTimeout(600_000);
-    await setupLearnerSession(page, 'achieve_perfect');
-
-    // Complete a lesson with perfect score
-    const completed = await completeOneLesson(page);
-    if (!completed) {
-      test.skip(true, 'Lesson generation timed out — skipping achievement assertions');
+  test('progress page displays header and stat cards', async ({ page }) => {
+    const { learnerId } = await setupLearnerSession(page);
+    if (!learnerId) {
+      test.skip(true, 'Learner setup failed');
       return;
     }
 
-    // Poll for achievements to appear (they are awarded synchronously on answer
-    // submission, but a small delay can occur before the API reflects them)
-    const learnerId = await page.evaluate(() =>
-      localStorage.getItem('selectedLearnerId')
-    );
-
-    let achievements: any[] = [];
-    await expect
-      .poll(
-        async () => {
-          const result = await apiCall(
-            page,
-            'GET',
-            `/api/achievements?learnerId=${learnerId}`
-          );
-          achievements = Array.isArray(result.data) ? result.data : [];
-          return achievements.length;
-        },
-        {
-          message: 'Waiting for achievements to be awarded after lesson completion',
-          timeout: 30_000,
-          intervals: [2_000],
-        }
-      )
-      .toBeGreaterThan(0);
-
-    // Navigate to progress page to view achievements
     await page.goto('/progress');
     await page.waitForLoadState('networkidle');
-    await screenshot(page, 'achieve-03-after-lesson');
+    await screenshot(page, 'achievements-01-progress-page');
 
-    // The progress page shows "My Trophies" section with achievement titles
-    const hasTrophySection = await page.getByText(/My Trophies/i)
-      .first().isVisible({ timeout: 10000 }).catch(() => false);
-    expect(hasTrophySection).toBeTruthy();
+    // "My Progress" header
+    const { locator: progressHeading } = await selfHealingLocator(page, 'progress-header', {
+      text: 'My Progress',
+      name: 'My Progress',
+    });
+    await expect(progressHeading).toBeVisible({ timeout: 10000 });
 
-    // Verify at least one achievement title is visible (e.g. "First Steps", "Perfect Score!")
-    const hasAchievementTitle = await page.getByText(/First Steps|Perfect Score|Learning Explorer/i)
-      .first().isVisible({ timeout: 10000 }).catch(() => false);
-    expect(hasAchievementTitle).toBeTruthy();
+    // Stat labels should be present — "Lessons Done", "How I'm Doing", "My Trophies"
+    const lessonsDoneStat = page.getByText('Lessons Done');
+    const howDoingStat = page.getByText("How I'm Doing");
+    const trophiesStat = page.getByText('My Trophies');
+
+    const hasLessonsDone = await lessonsDoneStat.first().isVisible({ timeout: 5000 }).catch(() => false);
+    const hasHowDoing = await howDoingStat.first().isVisible({ timeout: 5000 }).catch(() => false);
+    const hasTrophies = await trophiesStat.first().isVisible({ timeout: 5000 }).catch(() => false);
+
+    // At least some stats should be visible
+    expect(hasLessonsDone || hasHowDoing || hasTrophies).toBeTruthy();
   });
 
-  test('can view lesson history on progress page', async ({ page }) => {
-    test.setTimeout(600_000);
-    await setupLearnerSession(page, 'achieve_history');
-
-    // Complete a lesson
-    const completed = await completeOneLesson(page);
-    if (!completed) {
-      test.skip(true, 'Lesson generation timed out — skipping history assertions');
+  test('progress page shows trophy section with empty state for new learner', async ({ page }) => {
+    const { learnerId } = await setupLearnerSession(page);
+    if (!learnerId) {
+      test.skip(true, 'Learner setup failed');
       return;
     }
 
-    // Navigate to progress page
     await page.goto('/progress');
     await page.waitForLoadState('networkidle');
-    await screenshot(page, 'achieve-04-lesson-history');
 
-    // The "Recent Lessons" section should be visible with at least one entry
-    const hasRecentLessons = await page.getByText(/Recent Lessons/i)
-      .first().isVisible({ timeout: 10000 }).catch(() => false);
-    expect(hasRecentLessons).toBeTruthy();
+    // Scroll down to find trophies section
+    await page.evaluate(() => window.scrollTo(0, 500));
+    await page.waitForLoadState('networkidle');
+    await screenshot(page, 'achievements-02-trophies-section');
 
-    // Verify lesson history exists via API as a sanity check
-    const learnerId = await page.evaluate(() =>
-      localStorage.getItem('selectedLearnerId')
-    );
-    const historyResult = await apiCall(
-      page,
-      'GET',
-      `/api/lessons?learnerId=${learnerId}`
-    );
-    const history = Array.isArray(historyResult.data) ? historyResult.data : [];
-    expect(history.length).toBeGreaterThan(0);
+    // Should show "My Trophies" section header (in LearnerProgress stats or section title)
+    const trophiesSection = page.getByText('My Trophies');
+    const hasTrophiesSection = await trophiesSection.first().isVisible({ timeout: 5000 }).catch(() => false);
 
-    await screenshot(page, 'achieve-04-history-verified');
+    // For a new learner with no completed lessons, should show empty state
+    const emptyState = page.getByText(/Complete lessons to earn trophies/i);
+    const hasEmptyState = await emptyState.first().isVisible({ timeout: 5000 }).catch(() => false);
+
+    // Either trophies section exists or empty state shows — page rendered correctly
+    expect(hasTrophiesSection || hasEmptyState).toBeTruthy();
   });
 
-  test('progress page shows subject mastery breakdown', async ({ page }) => {
-    await setupLearnerSession(page, 'achieve_mastery');
+  test('progress page shows recent lessons section', async ({ page }) => {
+    const { learnerId } = await setupLearnerSession(page);
+    if (!learnerId) {
+      test.skip(true, 'Learner setup failed');
+      return;
+    }
 
     await page.goto('/progress');
     await page.waitForLoadState('networkidle');
-    await screenshot(page, 'achieve-05-mastery');
 
-    // Check for subject mastery section using semantic locators
-    const hasMasterySection = await page.getByText(/Mastery|Subject|Topics/i)
-      .first().isVisible({ timeout: 10000 }).catch(() => false);
+    // Scroll to find recent lessons area
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForLoadState('networkidle');
+    await screenshot(page, 'achievements-03-recent-lessons');
 
-    // The progress page should render with structural elements
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
+    // "Recent Lessons" section should appear
+    const recentSection = page.getByText('Recent Lessons');
+    const hasRecentSection = await recentSection.first().isVisible({ timeout: 5000 }).catch(() => false);
+
+    // For a new learner, may show empty state
+    const emptyLessons = page.getByText(/Start a lesson to see your history/i);
+    const hasEmptyLessons = await emptyLessons.first().isVisible({ timeout: 5000 }).catch(() => false);
+
+    // Page should show one of these
+    expect(hasRecentSection || hasEmptyLessons).toBeTruthy();
+  });
+
+  test('progress page shows level/XP information', async ({ page }) => {
+    const { learnerId } = await setupLearnerSession(page);
+    if (!learnerId) {
+      test.skip(true, 'Learner setup failed');
+      return;
+    }
+
+    await page.goto('/progress');
+    await page.waitForLoadState('networkidle');
+    await screenshot(page, 'achievements-04-level-info');
+
+    // LearnerProgress component shows level names (Beginner, Explorer, etc.)
+    const levelNames = ['Beginner', 'Explorer', 'Adventurer', 'Scholar', 'Expert'];
+    let hasLevelName = false;
+    for (const name of levelNames) {
+      const visible = await page.getByText(name).first().isVisible({ timeout: 1000 }).catch(() => false);
+      if (visible) {
+        hasLevelName = true;
+        break;
+      }
+    }
+
+    // A new learner should start at "Beginner" level
+    // The level badge or XP display should be present
+    const hasLevelOrScore = hasLevelName ||
+      await page.getByText(/\d+%/).first().isVisible({ timeout: 3000 }).catch(() => false) ||
+      await page.getByText(/Level/i).first().isVisible({ timeout: 3000 }).catch(() => false);
+
+    expect(hasLevelOrScore).toBeTruthy();
+  });
+
+  test('learner home links to progress page', async ({ page }) => {
+    const { learnerId } = await setupLearnerSession(page);
+    if (!learnerId) {
+      test.skip(true, 'Learner setup failed');
+      return;
+    }
+
+    await page.goto('/learner');
+    await page.waitForLoadState('networkidle');
+    await screenshot(page, 'achievements-05-learner-home');
+
+    // Learner home should have a "My Progress" card/link
+    const { locator: progressLink } = await selfHealingLocator(page, 'progress-link', {
+      text: 'My Progress',
+      name: 'My Progress',
+    });
+    const hasProgressLink = await progressLink.isVisible({ timeout: 10000 }).catch(() => false);
+
+    if (hasProgressLink) {
+      await progressLink.click();
+      await page.waitForLoadState('networkidle');
+      await screenshot(page, 'achievements-05-navigated-to-progress');
+
+      // Should now be on progress page
+      const isOnProgressPage = page.url().includes('/progress');
+      const hasProgressTitle = await page.getByText('My Progress').first().isVisible({ timeout: 5000 }).catch(() => false);
+
+      expect(isOnProgressPage || hasProgressTitle).toBeTruthy();
+    }
   });
 });

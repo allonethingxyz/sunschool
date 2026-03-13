@@ -7,99 +7,45 @@
  * Points come from quiz completion. Rewards are parent-created goals
  * that learners save points toward and request redemption.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { selfHealingLocator } from '../../helpers/self-healing';
-
-const SCREENSHOT_DIR = 'tests/e2e/screenshots/learner';
-
-const timestamp = Date.now();
-const parentUsername = `rewardparent_${timestamp}`;
-const parentEmail = `rewardparent_${timestamp}@test.com`;
-const parentPassword = 'TestPassword123!';
-const childName = `RewardChild_${timestamp}`;
-
-async function screenshot(page: Page, name: string) {
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/${name}.png`, fullPage: false });
-}
-
-async function setupLearnerSession(page: Page): Promise<void> {
-  const regResult = await page.evaluate(async (data) => {
-    const res = await fetch('/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    return res.json();
-  }, {
-    username: parentUsername,
-    email: parentEmail,
-    password: parentPassword,
-    name: 'Reward Test Parent',
-    role: 'PARENT',
-  });
-
-  if (regResult.token) {
-    await page.evaluate((token) => localStorage.setItem('AUTH_TOKEN', token), regResult.token);
-  }
-
-  const childResult = await page.evaluate(async (data) => {
-    const token = localStorage.getItem('AUTH_TOKEN');
-    const res = await fetch('/api/learners', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
-    return res.json();
-  }, { name: childName, gradeLevel: 3 });
-
-  if (childResult.id) {
-    await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), childResult.id);
-  }
-}
+import {
+  setupLearnerSession,
+  screenshot,
+  generateAndWaitForLesson,
+  completeOneLesson,
+  apiCall,
+} from '../../helpers/learner-setup';
 
 /** Create a reward goal via API (as parent) */
-async function createRewardGoal(page: Page, title: string, cost: number): Promise<number | null> {
-  const result = await page.evaluate(async ({ title, cost }) => {
-    const token = localStorage.getItem('AUTH_TOKEN');
-    const learnerId = localStorage.getItem('selectedLearnerId');
-    if (!token || !learnerId) return null;
+async function createRewardGoal(
+  page: import('@playwright/test').Page,
+  title: string,
+  cost: number
+): Promise<number | null> {
+  const learnerId = await page.evaluate(() =>
+    Number(localStorage.getItem('selectedLearnerId'))
+  );
 
-    const res = await fetch('/api/rewards', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        learnerId: Number(learnerId),
-        title,
-        cost,
-        emoji: '🎮',
-        color: '#4CAF50',
-      }),
-    });
+  const result = await apiCall(page, 'POST', '/api/rewards', {
+    learnerId,
+    title,
+    cost,
+    emoji: '🎮',
+    color: '#4CAF50',
+  });
 
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.id || null;
-  }, { title, cost });
-
-  return result;
+  return result.data?.id || null;
 }
 
 test.describe('Learner: Points & Rewards', () => {
   test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
-    await page.goto('/welcome');
-    await page.waitForLoadState('networkidle');
   });
 
   test('can view point balance on learner home', async ({ page }) => {
-    await setupLearnerSession(page);
+    await setupLearnerSession(page, 'points_view');
 
     await page.goto('/learner');
     await page.waitForLoadState('networkidle');
@@ -115,35 +61,27 @@ test.describe('Learner: Points & Rewards', () => {
   });
 
   test('can check point balance via API and see it reflected', async ({ page }) => {
-    await setupLearnerSession(page);
+    await setupLearnerSession(page, 'points_balance');
 
     await page.goto('/learner');
     await page.waitForLoadState('networkidle');
 
     // Check points balance via API
-    const balance = await page.evaluate(async () => {
-      const token = localStorage.getItem('AUTH_TOKEN');
-      const learnerId = localStorage.getItem('selectedLearnerId');
-      if (!token || !learnerId) return null;
-
-      const res = await fetch(`/api/points/balance?learnerId=${learnerId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      if (!res.ok) return null;
-      return res.json();
-    });
+    const learnerId = await page.evaluate(() => localStorage.getItem('selectedLearnerId'));
+    const balanceResult = await apiCall(
+      page, 'GET', `/api/points/balance?learnerId=${learnerId}`
+    );
 
     // New learner should have 0 or some default balance
-    if (balance !== null) {
-      expect(typeof balance).toBe('object');
+    if (balanceResult.status === 200) {
+      expect(typeof balanceResult.data).toBe('object');
     }
 
     await screenshot(page, 'points-02-balance-checked');
   });
 
   test('can navigate to goals page and see reward goals', async ({ page }) => {
-    await setupLearnerSession(page);
+    await setupLearnerSession(page, 'points_goals');
 
     // Create a reward goal as the parent
     const goalId = await createRewardGoal(page, 'Extra Screen Time', 10);
@@ -169,7 +107,7 @@ test.describe('Learner: Points & Rewards', () => {
   });
 
   test('can see reward goal progress and save points action', async ({ page }) => {
-    await setupLearnerSession(page);
+    await setupLearnerSession(page, 'points_progress');
 
     // Create a reward goal
     const goalId = await createRewardGoal(page, 'Movie Night', 5);
@@ -184,7 +122,7 @@ test.describe('Learner: Points & Rewards', () => {
         .isVisible({ timeout: 10000 }).catch(() => false);
 
       if (hasGoal) {
-        // Look for save points or progress indicator
+        // Look for save points or progress indicator using semantic locators
         const { locator: saveBtn } = await selfHealingLocator(page, 'save-points-btn', {
           role: 'button',
           name: 'Save Points',
@@ -206,110 +144,29 @@ test.describe('Learner: Points & Rewards', () => {
 
   test('points are awarded after completing a quiz', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page);
+
+    await setupLearnerSession(page, 'points_quiz');
 
     // Check initial balance
-    const initialBalance = await page.evaluate(async () => {
-      const token = localStorage.getItem('AUTH_TOKEN');
-      const learnerId = localStorage.getItem('selectedLearnerId');
-      if (!token || !learnerId) return 0;
+    const learnerId = await page.evaluate(() => localStorage.getItem('selectedLearnerId'));
+    const initialResult = await apiCall(
+      page, 'GET', `/api/points/balance?learnerId=${learnerId}`
+    );
+    const initialBalance = initialResult.data?.balance || initialResult.data?.points || 0;
 
-      const res = await fetch(`/api/points/balance?learnerId=${learnerId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!res.ok) return 0;
-      const data = await res.json();
-      return data.balance || data.points || 0;
-    });
+    // Complete a lesson (generates + submits quiz with correct answers)
+    const completed = await completeOneLesson(page, 'Math');
 
-    // Generate a lesson
-    const lessonId = await page.evaluate(async () => {
-      const token = localStorage.getItem('AUTH_TOKEN');
-      const learnerId = localStorage.getItem('selectedLearnerId');
-      if (!token || !learnerId) return null;
-
-      await fetch(`/api/learner-profile/${learnerId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-
-      const res = await fetch('/api/lessons/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ learnerId: Number(learnerId), subject: 'Math', gradeLevel: 3 }),
-      });
-
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.id || null;
-    });
-
-    if (!lessonId) return; // Skip if lesson creation failed
-
-    // Wait for lesson to be ready
-    for (let i = 0; i < 60; i++) {
-      const active = await page.evaluate(async () => {
-        const token = localStorage.getItem('AUTH_TOKEN');
-        const learnerId = localStorage.getItem('selectedLearnerId');
-        const res = await fetch(`/api/lessons/active?learnerId=${learnerId}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!res.ok) return null;
-        return res.json();
-      });
-      if (active?.id) break;
-      await new Promise((r) => setTimeout(r, 5000));
-    }
-
-    // Submit quiz answers via API with correct answers
-    const quizResult = await page.evaluate(async (lid) => {
-      const token = localStorage.getItem('AUTH_TOKEN');
-      const learnerId = localStorage.getItem('selectedLearnerId');
-      if (!token) return null;
-
-      const lessonRes = await fetch(`/api/lessons/${lid}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!lessonRes.ok) return null;
-      const lesson = await lessonRes.json();
-      const questions = lesson.spec?.questions || [];
-
-      const answers = questions.map((q: any, i: number) => ({
-        questionIndex: i,
-        selectedIndex: q.correctIndex ?? 0,
-      }));
-
-      const res = await fetch(`/api/lessons/${lid}/answer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ answers, learnerId: Number(learnerId) }),
-      });
-      return { status: res.status };
-    }, lessonId);
+    if (!completed) return; // Skip if lesson creation failed
 
     // Check updated balance
-    const newBalance = await page.evaluate(async () => {
-      const token = localStorage.getItem('AUTH_TOKEN');
-      const learnerId = localStorage.getItem('selectedLearnerId');
-      if (!token || !learnerId) return 0;
+    const newResult = await apiCall(
+      page, 'GET', `/api/points/balance?learnerId=${learnerId}`
+    );
+    const newBalance = newResult.data?.balance || newResult.data?.points || 0;
 
-      const res = await fetch(`/api/points/balance?learnerId=${learnerId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!res.ok) return 0;
-      const data = await res.json();
-      return data.balance || data.points || 0;
-    });
-
-    // If quiz was submitted successfully, points should have increased
-    if (quizResult?.status === 200) {
-      expect(newBalance).toBeGreaterThanOrEqual(initialBalance);
-    }
+    // Points should have increased after quiz submission
+    expect(newBalance).toBeGreaterThanOrEqual(initialBalance);
 
     // Navigate to learner home and verify UI reflects points
     await page.goto('/learner');

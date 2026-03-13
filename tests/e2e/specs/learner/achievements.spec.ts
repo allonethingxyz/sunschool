@@ -9,144 +9,23 @@
  *
  * Achievements are awarded automatically after quiz submission.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { selfHealingLocator } from '../../helpers/self-healing';
-
-const SCREENSHOT_DIR = 'tests/e2e/screenshots/learner';
-
-const timestamp = Date.now();
-const parentUsername = `achieveparent_${timestamp}`;
-const parentEmail = `achieveparent_${timestamp}@test.com`;
-const parentPassword = 'TestPassword123!';
-const childName = `AchieveChild_${timestamp}`;
-
-async function screenshot(page: Page, name: string) {
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/${name}.png`, fullPage: false });
-}
-
-async function setupLearnerSession(page: Page): Promise<void> {
-  const regResult = await page.evaluate(async (data) => {
-    const res = await fetch('/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    return res.json();
-  }, {
-    username: parentUsername,
-    email: parentEmail,
-    password: parentPassword,
-    name: 'Achievement Test Parent',
-    role: 'PARENT',
-  });
-
-  if (regResult.token) {
-    await page.evaluate((token) => localStorage.setItem('AUTH_TOKEN', token), regResult.token);
-  }
-
-  const childResult = await page.evaluate(async (data) => {
-    const token = localStorage.getItem('AUTH_TOKEN');
-    const res = await fetch('/api/learners', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
-    return res.json();
-  }, { name: childName, gradeLevel: 3 });
-
-  if (childResult.id) {
-    await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), childResult.id);
-  }
-}
-
-/** Generate lesson and complete quiz via API. Returns true if successful. */
-async function completeOneLesson(page: Page): Promise<boolean> {
-  // Generate lesson
-  const lessonId = await page.evaluate(async () => {
-    const token = localStorage.getItem('AUTH_TOKEN');
-    const learnerId = localStorage.getItem('selectedLearnerId');
-    if (!token || !learnerId) return null;
-
-    await fetch(`/api/learner-profile/${learnerId}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-
-    const res = await fetch('/api/lessons/create', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ learnerId: Number(learnerId), subject: 'Science', gradeLevel: 3 }),
-    });
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.id || null;
-  });
-
-  if (!lessonId) return false;
-
-  // Wait for lesson to be ready
-  for (let i = 0; i < 60; i++) {
-    const active = await page.evaluate(async () => {
-      const token = localStorage.getItem('AUTH_TOKEN');
-      const learnerId = localStorage.getItem('selectedLearnerId');
-      const res = await fetch(`/api/lessons/active?learnerId=${learnerId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!res.ok) return null;
-      return res.json();
-    });
-    if (active?.id) break;
-    await new Promise((r) => setTimeout(r, 5000));
-  }
-
-  // Submit quiz with correct answers
-  const result = await page.evaluate(async (lid) => {
-    const token = localStorage.getItem('AUTH_TOKEN');
-    const learnerId = localStorage.getItem('selectedLearnerId');
-    if (!token) return false;
-
-    const lessonRes = await fetch(`/api/lessons/${lid}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (!lessonRes.ok) return false;
-    const lesson = await lessonRes.json();
-    const questions = lesson.spec?.questions || [];
-
-    const answers = questions.map((q: any, i: number) => ({
-      questionIndex: i,
-      selectedIndex: q.correctIndex ?? 0,
-    }));
-
-    const res = await fetch(`/api/lessons/${lid}/answer`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ answers, learnerId: Number(learnerId) }),
-    });
-    return res.ok;
-  }, lessonId);
-
-  return result;
-}
+import {
+  setupLearnerSession,
+  screenshot,
+  completeOneLesson,
+  apiCall,
+} from '../../helpers/learner-setup';
 
 test.describe('Learner: Achievements', () => {
   test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
-    await page.goto('/welcome');
-    await page.waitForLoadState('networkidle');
   });
 
   test('can view progress page with learning stats', async ({ page }) => {
-    await setupLearnerSession(page);
+    await setupLearnerSession(page, 'achieve_view');
 
     await page.goto('/progress');
     await page.waitForLoadState('networkidle');
@@ -156,7 +35,7 @@ test.describe('Learner: Achievements', () => {
     const bodyText = await page.evaluate(() => document.body.innerText);
     expect(bodyText.length).toBeGreaterThan(50);
 
-    // Look for progress-related elements
+    // Look for progress-related elements using semantic locators
     const hasProgressTitle = await page.getByText(/Progress|Learning|Dashboard/i)
       .first().isVisible({ timeout: 10000 }).catch(() => false);
     const hasStats = await page.getByText(/Lessons|Score|Completed|Average/i)
@@ -166,7 +45,7 @@ test.describe('Learner: Achievements', () => {
   });
 
   test('progress page shows zero state for new learner', async ({ page }) => {
-    await setupLearnerSession(page);
+    await setupLearnerSession(page, 'achieve_zero');
 
     await page.goto('/progress');
     await page.waitForLoadState('networkidle');
@@ -185,23 +64,18 @@ test.describe('Learner: Achievements', () => {
 
   test('achievements appear after completing a lesson with perfect score', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page);
+
+    await setupLearnerSession(page, 'achieve_perfect');
 
     // Complete a lesson with perfect score
     const completed = await completeOneLesson(page);
 
     // Check achievements via API
-    const achievements = await page.evaluate(async () => {
-      const token = localStorage.getItem('AUTH_TOKEN');
-      const learnerId = localStorage.getItem('selectedLearnerId');
-      if (!token || !learnerId) return [];
-
-      const res = await fetch(`/api/achievements?learnerId=${learnerId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!res.ok) return [];
-      return res.json();
-    });
+    const learnerId = await page.evaluate(() => localStorage.getItem('selectedLearnerId'));
+    const achievementsResult = await apiCall(
+      page, 'GET', `/api/achievements?learnerId=${learnerId}`
+    );
+    const achievements = achievementsResult.data || [];
 
     // Navigate to progress page to view achievements
     await page.goto('/progress');
@@ -221,7 +95,8 @@ test.describe('Learner: Achievements', () => {
 
   test('can view lesson history on progress page', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page);
+
+    await setupLearnerSession(page, 'achieve_history');
 
     // Complete a lesson
     await completeOneLesson(page);
@@ -232,17 +107,11 @@ test.describe('Learner: Achievements', () => {
     await screenshot(page, 'achieve-04-lesson-history');
 
     // Check lesson history via API
-    const history = await page.evaluate(async () => {
-      const token = localStorage.getItem('AUTH_TOKEN');
-      const learnerId = localStorage.getItem('selectedLearnerId');
-      if (!token || !learnerId) return [];
-
-      const res = await fetch(`/api/lessons?learnerId=${learnerId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!res.ok) return [];
-      return res.json();
-    });
+    const learnerId = await page.evaluate(() => localStorage.getItem('selectedLearnerId'));
+    const historyResult = await apiCall(
+      page, 'GET', `/api/lessons?learnerId=${learnerId}`
+    );
+    const history = historyResult.data || [];
 
     // If a lesson was completed, history should have at least one entry
     if (Array.isArray(history) && history.length > 0) {
@@ -259,13 +128,13 @@ test.describe('Learner: Achievements', () => {
   });
 
   test('progress page shows subject mastery breakdown', async ({ page }) => {
-    await setupLearnerSession(page);
+    await setupLearnerSession(page, 'achieve_mastery');
 
     await page.goto('/progress');
     await page.waitForLoadState('networkidle');
     await screenshot(page, 'achieve-05-mastery');
 
-    // Check for subject mastery section
+    // Check for subject mastery section using semantic locators
     const hasMasterySection = await page.getByText(/Mastery|Subject|Topics/i)
       .first().isVisible({ timeout: 10000 }).catch(() => false);
 

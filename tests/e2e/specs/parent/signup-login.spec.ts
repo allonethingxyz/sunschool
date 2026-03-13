@@ -29,7 +29,6 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('full registration flow creates a parent account and lands on dashboard', async ({ page }) => {
-    test.retry(2);
 
     // Navigate to the auth page
     await page.goto('/auth');
@@ -115,7 +114,6 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('login with valid credentials navigates to dashboard', async ({ page }) => {
-    test.retry(2);
 
     // First register via API to ensure account exists
     await page.goto('/auth');
@@ -170,7 +168,6 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('login with invalid credentials shows error message', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -219,7 +216,6 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('session persists across page reload', async ({ page }) => {
-    test.retry(2);
 
     // Register and login via API
     await page.goto('/auth');
@@ -257,7 +253,6 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('logout returns to public page', async ({ page }) => {
-    test.retry(2);
 
     // Register and login via API
     await page.goto('/auth');

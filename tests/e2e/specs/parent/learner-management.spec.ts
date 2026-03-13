@@ -55,7 +55,6 @@ test.describe('Learner Management', () => {
   });
 
   test('add a child learner from the dashboard', async ({ page }) => {
-    test.retry(2);
 
     // Click "Add Child" or "Add Another Child" button
     const addChildBtn = await selfHealingLocator(page, [
@@ -104,7 +103,6 @@ test.describe('Learner Management', () => {
   });
 
   test('view learner list on the learners page', async ({ page }) => {
-    test.retry(2);
 
     // Create a child via API first to ensure data exists
     const listChildName = `ListChild_${ts}`;
@@ -134,7 +132,6 @@ test.describe('Learner Management', () => {
   });
 
   test('edit learner grade level', async ({ page }) => {
-    test.retry(2);
 
     // Create a child via API
     const editChildName = `EditChild_${ts}`;
@@ -186,7 +183,6 @@ test.describe('Learner Management', () => {
   });
 
   test('dashboard shows child cards with stats', async ({ page }) => {
-    test.retry(2);
 
     // Create a child via API to guarantee at least one exists
     const dashChildName = `DashChild_${ts}`;

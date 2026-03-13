@@ -53,7 +53,6 @@ test.describe('Parent Dashboard', () => {
   });
 
   test('dashboard displays welcome greeting and child overview', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -79,7 +78,6 @@ test.describe('Parent Dashboard', () => {
   });
 
   test('dashboard shows stats for each child (lessons, score, achievements)', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -101,7 +99,6 @@ test.describe('Parent Dashboard', () => {
   });
 
   test('dashboard has navigation links to Reports and Rewards', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -125,7 +122,6 @@ test.describe('Parent Dashboard', () => {
   });
 
   test('clicking Reports navigates to reports page', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -155,7 +151,6 @@ test.describe('Parent Dashboard', () => {
   });
 
   test('parent can switch to learner mode from dashboard', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -181,7 +176,6 @@ test.describe('Parent Dashboard', () => {
   });
 
   test('How It Works section explains the platform', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');

@@ -14,6 +14,10 @@ on:
         type: choice
         options: [local, production]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 concurrency:
   group: synthetic-e2e-${{ github.ref }}
   cancel-in-progress: true
@@ -88,7 +92,12 @@ jobs:
 
       - name: Generate synthetic report
         if: always()
-        run: node tests/e2e/generate-report.mjs
+        run: |
+          if [ -f tests/e2e/generate-report.mjs ]; then
+            node tests/e2e/generate-report.mjs
+          else
+            echo "::warning::generate-report.mjs not found, skipping report generation"
+          fi
         env:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
@@ -96,7 +105,12 @@ jobs:
 
       - name: Auto-quarantine flaky tests
         if: always()
-        run: node tests/e2e/quarantine.mjs
+        run: |
+          if [ -f tests/e2e/quarantine.mjs ]; then
+            node tests/e2e/quarantine.mjs
+          else
+            echo "::warning::quarantine.mjs not found, skipping auto-quarantine"
+          fi
 
       - name: Upload test artifacts
         if: always()

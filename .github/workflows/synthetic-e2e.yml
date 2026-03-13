@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       target_url:
-        description: 'Target URL to test against (leave empty for localhost)'
+        description: 'Target URL to test against'
         required: false
-        default: ''
+        default: 'http://localhost:5000'
         type: string
 
 concurrency:
@@ -48,19 +48,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Resolve target URL
-        id: target
-        run: |
-          CUSTOM_URL="${{ github.event.inputs.target_url }}"
-          if [ -n "$CUSTOM_URL" ]; then
-            URL="$CUSTOM_URL"
-          else
-            URL="http://localhost:5000"
-          fi
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
-
       - name: Setup database
-        if: steps.target.outputs.url == 'http://localhost:5000'
         run: |
           npx ts-node -r dotenv/config scripts/migrate.ts
           npx ts-node -r dotenv/config scripts/seed-clean.ts
@@ -69,10 +57,19 @@ jobs:
           NODE_ENV: test
 
       - name: Build frontend
-        if: steps.target.outputs.url == 'http://localhost:5000'
         run: npm run build
         env:
           NODE_ENV: test
+
+      - name: Resolve target URL
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            URL="${{ github.event.inputs.target_url }}"
+          else
+            URL="http://localhost:5000"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Run synthetic user tests
         run: npx playwright test --reporter=json --output=test-results/
@@ -86,24 +83,14 @@ jobs:
 
       - name: Generate synthetic report
         if: always()
-        run: |
-          if [ -f tests/e2e/generate-report.mjs ]; then
-            node tests/e2e/generate-report.mjs
-          else
-            echo "generate-report.mjs not found, skipping report generation"
-          fi
+        run: node tests/e2e/generate-report.mjs
         env:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
 
       - name: Auto-quarantine flaky tests
         if: always()
-        run: |
-          if [ -f tests/e2e/quarantine.mjs ]; then
-            node tests/e2e/quarantine.mjs
-          else
-            echo "quarantine.mjs not found, skipping auto-quarantine"
-          fi
+        run: node tests/e2e/quarantine.mjs
 
       - name: Upload test artifacts
         if: always()
@@ -144,7 +131,7 @@ jobs:
             const fs = require('fs');
             const reportPath = 'test-results/synthetic-report.json';
             if (!fs.existsSync(reportPath)) {
-              console.log('No synthetic report found, skipping PR comment');
+              console.log('No synthetic report found');
               return;
             }
             const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));

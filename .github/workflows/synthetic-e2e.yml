@@ -7,14 +7,16 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      target_url:
-        description: 'Target URL to test against (default: staging)'
-        required: false
-        default: ''
-      skip_deploy:
-        description: 'Skip staging deploy (test against existing deployment)'
-        required: false
-        default: 'false'
+      target_env:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options: [staging, production]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 concurrency:
   group: synthetic-e2e-${{ github.ref }}
@@ -25,7 +27,10 @@ jobs:
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
-    if: github.event.inputs.skip_deploy != 'true'
+    # Skip staging deploy for production-targeted manual runs
+    if: >-
+      !(github.event_name == 'workflow_dispatch' &&
+        github.event.inputs.target_env == 'production')
     outputs:
       staging_url: ${{ steps.resolve-url.outputs.url }}
       deployment_id: ${{ steps.deploy.outputs.deployment_id }}
@@ -51,10 +56,10 @@ jobs:
       - name: Wait for staging health
         id: resolve-url
         run: |
-          # Use provided URL or default Railway staging URL
-          STAGING_URL="${{ github.event.inputs.target_url }}"
+          # Resolve staging URL from secrets or default
+          STAGING_URL="${{ secrets.RAILWAY_STAGING_URL }}"
           if [ -z "$STAGING_URL" ]; then
-            STAGING_URL="${{ secrets.RAILWAY_STAGING_URL || 'https://sunschool-deployed-private-staging.up.railway.app' }}"
+            STAGING_URL="https://sunschool-deployed-private-staging.up.railway.app"
           fi
           echo "url=$STAGING_URL" >> "$GITHUB_OUTPUT"
 
@@ -101,9 +106,9 @@ jobs:
       - name: Resolve target URL
         id: target
         run: |
-          # Priority: workflow_dispatch input > staging deploy output > production
-          if [ -n "${{ github.event.inputs.target_url }}" ]; then
-            TARGET="${{ github.event.inputs.target_url }}"
+          # Priority: production override > staging deploy output > production fallback
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.target_env }}" = "production" ]; then
+            TARGET="${{ secrets.PRODUCTION_URL || 'https://sunschool.xyz' }}"
           elif [ -n "${{ needs.deploy-staging.outputs.staging_url }}" ]; then
             TARGET="${{ needs.deploy-staging.outputs.staging_url }}"
           else
@@ -118,6 +123,7 @@ jobs:
         run: npx playwright test --config=playwright.config.ts
         env:
           TARGET_URL: ${{ steps.target.outputs.url }}
+          PLAYWRIGHT_BASE_URL: ${{ steps.target.outputs.url }}
           CI: true
           TARGET_ENV: ${{ needs.deploy-staging.outputs.staging_url && 'staging' || 'production' }}
           RAILWAY_DEPLOYMENT_ID: ${{ needs.deploy-staging.outputs.deployment_id }}

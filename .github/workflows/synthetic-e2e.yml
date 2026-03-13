@@ -1,0 +1,231 @@
+name: Synthetic E2E Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target URL to test against (default: staging)'
+        required: false
+        default: ''
+      skip_deploy:
+        description: 'Skip staging deploy (test against existing deployment)'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: synthetic-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Phase 1: Deploy to Railway Staging ────────────────────
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.event.inputs.skip_deploy != 'true'
+    outputs:
+      staging_url: ${{ steps.resolve-url.outputs.url }}
+      deployment_id: ${{ steps.deploy.outputs.deployment_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to staging
+        id: deploy
+        run: |
+          # Deploy to Railway staging environment
+          DEPLOY_OUTPUT=$(railway up --environment staging --json 2>&1 || true)
+          echo "Deploy output: $DEPLOY_OUTPUT"
+
+          # Extract deployment ID if available
+          DEPLOYMENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -oP '"deploymentId":\s*"\K[^"]+' || echo "")
+          echo "deployment_id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Wait for staging health
+        id: resolve-url
+        run: |
+          # Use provided URL or default Railway staging URL
+          STAGING_URL="${{ github.event.inputs.target_url }}"
+          if [ -z "$STAGING_URL" ]; then
+            STAGING_URL="${{ secrets.RAILWAY_STAGING_URL || 'https://sunschool-deployed-private-staging.up.railway.app' }}"
+          fi
+          echo "url=$STAGING_URL" >> "$GITHUB_OUTPUT"
+
+          echo "Waiting for staging to be healthy at $STAGING_URL..."
+          MAX_RETRIES=30
+          RETRY_INTERVAL=10
+          for i in $(seq 1 $MAX_RETRIES); do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL" --max-time 10 || echo "000")
+            echo "Attempt $i/$MAX_RETRIES: HTTP $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "301" ] || [ "$HTTP_STATUS" = "302" ]; then
+              echo "Staging is healthy!"
+              exit 0
+            fi
+            sleep $RETRY_INTERVAL
+          done
+          echo "::warning::Staging health check timed out after $((MAX_RETRIES * RETRY_INTERVAL))s"
+          # Don't fail — tests may still pass
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  # ─── Phase 2: Run Synthetic E2E Tests ──────────────────────
+  synthetic-e2e:
+    name: Synthetic E2E Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped')
+    outputs:
+      test_result: ${{ steps.run-tests.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Resolve target URL
+        id: target
+        run: |
+          # Priority: workflow_dispatch input > staging deploy output > production
+          if [ -n "${{ github.event.inputs.target_url }}" ]; then
+            TARGET="${{ github.event.inputs.target_url }}"
+          elif [ -n "${{ needs.deploy-staging.outputs.staging_url }}" ]; then
+            TARGET="${{ needs.deploy-staging.outputs.staging_url }}"
+          else
+            TARGET="https://sunschool.xyz"
+          fi
+          echo "url=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "Testing against: $TARGET"
+
+      - name: Run E2E tests
+        id: run-tests
+        continue-on-error: true
+        run: npx playwright test --config=playwright.config.ts
+        env:
+          TARGET_URL: ${{ steps.target.outputs.url }}
+          CI: true
+          TARGET_ENV: ${{ needs.deploy-staging.outputs.staging_url && 'staging' || 'production' }}
+          RAILWAY_DEPLOYMENT_ID: ${{ needs.deploy-staging.outputs.deployment_id }}
+
+      - name: Generate synthetic report
+        if: always()
+        run: node tests/e2e/generate-report.mjs
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+          TARGET_ENV: ${{ needs.deploy-staging.outputs.staging_url && 'staging' || 'production' }}
+          RAILWAY_DEPLOYMENT_ID: ${{ needs.deploy-staging.outputs.deployment_id }}
+
+      - name: Update quarantine list
+        if: always()
+        run: node tests/e2e/quarantine.mjs
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-e2e-results
+          path: |
+            test-results/
+            tests/e2e/report/
+            tests/e2e/quarantine.json
+          retention-days: 14
+
+      - name: Upload synthetic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-report
+          path: test-results/synthetic-report.json
+          retention-days: 30
+
+  # ─── Phase 3: Stoneforge Feedback Loop ─────────────────────
+  feedback-loop:
+    name: Feedback Loop
+    runs-on: ubuntu-latest
+    needs: [synthetic-e2e]
+    if: always() && needs.synthetic-e2e.result != 'cancelled'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download synthetic report
+        uses: actions/download-artifact@v4
+        with:
+          name: synthetic-report
+          path: test-results/
+
+      - name: Install Stoneforge CLI
+        run: |
+          # Install sf CLI if available, otherwise feedback loop falls back to console
+          npm install -g @stoneforge/cli 2>/dev/null || echo "Stoneforge CLI not available — using console fallback"
+
+      - name: Run feedback loop
+        run: node tests/e2e/feedback-loop.mjs
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          SF_PLAN: "Synthetic E2E Testing"
+
+      - name: Post summary to PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'test-results/synthetic-report.json';
+            if (!fs.existsSync(reportPath)) {
+              console.log('No synthetic report found');
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const s = report.summary;
+
+            const statusEmoji = s.failed > 0 ? ':x:' : s.flaky > 0 ? ':warning:' : ':white_check_mark:';
+            const body = [
+              `## ${statusEmoji} Synthetic E2E Results`,
+              '',
+              `| Metric | Count |`,
+              `|--------|-------|`,
+              `| Total | ${s.total} |`,
+              `| Passed | ${s.passed} |`,
+              `| Failed | ${s.failed} |`,
+              `| Flaky | ${s.flaky} |`,
+              `| Healed | ${s.healed} |`,
+              `| Selector Drift | ${s.selector_drift_count} |`,
+              `| Mean Duration | ${s.mean_duration_ms}ms |`,
+              '',
+              ...(report.recommendations.length > 0
+                ? ['### Recommendations', '', ...report.recommendations.map(r => `- ${r}`)]
+                : []),
+              '',
+              `<sub>Run ID: ${report.run_id} | Target: ${report.target_env}</sub>`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });

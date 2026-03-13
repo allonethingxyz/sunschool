@@ -138,6 +138,7 @@ async function completeOneLesson(page: Page): Promise<boolean> {
 }
 
 test.describe('Learner: Achievements', () => {
+  test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
     await page.goto('/welcome');
@@ -183,7 +184,6 @@ test.describe('Learner: Achievements', () => {
   });
 
   test('achievements appear after completing a lesson with perfect score', async ({ page }) => {
-    test.retry(2);
     test.setTimeout(600_000);
     await setupLearnerSession(page);
 
@@ -220,7 +220,6 @@ test.describe('Learner: Achievements', () => {
   });
 
   test('can view lesson history on progress page', async ({ page }) => {
-    test.retry(2);
     test.setTimeout(600_000);
     await setupLearnerSession(page);
 

@@ -115,6 +115,7 @@ async function generateAndWaitForLesson(page: Page): Promise<number | null> {
 }
 
 test.describe('Learner: Quiz Assessment', () => {
+  test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
     await page.goto('/welcome');
@@ -122,7 +123,6 @@ test.describe('Learner: Quiz Assessment', () => {
   });
 
   test('can navigate to quiz pre-screen from lesson', async ({ page }) => {
-    test.retry(2);
     await setupLearnerSession(page);
 
     const lessonId = await generateAndWaitForLesson(page);
@@ -166,7 +166,6 @@ test.describe('Learner: Quiz Assessment', () => {
   });
 
   test('can answer quiz questions and see options', async ({ page }) => {
-    test.retry(2);
     await setupLearnerSession(page);
 
     const lessonId = await generateAndWaitForLesson(page);
@@ -208,7 +207,7 @@ test.describe('Learner: Quiz Assessment', () => {
     // Click the first answer option for the first question
     const clicked = await page.evaluate(() => {
       const clickables = document.querySelectorAll('[tabindex="0"]');
-      for (const el of clickables) {
+      for (const el of Array.from(clickables)) {
         const rect = el.getBoundingClientRect();
         if (rect.width > 100 && rect.height > 30) {
           const text = el.textContent || '';
@@ -226,7 +225,6 @@ test.describe('Learner: Quiz Assessment', () => {
   });
 
   test('can submit quiz and view results with score', async ({ page }) => {
-    test.retry(2);
     await setupLearnerSession(page);
 
     const lessonId = await generateAndWaitForLesson(page);
@@ -256,7 +254,7 @@ test.describe('Learner: Quiz Assessment', () => {
         await page.evaluate((qNum) => {
           const allElements = document.querySelectorAll('*');
           let questionEl: Element | null = null;
-          for (const el of allElements) {
+          for (const el of Array.from(allElements)) {
             if (el.textContent?.trim()?.match(new RegExp(`^Question ${qNum} of \\d+$`))) {
               questionEl = el;
               break;
@@ -268,7 +266,7 @@ test.describe('Learner: Quiz Assessment', () => {
           for (let i = 0; i < 5 && container; i++) {
             const clickables = container.querySelectorAll('[tabindex="0"]');
             if (clickables.length >= 3) {
-              for (const clickable of clickables) {
+              for (const clickable of Array.from(clickables)) {
                 if (clickable.textContent?.includes(`Question ${qNum}`)) continue;
                 const rect = clickable.getBoundingClientRect();
                 if (rect.width < 100) continue;
@@ -319,7 +317,6 @@ test.describe('Learner: Quiz Assessment', () => {
   });
 
   test('can return to learner home after quiz completion', async ({ page }) => {
-    test.retry(2);
     await setupLearnerSession(page);
 
     const lessonId = await generateAndWaitForLesson(page);

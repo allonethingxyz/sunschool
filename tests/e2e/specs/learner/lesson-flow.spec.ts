@@ -86,6 +86,7 @@ async function setupLearnerSession(page: Page): Promise<void> {
 }
 
 test.describe('Learner: Lesson Flow', () => {
+  test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
     await page.goto('/welcome');

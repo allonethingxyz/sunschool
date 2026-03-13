@@ -91,6 +91,7 @@ async function createRewardGoal(page: Page, title: string, cost: number): Promis
 }
 
 test.describe('Learner: Points & Rewards', () => {
+  test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
     await page.goto('/welcome');
@@ -204,7 +205,6 @@ test.describe('Learner: Points & Rewards', () => {
   });
 
   test('points are awarded after completing a quiz', async ({ page }) => {
-    test.retry(2);
     test.setTimeout(600_000);
     await setupLearnerSession(page);
 

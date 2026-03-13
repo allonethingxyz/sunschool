@@ -18,13 +18,13 @@ import {
  */
 
 test.describe('AI prompt audit and transparency', () => {
+  test.describe.configure({ retries: 2 });
+
   test.afterEach(async ({ page }, testInfo) => {
     await captureFailureArtifacts(page, testInfo);
   });
 
   test('parent can access the reports page to view learner history', async ({ page }) => {
-    test.retry(2);
-
     const ts = Date.now();
     await page.goto('/');
     await page.waitForLoadState('networkidle');
@@ -53,8 +53,6 @@ test.describe('AI prompt audit and transparency', () => {
   });
 
   test('parent can select a learner and view their report tabs', async ({ page }) => {
-    test.retry(2);
-
     const ts = Date.now();
     const childName = `SelectKid_${ts}`;
     await page.goto('/');
@@ -91,8 +89,6 @@ test.describe('AI prompt audit and transparency', () => {
   });
 
   test('parent can view lesson history in the Lessons report tab', async ({ page }) => {
-    test.retry(2);
-
     const ts = Date.now();
     const childName = `LessonsKid_${ts}`;
     await page.goto('/');
@@ -135,8 +131,6 @@ test.describe('AI prompt audit and transparency', () => {
   });
 
   test('parent can access lesson details to verify AI prompt visibility', async ({ page }) => {
-    test.retry(2);
-
     const ts = Date.now();
     const childName = `PromptKid_${ts}`;
     await page.goto('/');
@@ -178,8 +172,6 @@ test.describe('AI prompt audit and transparency', () => {
   });
 
   test('parent can download a report for audit purposes', async ({ page }) => {
-    test.retry(2);
-
     const ts = Date.now();
     const childName = `DownloadKid_${ts}`;
     await page.goto('/');

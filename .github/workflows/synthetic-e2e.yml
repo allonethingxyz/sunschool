@@ -7,12 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      target_env:
-        description: 'Target environment'
-        required: true
-        default: 'local'
-        type: choice
-        options: [local, production]
+      target_url:
+        description: 'Target URL to test against (defaults to localhost)'
+        required: false
+        default: 'http://localhost:5000'
+        type: string
 
 concurrency:
   group: synthetic-e2e-${{ github.ref }}
@@ -65,21 +64,18 @@ jobs:
       - name: Resolve target URL
         id: target
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.target_env }}" = "production" ]; then
-            URL="${{ secrets.PRODUCTION_URL }}"
-            ENV="production"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            URL="${{ github.event.inputs.target_url }}"
           else
             URL="http://localhost:5000"
-            ENV="local"
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          echo "env=$ENV" >> "$GITHUB_OUTPUT"
 
       - name: Run synthetic user tests
         run: npx playwright test --reporter=json --output=test-results/
         env:
+          TARGET_URL: ${{ steps.target.outputs.url }}
           PLAYWRIGHT_BASE_URL: ${{ steps.target.outputs.url }}
-          TARGET_ENV: ${{ steps.target.outputs.env }}
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
           SESSION_SECRET: test-secret
           JWT_SECRET: test-jwt-secret
@@ -92,7 +88,7 @@ jobs:
         env:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
-          TARGET_ENV: ${{ steps.target.outputs.env }}
+          TARGET_ENV: ci
 
       - name: Auto-quarantine flaky tests
         if: always()
@@ -146,9 +142,12 @@ jobs:
 
             let body = `## ${status} Synthetic User E2E Results\n\n`;
             body += `| Metric | Value |\n|--------|-------|\n`;
-            body += `| Total | ${s.total} |\n| Passed | ${s.passed} |\n`;
-            body += `| Failed | ${s.failed} |\n| Flaky | ${s.flaky} |\n`;
-            body += `| Healed | ${s.healed} |\n| Selector Drift | ${s.selector_drift_count} |\n`;
+            body += `| Total | ${s.total} |\n`;
+            body += `| Passed | ${s.passed} |\n`;
+            body += `| Failed | ${s.failed} |\n`;
+            body += `| Flaky | ${s.flaky} |\n`;
+            body += `| Healed | ${s.healed} |\n`;
+            body += `| Selector Drift | ${s.selector_drift_count} |\n`;
             body += `| Mean Duration | ${s.mean_duration_ms}ms |\n\n`;
 
             if (report.recommendations && report.recommendations.length > 0) {
@@ -161,7 +160,7 @@ jobs:
               body += `${s.healed} selectors auto-healed. These are tech debt — review the full report.\n`;
             }
 
-            // Find existing bot comment to update instead of creating duplicates
+            // Find and update existing comment or create new one
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -176,13 +175,13 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: botComment.id,
-                body
+                body,
               });
             } else {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body
+                body,
               });
             }

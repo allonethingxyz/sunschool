@@ -1,0 +1,312 @@
+name: Synthetic User E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options: [staging, production, local]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: synthetic-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Phase 1: Deploy to Railway staging ──────────────────────
+  deploy-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Skip staging deploy when targeting production or local directly
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.target_env == 'staging'
+    outputs:
+      staging_url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.com/install.sh | sh
+          railway version
+
+      - name: Deploy to staging
+        id: deploy
+        run: |
+          # Deploy current commit to Railway staging environment
+          DEPLOY_OUTPUT=$(railway up --detach 2>&1) || true
+          echo "$DEPLOY_OUTPUT"
+
+          # Resolve staging URL
+          if [ -n "${{ secrets.RAILWAY_STAGING_URL }}" ]; then
+            STAGING_URL="${{ secrets.RAILWAY_STAGING_URL }}"
+          else
+            # Fallback: derive from Railway project
+            STAGING_URL="https://sunschool-deployed-private-production.up.railway.app"
+          fi
+
+          echo "url=$STAGING_URL" >> "$GITHUB_OUTPUT"
+          echo "🚀 Staging URL: $STAGING_URL"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Wait for deployment health
+        run: |
+          URL="${{ steps.deploy.outputs.url }}"
+          echo "⏳ Waiting for $URL to be healthy..."
+
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" 2>/dev/null || echo "000")
+
+            if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "304" ]; then
+              echo "✅ Deployment healthy (HTTP $HTTP_STATUS) after $ATTEMPT attempts"
+              exit 0
+            fi
+
+            echo "  Attempt $ATTEMPT/$MAX_ATTEMPTS: HTTP $HTTP_STATUS — retrying in 10s..."
+            sleep 10
+          done
+
+          echo "❌ Deployment did not become healthy after $MAX_ATTEMPTS attempts"
+          exit 1
+
+  # ─── Phase 2: Run Playwright synthetic user tests ─────────────
+  synthetic-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [deploy-staging]
+    # Run even if deploy-staging was skipped (for local/production targets)
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped')
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Setup database
+        run: |
+          npx ts-node -r dotenv/config scripts/migrate.ts
+          npx ts-node -r dotenv/config scripts/seed-clean.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+          NODE_ENV: test
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          NODE_ENV: test
+
+      - name: Resolve target URL
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            case "${{ github.event.inputs.target_env }}" in
+              production)
+                URL="${{ secrets.PRODUCTION_URL }}"
+                ENV="production"
+                ;;
+              local)
+                URL="http://localhost:5000"
+                ENV="local"
+                ;;
+              *)
+                URL="${{ needs.deploy-staging.outputs.staging_url }}"
+                ENV="staging"
+                ;;
+            esac
+          else
+            # Default: use staging URL from deploy phase
+            URL="${{ needs.deploy-staging.outputs.staging_url }}"
+            ENV="staging"
+          fi
+
+          # Fallback to local if no URL resolved
+          if [ -z "$URL" ]; then
+            URL="http://localhost:5000"
+            ENV="local"
+          fi
+
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "env=$ENV" >> "$GITHUB_OUTPUT"
+          echo "🎯 Target: $ENV ($URL)"
+
+      - name: Start local server (if needed)
+        if: steps.target.outputs.env == 'local'
+        run: |
+          node dist/server/index.js &
+          sleep 5
+          # Wait for server to be ready
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:5000 > /dev/null 2>&1; then
+              echo "✅ Local server ready"
+              break
+            fi
+            sleep 2
+          done
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+          SESSION_SECRET: test-secret
+          JWT_SECRET: test-jwt-secret
+          NODE_ENV: test
+
+      - name: Run synthetic user tests
+        run: npx playwright test --reporter=json --output=test-results/
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.target.outputs.url }}
+          TARGET_ENV: ${{ steps.target.outputs.env }}
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+          SESSION_SECRET: test-secret
+          JWT_SECRET: test-jwt-secret
+          NODE_ENV: test
+          CI: true
+
+      - name: Generate synthetic report
+        if: always()
+        run: node tests/e2e/generate-report.mjs
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+          TARGET_ENV: ${{ steps.target.outputs.env }}
+
+      - name: Auto-quarantine flaky tests
+        if: always()
+        run: node tests/e2e/quarantine.mjs
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-e2e-results-${{ github.sha }}
+          path: |
+            test-results/
+          retention-days: 30
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-${{ github.sha }}
+          path: test-results/**/*.zip
+          retention-days: 14
+
+  # ─── Phase 3: Feedback loop — create tasks from failures ──────
+  feedback-loop:
+    needs: [synthetic-e2e]
+    if: always() && needs.synthetic-e2e.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download test report
+        uses: actions/download-artifact@v4
+        with:
+          name: synthetic-e2e-results-${{ github.sha }}
+          path: test-results/
+
+      - name: Run feedback loop
+        run: node tests/e2e/feedback-loop.mjs
+        env:
+          TEST_RESULTS_DIR: test-results
+          SF_PLAN: 'E2E Test Maintenance'
+          FEEDBACK_DRY_RUN: ${{ secrets.SF_TOKEN == '' && 'true' || 'false' }}
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Post PR summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'test-results/synthetic-report.json';
+            if (!fs.existsSync(reportPath)) {
+              console.log('No synthetic report found');
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const s = report.summary;
+            const status = s.failed > 0 ? '🔴' : s.flaky > 0 ? '🟡' : '🟢';
+
+            let body = `## ${status} Synthetic User E2E Results\n\n`;
+            body += `| Metric | Value |\n|--------|-------|\n`;
+            body += `| Total | ${s.total} |\n| Passed | ${s.passed} |\n`;
+            body += `| Failed | ${s.failed} |\n| Flaky | ${s.flaky} |\n`;
+            body += `| Healed | ${s.healed} |\n| Selector Drift | ${s.selector_drift_count} |\n`;
+            body += `| Mean Duration | ${s.mean_duration_ms}ms |\n\n`;
+
+            if (report.recommendations && report.recommendations.length > 0) {
+              body += `### Recommendations\n`;
+              report.recommendations.forEach(r => { body += `- ${r}\n`; });
+            }
+
+            if (s.healed > 0) {
+              body += `\n### Self-Healed Selectors\n`;
+              body += `${s.healed} selectors auto-healed. These are tech debt — review the full report.\n`;
+            }
+
+            body += `\n---\n*Target: ${report.metadata?.env || 'unknown'} | SHA: ${report.metadata?.sha?.substring(0, 7) || 'unknown'}*`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Synthetic User E2E Results')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }

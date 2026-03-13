@@ -105,34 +105,22 @@ test.describe('Learner: Quiz Assessment', () => {
     const questionCount = await questionHeader.count();
     expect(questionCount).toBeGreaterThanOrEqual(1);
 
-    // Find answer options using semantic locators only
-    // Try standard ARIA roles first: radio, option, then button-based options
-    const radioOptions = page.getByRole('radio');
-    const optionOptions = page.getByRole('option');
-    const radioCount = await radioOptions.count();
-    const optionCount = await optionOptions.count();
+    // Quiz options are rendered as TouchableOpacity (button role) in QuizComponent.
+    // Get all option buttons on the page (quiz options rendered as buttons)
+    const optionButtons = page.locator('div[role="button"]').filter({
+      hasNot: page.getByText(/Start Quiz|I'm Done/i),
+    });
+    const optionCount = await optionButtons.count();
 
-    if (radioCount > 0) {
-      await radioOptions.first().click();
-    } else if (optionCount > 0) {
-      await optionOptions.first().click();
-    } else {
-      // Use selfHealingLocator to find clickable answer choices
-      const { locator: answerOption } = await selfHealingLocator(page, 'quiz-answer-option', {
-        role: 'button',
-        name: /^[A-D]\.|Option/i,
-        text: /^[A-D]\./,
-      });
-      const answerVisible = await answerOption.isVisible({ timeout: 5000 }).catch(() => false);
-      if (answerVisible) {
-        await answerOption.click();
-      }
+    if (optionCount > 0) {
+      // Click the first answer option
+      await optionButtons.first().click();
     }
 
     await screenshot(page, 'quiz-04-answer-selected');
 
     // Verify the page has interactive quiz content
-    const hasContent = radioCount > 0 || optionCount > 0 || questionCount >= 1;
+    const hasContent = optionCount > 0 || questionCount >= 1;
     expect(hasContent).toBeTruthy();
   });
 
@@ -157,7 +145,11 @@ test.describe('Learner: Quiz Assessment', () => {
     await page.getByText(/Question \d+ of \d+/).first()
       .waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
 
-    // Select answers for each question using semantic locators
+    // Select one answer per question.
+    // QuizComponent renders options as TouchableOpacity (button role).
+    // Each question section starts with "Question N of M" text followed by a
+    // card containing option buttons.  We locate each question header, find
+    // the nearest QuizComponent container, and click the first option inside it.
     const totalQuestions = await page.getByText(/Question \d+ of \d+/).count();
 
     for (let q = 1; q <= totalQuestions; q++) {
@@ -165,24 +157,27 @@ test.describe('Learner: Quiz Assessment', () => {
       if (await qHeader.isVisible({ timeout: 3000 }).catch(() => false)) {
         await qHeader.scrollIntoViewIfNeeded();
 
-        // Try semantic locators for answer options
-        const radioOptions = page.getByRole('radio');
-        const radioCount = await radioOptions.count();
+        // Find the question's parent container that holds the option buttons.
+        // The structure is: questionContainer > questionNumber + QuizComponent
+        // QuizComponent renders options as div[role="button"] with Circle/CheckCircle icons.
+        const questionSection = qHeader.locator('xpath=ancestor::div[1]/following-sibling::div[1]');
+        const optionBtns = questionSection.locator('div[role="button"]');
+        const btnCount = await optionBtns.count().catch(() => 0);
 
-        if (radioCount >= q) {
-          await radioOptions.nth(q - 1).click().catch(() => {});
+        if (btnCount > 0) {
+          await optionBtns.first().click().catch(() => {});
         } else {
-          // Use selfHealingLocator for answer option
-          const { locator: answerOption } = await selfHealingLocator(
-            page,
-            `quiz-q${q}-answer`,
-            {
-              role: 'button',
-              name: /^[A-D]\.|Option|answer/i,
-              text: /^[A-D]\./,
-            }
-          );
-          await answerOption.click().catch(() => {});
+          // Fallback: try clicking any visible option button on the page
+          // that hasn't been selected yet (no CheckCircle icon)
+          const allOptionBtns = page.locator('div[role="button"]').filter({
+            hasNot: page.getByText(/Start Quiz|I'm Done|Keep Going|Go Back/i),
+          });
+          const allCount = await allOptionBtns.count();
+          // Click the first option for each question (options are 4 per question)
+          const idx = (q - 1) * 4; // Approximate: 4 options per question
+          if (idx < allCount) {
+            await allOptionBtns.nth(idx).click().catch(() => {});
+          }
         }
       }
     }
@@ -238,10 +233,8 @@ test.describe('Learner: Quiz Assessment', () => {
     const lessonResult = await apiCall(page, 'GET', `/api/lessons/${lessonId}`);
     const questions = lessonResult.data?.spec?.questions || [];
 
-    const answers = questions.map((_: any, i: number) => ({
-      questionIndex: i,
-      selectedIndex: 0,
-    }));
+    // Server expects answers as a plain number[] of selected answer indices
+    const answers = questions.map(() => 0);
 
     await apiCall(page, 'POST', `/api/lessons/${lessonId}/answer`, {
       answers,

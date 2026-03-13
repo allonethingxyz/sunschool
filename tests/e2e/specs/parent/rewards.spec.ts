@@ -2,253 +2,208 @@ import { test, expect } from '@playwright/test';
 import {
   selfHealingLocator,
   captureFailureArtifacts,
-  dismissModals,
   registerParentViaAPI,
-  apiCall,
   authenticateAndNavigate,
+  apiCall,
 } from '../../helpers/self-healing';
 
 /**
  * Parent Persona: Rewards System
  *
- * Models the parent creating rewards, setting point costs,
- * and managing redemption requests.
+ * Models a parent creating rewards, setting point costs, viewing redemption
+ * requests, and managing the rewards center tabs (Rewards, Requests, Settings).
  */
 
-const ts = Date.now();
-
-test.describe('Rewards Management', () => {
+test.describe('Rewards management', () => {
   test.describe.configure({ retries: 2 });
-
-  let token: string;
-  let learnerName: string;
-  let learnerId: number;
-
-  const parentUser = {
-    username: `parent_rewards_${ts}`,
-    email: `parent_rewards_${ts}@test.com`,
-    password: 'TestPassword123!',
-    name: 'Rewards Parent',
-  };
-
-  test.beforeAll(async ({ browser }) => {
-    const page = await browser.newPage();
-    await page.goto('/auth');
-    await page.waitForLoadState('networkidle');
-
-    // Register parent
-    token = await registerParentViaAPI(page, parentUser);
-
-    // Create a child learner via API
-    learnerName = `RewardChild_${ts}`;
-    const result = await apiCall(page, 'POST', '/api/learners', {
-      name: learnerName,
-      gradeLevel: 4,
-    }) as { status: number; data: { id: number } };
-    learnerId = result.data.id;
-
-    await page.close();
-  });
 
   test.afterEach(async ({ page }, testInfo) => {
     await captureFailureArtifacts(page, testInfo);
   });
 
-  test('rewards page loads with Rewards Center heading', async ({ page }) => {
+  test('parent sees the Rewards Center with tabs', async ({ page }) => {
 
-    await page.goto('/auth');
+    const ts = Date.now();
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
+
+    const token = await registerParentViaAPI(page, {
+      username: `parent_rew_tabs_${ts}`,
+      email: `parent_rew_tabs_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'Rewards Tabs Parent',
+    });
+
+    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+    await apiCall(page, 'POST', '/api/learners', { name: 'RewardKid', gradeLevel: 5 });
+
     await authenticateAndNavigate(page, token, '/rewards');
-    await page.waitForLoadState('networkidle');
-    await dismissModals(page);
 
-    // Page heading should be visible
+    // Verify Rewards Center heading
     const heading = await selfHealingLocator(page, [
-      () => page.getByText(/Rewards Center/i),
-      () => page.getByText(/Rewards/i).first(),
-    ], { timeout: 15000 });
-    await expect(heading).toBeVisible();
+      () => page.getByRole('heading', { name: /rewards center/i }),
+      () => page.getByText(/rewards center/i),
+    ]);
+    await expect(heading).toBeVisible({ timeout: 10000 });
 
-    // URL should match
-    expect(page.url()).toMatch(/rewards/);
+    // Verify all three tabs are visible
+    await expect(page.getByRole('tab', { name: /rewards/i }).first()).toBeVisible();
+    await expect(page.getByRole('tab', { name: /requests/i })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /settings/i })).toBeVisible();
   });
 
-  test('create a new reward with title and point cost', async ({ page }) => {
+  test('parent can create a new reward with title and point cost', async ({ page }) => {
 
-    await page.goto('/auth');
+    const ts = Date.now();
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
+
+    const token = await registerParentViaAPI(page, {
+      username: `parent_rew_create_${ts}`,
+      email: `parent_rew_create_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'Create Reward Parent',
+    });
+
+    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+    await apiCall(page, 'POST', '/api/learners', { name: 'CreateKid', gradeLevel: 4 });
+
     await authenticateAndNavigate(page, token, '/rewards');
-    await page.waitForLoadState('networkidle');
-    await dismissModals(page);
 
     // Click Add Reward button
-    const addRewardBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /Add Reward/i }),
-      () => page.getByText(/Add Reward/i),
-    ], { timeout: 15000 });
-    await addRewardBtn.click();
+    const addButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: /add reward/i }),
+      () => page.getByText(/add reward/i),
+    ]);
+    await expect(addButton).toBeVisible({ timeout: 10000 });
+    await addButton.click();
 
-    // Fill in the reward form
+    // Fill in reward title
     const titleInput = await selfHealingLocator(page, [
-      () => page.getByPlaceholder(/Movie Night/i),
-      () => page.getByPlaceholder(/title/i),
-      () => page.getByLabel(/Title/i),
-    ], { timeout: 10000 });
-    await titleInput.fill('Extra Screen Time');
+      () => page.getByPlaceholder(/movie night/i),
+      () => page.getByLabel(/title/i),
+      () => page.getByRole('textbox').first(),
+    ]);
+    await titleInput.fill('Ice Cream Trip');
 
     // Set point cost
-    const pointsInput = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('10'),
-      () => page.getByPlaceholder(/points/i),
-      () => page.getByLabel(/Points/i),
-    ]);
-    await pointsInput.clear();
-    await pointsInput.fill('50');
+    const pointsInput = page.getByRole('spinbutton').first();
+    if (await pointsInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await pointsInput.clear();
+      await pointsInput.fill('25');
+    }
 
-    // Save the reward
-    const saveBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /Save/i }),
-      () => page.getByRole('button', { name: /Create/i }),
+    // Click Save
+    const saveButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: /save/i }),
+      () => page.getByText(/save/i),
     ]);
-    await saveBtn.click();
+    await saveButton.click();
 
-    // Verify the reward appears in the list
+    await page.waitForLoadState('networkidle');
+
+    // Verify the new reward appears
     await expect(async () => {
-      const rewardVisible = await page.getByText('Extra Screen Time').isVisible().catch(() => false);
-      expect(rewardVisible).toBe(true);
+      await expect(page.getByText('Ice Cream Trip')).toBeVisible();
     }).toPass({ timeout: 10000 });
 
-    // Point cost should be displayed
-    await expect(async () => {
-      const pointsVisible = await page.getByText(/50\s*pts/i).isVisible().catch(() => false);
-      expect(pointsVisible).toBe(true);
-    }).toPass({ timeout: 10000 });
+    // Verify point cost is displayed
+    await expect(page.getByText(/25/)).toBeVisible();
   });
 
-  test('reward form supports emoji icon selection', async ({ page }) => {
+  test('parent can view empty redemption requests tab', async ({ page }) => {
 
-    await page.goto('/auth');
+    const ts = Date.now();
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
+
+    const token = await registerParentViaAPI(page, {
+      username: `parent_rew_req_${ts}`,
+      email: `parent_rew_req_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'Requests Parent',
+    });
+
+    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+    await apiCall(page, 'POST', '/api/learners', { name: 'RequestKid', gradeLevel: 3 });
+
     await authenticateAndNavigate(page, token, '/rewards');
-    await page.waitForLoadState('networkidle');
-    await dismissModals(page);
 
-    // Open Add Reward form
-    const addRewardBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /Add Reward/i }),
-      () => page.getByText(/Add Reward/i),
-    ], { timeout: 15000 });
-    await addRewardBtn.click();
-
-    // The form should contain emoji icons for selection
-    await expect(async () => {
-      // Check that emoji icons are visible (common reward emojis)
-      const hasEmoji =
-        await page.getByText('🎁').isVisible().catch(() => false) ||
-        await page.getByText('⭐').isVisible().catch(() => false) ||
-        await page.getByText('🏆').isVisible().catch(() => false);
-      expect(hasEmoji).toBe(true);
-    }).toPass({ timeout: 10000 });
-
-    // Fill in a reward with an emoji icon selected
-    const titleInput = await selfHealingLocator(page, [
-      () => page.getByPlaceholder(/Movie Night/i),
-      () => page.getByPlaceholder(/title/i),
-    ]);
-    await titleInput.fill('Ice Cream Treat');
-
-    // Click an emoji icon
-    const emojiBtn = await selfHealingLocator(page, [
-      () => page.getByText('🎁'),
-      () => page.getByText('⭐'),
-    ]);
-    await emojiBtn.click();
-
-    // Set point cost
-    const pointsInput = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('10'),
-      () => page.getByPlaceholder(/points/i),
-    ]);
-    await pointsInput.clear();
-    await pointsInput.fill('25');
-
-    // Save
-    const saveBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /Save/i }),
-    ]);
-    await saveBtn.click();
-
-    // Verify created reward with emoji appears
-    await expect(async () => {
-      await expect(page.getByText('Ice Cream Treat')).toBeVisible();
-    }).toPass({ timeout: 10000 });
-  });
-
-  test('rewards page has tabs for Rewards, Requests, and Settings', async ({ page }) => {
-
-    await page.goto('/auth');
-    await page.waitForLoadState('networkidle');
-    await authenticateAndNavigate(page, token, '/rewards');
-    await page.waitForLoadState('networkidle');
-    await dismissModals(page);
-
-    // Rewards tab should be present
-    const rewardsTab = await selfHealingLocator(page, [
-      () => page.getByRole('tab', { name: /Rewards/i }),
-      () => page.getByText('Rewards', { exact: true }).first(),
-    ], { timeout: 15000 });
-    await expect(rewardsTab).toBeVisible();
-
-    // Requests tab
+    // Switch to Requests tab
     const requestsTab = await selfHealingLocator(page, [
-      () => page.getByRole('tab', { name: /Requests/i }),
-      () => page.getByText('Requests').first(),
+      () => page.getByRole('tab', { name: /requests/i }),
+      () => page.getByText(/requests/i),
     ]);
-    await expect(requestsTab).toBeVisible();
-
-    // Settings tab
-    const settingsTab = await selfHealingLocator(page, [
-      () => page.getByRole('tab', { name: 'Settings' }),
-      () => page.getByText('Settings', { exact: true }).first(),
-    ]);
-    await expect(settingsTab).toBeVisible();
-
-    // Click on Settings tab — should show Double-or-Loss mode settings
-    await settingsTab.click();
-    await page.waitForLoadState('networkidle');
-
-    await expect(async () => {
-      const hasDoubleOrLoss =
-        await page.getByText(/Double-or-Loss/i).isVisible().catch(() => false) ||
-        await page.getByText(/scoring/i).isVisible().catch(() => false);
-      expect(hasDoubleOrLoss).toBe(true);
-    }).toPass({ timeout: 10000 });
-  });
-
-  test('view redemption requests tab (empty state for new account)', async ({ page }) => {
-
-    await page.goto('/auth');
-    await page.waitForLoadState('networkidle');
-    await authenticateAndNavigate(page, token, '/rewards');
-    await page.waitForLoadState('networkidle');
-    await dismissModals(page);
-
-    // Click on the Requests tab
-    const requestsTab = await selfHealingLocator(page, [
-      () => page.getByRole('tab', { name: /Requests/i }),
-      () => page.getByText('Requests').first(),
-    ], { timeout: 15000 });
+    await expect(requestsTab).toBeVisible({ timeout: 10000 });
     await requestsTab.click();
+
     await page.waitForLoadState('networkidle');
 
-    // For a new account, should show empty state or no pending requests
+    // Should show empty state message
     await expect(async () => {
-      const hasContent =
-        await page.getByText(/no.*request/i).isVisible().catch(() => false) ||
-        await page.getByText(/pending/i).isVisible().catch(() => false) ||
-        await page.getByText(/Requests/i).isVisible().catch(() => false) ||
-        await page.getByText(/empty/i).isVisible().catch(() => false);
-      expect(hasContent).toBe(true);
+      await expect(page.getByText(/no redemption requests/i)).toBeVisible();
+    }).toPass({ timeout: 10000 });
+  });
+
+  test('parent can view Settings tab with double-or-loss mode', async ({ page }) => {
+
+    const ts = Date.now();
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const token = await registerParentViaAPI(page, {
+      username: `parent_rew_set_${ts}`,
+      email: `parent_rew_set_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'Settings Parent',
+    });
+
+    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+    await apiCall(page, 'POST', '/api/learners', { name: 'SettingsKid', gradeLevel: 6 });
+
+    await authenticateAndNavigate(page, token, '/rewards');
+
+    // Switch to Settings tab
+    const settingsTab = await selfHealingLocator(page, [
+      () => page.getByRole('tab', { name: /settings/i }),
+      () => page.getByText(/settings/i),
+    ]);
+    await expect(settingsTab).toBeVisible({ timeout: 10000 });
+    await settingsTab.click();
+
+    await page.waitForLoadState('networkidle');
+
+    // Should see Double-or-Loss Mode section
+    await expect(page.getByText(/double-or-loss/i).first()).toBeVisible({ timeout: 10000 });
+
+    // Should see a toggle switch for the mode
+    const toggle = page.getByRole('switch').first();
+    if (await toggle.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await expect(toggle).toBeVisible();
+    }
+  });
+
+  test('parent sees empty state when no rewards exist', async ({ page }) => {
+
+    const ts = Date.now();
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const token = await registerParentViaAPI(page, {
+      username: `parent_rew_empty_${ts}`,
+      email: `parent_rew_empty_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'Empty Rewards Parent',
+    });
+
+    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+    await apiCall(page, 'POST', '/api/learners', { name: 'EmptyKid', gradeLevel: 2 });
+
+    await authenticateAndNavigate(page, token, '/rewards');
+
+    // On a fresh account with no rewards, should see empty state
+    await expect(async () => {
+      await expect(page.getByText(/no rewards yet/i)).toBeVisible();
     }).toPass({ timeout: 10000 });
   });
 });

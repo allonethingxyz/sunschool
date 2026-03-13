@@ -1,14 +1,3 @@
-import { test, expect } from '@playwright/test';
-import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
-import {
-  setupLearnerSession,
-  screenshot,
-  generateAndWaitForLesson,
-  waitForLessonLoaded,
-  pollForVisibleText,
-  apiCall,
-} from '../../helpers/learner-setup';
-
 /**
  * Learner Persona — Lesson Flow E2E
  *
@@ -20,6 +9,13 @@ import {
  *
  * AI content is variable — assertions are structural, not textual.
  */
+import { test, expect } from '@playwright/test';
+import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
+import {
+  setupLearnerSession,
+  screenshot,
+  pollForVisibleText,
+} from '../../helpers/learner-setup';
 
 const TEST_NAME = 'lesson-flow';
 
@@ -52,10 +48,10 @@ test.describe('Learner: Lesson Flow', () => {
       await randomLessonBtn.click();
       await screenshot(page, `${TEST_NAME}-02-generating-lesson`);
 
-      // Wait for lesson generation using proper Playwright polling
+      // Wait for lesson generation using pollForVisibleText (no setTimeout)
       const lessonReady = await pollForVisibleText(page, 'Current Lesson', {
         timeout: 300_000,
-        reloadBetweenPolls: false,
+        reloadBetweenPolls: true,
       });
       expect(lessonReady).toBe(true);
     }
@@ -66,33 +62,33 @@ test.describe('Learner: Lesson Flow', () => {
     await expect(page.getByText('Current Lesson')).toBeVisible();
 
     // Click the lesson card to view content using semantic locators
-    // Look for a button or link near the "Current Lesson" heading
-    const { locator: viewLessonBtn } = await selfHealingLocator(
+    const { locator: lessonCard } = await selfHealingLocator(
       page, TEST_NAME,
-      { role: 'button', name: 'Current Lesson', text: 'Current Lesson' }
+      { role: 'button', name: /lesson|view|start|continue/i, text: /lesson/i }
     );
 
-    const viewBtnVisible = await viewLessonBtn.isVisible({ timeout: 3000 }).catch(() => false);
-    if (viewBtnVisible) {
-      await viewLessonBtn.click();
+    const lessonCardVisible = await lessonCard.isVisible({ timeout: 3000 }).catch(() => false);
+    if (lessonCardVisible) {
+      await lessonCard.click();
     } else {
-      // Fall back to clicking the heading text itself (it may be a clickable card)
+      // Fall back to clicking the "Current Lesson" text area
       await page.getByText('Current Lesson').click();
     }
+
     await page.waitForLoadState('networkidle');
     await screenshot(page, `${TEST_NAME}-04-lesson-content`);
 
     // Structural assertions: lesson content should have rendered
-    // At least one heading element (lesson title or section header)
     const headings = page.getByRole('heading');
     await expect(headings.first()).toBeVisible({ timeout: 30000 });
     const headingCount = await headings.count();
     expect(headingCount).toBeGreaterThanOrEqual(1);
 
-    // Content area should have text paragraphs (rendered as Text components)
-    // Check for minimum text content length on the page
-    const pageText = await page.evaluate(() => document.body.innerText);
-    expect(pageText.length).toBeGreaterThan(200);
+    // Content area should have substantial text
+    const bodyText = await page.getByRole('main').innerText().catch(
+      () => page.evaluate(() => document.body.innerText)
+    );
+    expect(bodyText.length).toBeGreaterThan(200);
 
     await screenshot(page, `${TEST_NAME}-05-content-verified`);
 
@@ -118,16 +114,30 @@ test.describe('Learner: Lesson Flow', () => {
   test('lesson card displays subject and topic information', async ({ page }) => {
     test.setTimeout(600000);
 
-    const { learnerId } = await setupLearnerSession(page, 'lf_card');
+    await setupLearnerSession(page, 'lf_card');
 
-    // Generate a lesson via API
-    await generateAndWaitForLesson(page, 'Science');
+    // Generate a lesson via API directly
+    await page.evaluate(async () => {
+      const token = localStorage.getItem('AUTH_TOKEN');
+      const learnerId = localStorage.getItem('selectedLearnerId');
+      await fetch('/api/lessons/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          learnerId: Number(learnerId),
+          subject: 'Science',
+          gradeLevel: 3,
+        }),
+      });
+    });
 
-    // Navigate to learner home and wait for lesson
+    // Navigate to learner home and wait for lesson using pollForVisibleText
     await page.goto('/learner');
     await page.waitForLoadState('networkidle');
 
-    // Poll for lesson card to appear
     const lessonReady = await pollForVisibleText(page, 'Current Lesson', {
       timeout: 300_000,
       reloadBetweenPolls: true,
@@ -138,9 +148,9 @@ test.describe('Learner: Lesson Flow', () => {
       await expect(page.getByText('Current Lesson')).toBeVisible();
       await screenshot(page, `${TEST_NAME}-08-lesson-card-info`);
 
-      // The page should contain visible text beyond just the header
-      const pageText = await page.evaluate(() => document.body.innerText);
-      expect(pageText.length).toBeGreaterThan(10);
+      // The page should contain visible headings and content
+      const headings = await page.getByRole('heading').count();
+      expect(headings).toBeGreaterThanOrEqual(1);
     }
   });
 

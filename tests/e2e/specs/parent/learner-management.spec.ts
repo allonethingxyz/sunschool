@@ -2,220 +2,237 @@ import { test, expect } from '@playwright/test';
 import {
   selfHealingLocator,
   captureFailureArtifacts,
-  dismissModals,
   registerParentViaAPI,
-  apiCall,
   authenticateAndNavigate,
+  apiCall,
 } from '../../helpers/self-healing';
 
 /**
  * Parent Persona: Learner Management
  *
- * Models the parent journey of adding children, editing profiles,
- * and viewing the learner list.
+ * Models a parent adding, editing, and viewing their child learner accounts.
+ * Covers: add learner (inline & dedicated page), view list, edit grade, navigate.
  */
 
-const ts = Date.now();
-
-test.describe('Learner Management', () => {
-  let token: string;
-  const parentUser = {
-    username: `parent_learner_mgmt_${ts}`,
-    email: `parent_learner_mgmt_${ts}@test.com`,
-    password: 'TestPassword123!',
-    name: 'Learner Mgmt Parent',
-  };
-
-  test.beforeEach(async ({ page }) => {
-    // Register parent via API if not already done, then authenticate
-    await page.goto('/auth');
-    await page.waitForLoadState('networkidle');
-    try {
-      token = await registerParentViaAPI(page, parentUser);
-    } catch {
-      // Already registered — login instead
-      const result = await page.evaluate(async (creds) => {
-        const res = await fetch('/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(creds),
-        });
-        const data = await res.json();
-        return { token: data.token };
-      }, { username: parentUser.username, password: parentUser.password });
-      token = result.token;
-    }
-    await authenticateAndNavigate(page, token, '/dashboard');
-    await page.waitForLoadState('networkidle');
-    await dismissModals(page);
-  });
-
+test.describe('Learner management', () => {
   test.afterEach(async ({ page }, testInfo) => {
     await captureFailureArtifacts(page, testInfo);
   });
 
-  test('add a child learner from the dashboard', async ({ page }) => {
+  test('parent can add a child from the dashboard inline form', async ({ page }) => {
 
-    // Click "Add Child" or "Add Another Child" button
-    const addChildBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /Add.*Child/i }),
-      () => page.getByRole('link', { name: /Add.*Child/i }),
-      () => page.getByText(/Add.*Child/i).first(),
-    ]);
-    await addChildBtn.click();
+    const ts = Date.now();
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    const childName = `TestChild_${ts}`;
+    const token = await registerParentViaAPI(page, {
+      username: `parent_inline_${ts}`,
+      email: `parent_inline_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'Inline Parent',
+    });
 
-    // Fill in the child's name
+    await authenticateAndNavigate(page, token, '/dashboard');
+
+    // First-time parent should see the inline add child form
+    await expect(page.getByText(/add your child to get started/i)).toBeVisible({ timeout: 10000 });
+
+    // Fill child name
     const nameInput = await selfHealingLocator(page, [
-      () => page.getByPlaceholder(/child.*name/i),
-      () => page.getByPlaceholder(/learner.*name/i),
-      () => page.getByPlaceholder(/Enter.*name/i),
-      () => page.getByLabel(/Child.*Name/i),
+      () => page.getByLabel(/child.?s name/i),
+      () => page.getByPlaceholder(/name/i),
+      () => page.getByRole('textbox').first(),
     ]);
-    await nameInput.fill(childName);
+    await nameInput.fill('First Child');
 
-    // Select a grade level (grade 5)
-    const gradeBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: '5', exact: true }),
-      () => page.getByText('5', { exact: true }).first(),
+    // Select a grade level
+    const grade5 = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: '5' }),
+      () => page.getByText('5'),
+    ], { timeout: 3000 });
+    await grade5.click();
+
+    // Submit
+    const addButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: 'Add Child' }),
+      () => page.getByText('Add Child'),
     ]);
-    await gradeBtn.click();
+    await addButton.click();
 
-    // Submit the form
-    const submitBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /Add Child/i }),
-      () => page.getByRole('button', { name: /Create.*Learner/i }),
-      () => page.getByRole('button', { name: /Create.*Account/i }),
-    ]);
-    await submitBtn.click();
+    await page.waitForLoadState('networkidle');
 
-    // Verify the child was created — should see the child's name somewhere
+    // Verify child appears on dashboard
     await expect(async () => {
-      const result = await apiCall(page, 'GET', '/api/learners') as { status: number; data: Array<{ name: string }> };
-      expect(result.status).toBe(200);
-      const childExists = (result.data as Array<{ name: string }>).some(
-        (l) => l.name === childName,
-      );
-      expect(childExists).toBe(true);
+      await expect(page.getByText('First Child')).toBeVisible();
     }).toPass({ timeout: 15000 });
   });
 
-  test('view learner list on the learners page', async ({ page }) => {
+  test('parent can add a child via the add learner page', async ({ page }) => {
 
-    // Create a child via API first to ensure data exists
-    const listChildName = `ListChild_${ts}`;
-    await apiCall(page, 'POST', '/api/learners', {
-      name: listChildName,
-      gradeLevel: 3,
+    const ts = Date.now();
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const token = await registerParentViaAPI(page, {
+      username: `parent_addpage_${ts}`,
+      email: `parent_addpage_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'Add Page Parent',
     });
+
+    await authenticateAndNavigate(page, token, '/add-learner');
+
+    // Should see the add child form
+    await expect(page.getByText(/add child/i).first()).toBeVisible({ timeout: 10000 });
+
+    // Fill in child's name
+    const nameField = await selfHealingLocator(page, [
+      () => page.getByLabel(/child.?s name/i),
+      () => page.getByPlaceholder(/name/i),
+      () => page.getByRole('textbox').first(),
+    ]);
+    await nameField.fill('Page Child');
+
+    // Select grade 3
+    const grade3 = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: '3' }),
+      () => page.getByText('3'),
+    ], { timeout: 3000 });
+    await grade3.click();
+
+    // Submit
+    const submitButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: 'Add Child' }),
+      () => page.getByText('Add Child'),
+    ]);
+    await submitButton.click();
+
+    await page.waitForLoadState('networkidle');
+
+    // Should show the new child
+    await expect(async () => {
+      await expect(page.getByText('Page Child')).toBeVisible();
+    }).toPass({ timeout: 15000 });
+  });
+
+  test('parent can view the list of learners on the dashboard', async ({ page }) => {
+
+    const ts = Date.now();
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const token = await registerParentViaAPI(page, {
+      username: `parent_list_${ts}`,
+      email: `parent_list_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'List Parent',
+    });
+
+    // Create two children via API
+    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+    await apiCall(page, 'POST', '/api/learners', { name: 'Alice', gradeLevel: 3 });
+    await apiCall(page, 'POST', '/api/learners', { name: 'Bob', gradeLevel: 7 });
+
+    await authenticateAndNavigate(page, token, '/dashboard');
+
+    // Both children should be visible
+    await expect(page.getByText('Alice')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Bob')).toBeVisible({ timeout: 10000 });
+
+    // Verify grade info is displayed
+    await expect(page.getByText(/grade/i).first()).toBeVisible();
+
+    // Verify "Start Learning" buttons exist
+    await expect(page.getByRole('button', { name: /start learning/i }).first()).toBeVisible();
+  });
+
+  test('parent can edit a learner grade level', async ({ page }) => {
+
+    const ts = Date.now();
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const token = await registerParentViaAPI(page, {
+      username: `parent_edit_${ts}`,
+      email: `parent_edit_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'Edit Parent',
+    });
+
+    // Create a child via API
+    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+    await apiCall(page, 'POST', '/api/learners', { name: 'Charlie', gradeLevel: 4 });
 
     // Navigate to learners management page
     await authenticateAndNavigate(page, token, '/learners');
+
+    // Find and click the edit grade button
+    const editButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: /edit grade/i }),
+      () => page.getByText(/edit grade/i),
+    ]);
+    await editButton.click();
+
+    // Modal should appear with grade update form
+    await expect(page.getByText(/update grade level/i)).toBeVisible({ timeout: 5000 });
+
+    // Select a new grade (grade 6)
+    const grade6 = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: '6' }),
+      () => page.getByText('6'),
+    ], { timeout: 3000 });
+    await grade6.click();
+
+    // Click update
+    const updateButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: /update grade/i }),
+      () => page.getByText(/update grade/i),
+    ]);
+    await updateButton.click();
+
     await page.waitForLoadState('networkidle');
-    await dismissModals(page);
 
-    // The child name should be visible on the page
-    const childText = await selfHealingLocator(page, [
-      () => page.getByText(listChildName),
-    ], { timeout: 15000 });
-    await expect(childText).toBeVisible();
-
-    // Grade level should also be visible
+    // Verify the updated grade is reflected
     await expect(async () => {
-      const gradeVisible =
-        await page.getByText(/Grade 3/i).isVisible().catch(() => false) ||
-        await page.getByText('3').isVisible().catch(() => false);
-      expect(gradeVisible).toBe(true);
+      await expect(page.getByText(/grade 6/i)).toBeVisible();
     }).toPass({ timeout: 10000 });
   });
 
-  test('edit learner grade level', async ({ page }) => {
+  test('parent can navigate from dashboard to add another child', async ({ page }) => {
 
-    // Create a child via API
-    const editChildName = `EditChild_${ts}`;
-    const createResult = await apiCall(page, 'POST', '/api/learners', {
-      name: editChildName,
-      gradeLevel: 4,
-    }) as { status: number; data: { id: number } };
-
-    // Navigate to learners page
-    await authenticateAndNavigate(page, token, '/learners');
+    const ts = Date.now();
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await dismissModals(page);
 
-    // Wait for child to appear
-    await expect(page.getByText(editChildName)).toBeVisible({ timeout: 10000 });
-
-    // Click the Edit Grade button
-    const editBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /Edit Grade/i }),
-      () => page.getByRole('button', { name: /Edit/i }).first(),
-    ]);
-    await editBtn.click();
-
-    // A modal should open — select a new grade (e.g. grade 7)
-    const newGradeBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: '7', exact: true }),
-      () => page.getByText('7', { exact: true }),
-    ], { timeout: 5000 });
-    await newGradeBtn.click();
-
-    // Confirm the update
-    const updateBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /Update Grade/i }),
-      () => page.getByRole('button', { name: /Save/i }),
-      () => page.getByRole('button', { name: /Update/i }),
-    ]);
-    await updateBtn.click();
-
-    // Verify the grade was updated via API
-    await expect(async () => {
-      const result = await apiCall(page, 'GET', '/api/learners') as { status: number; data: Array<{ name: string; gradeLevel: number }> };
-      expect(result.status).toBe(200);
-      const child = (result.data as Array<{ name: string; gradeLevel: number }>).find(
-        (l) => l.name === editChildName,
-      );
-      expect(child).toBeTruthy();
-      expect(child!.gradeLevel).toBe(7);
-    }).toPass({ timeout: 10000 });
-  });
-
-  test('dashboard shows child cards with stats', async ({ page }) => {
-
-    // Create a child via API to guarantee at least one exists
-    const dashChildName = `DashChild_${ts}`;
-    await apiCall(page, 'POST', '/api/learners', {
-      name: dashChildName,
-      gradeLevel: 6,
+    const token = await registerParentViaAPI(page, {
+      username: `parent_nav_${ts}`,
+      email: `parent_nav_${ts}@test.com`,
+      password: 'SecurePass123!',
+      name: 'Nav Parent',
     });
 
-    // Navigate to dashboard
+    // Create one child via API
+    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+    await apiCall(page, 'POST', '/api/learners', { name: 'Diana', gradeLevel: 2 });
+
     await authenticateAndNavigate(page, token, '/dashboard');
+
+    // Should see existing child
+    await expect(page.getByText('Diana')).toBeVisible({ timeout: 10000 });
+
+    // Click "Add Child" link/button
+    const addChildLink = await selfHealingLocator(page, [
+      () => page.getByRole('link', { name: /add.*child/i }),
+      () => page.getByRole('button', { name: /add.*child/i }),
+      () => page.getByText(/add.*child/i).first(),
+    ]);
+    await addChildLink.click();
+
     await page.waitForLoadState('networkidle');
-    await dismissModals(page);
 
-    // Child name should appear in a card
-    const childCard = await selfHealingLocator(page, [
-      () => page.getByText(dashChildName),
-    ], { timeout: 15000 });
-    await expect(childCard).toBeVisible();
-
-    // Should see "Start Learning as [Name]" button
-    const startLearningBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: new RegExp(`Start Learning as ${dashChildName}`, 'i') }),
-      () => page.getByText(new RegExp(`Start Learning as ${dashChildName}`, 'i')),
-      () => page.getByText(/Start Learning as/i).first(),
-    ], { timeout: 10000 });
-    await expect(startLearningBtn).toBeVisible();
-
-    // Stats labels should be present (Lessons, Achievements, etc.)
+    // Should navigate to add learner page
     await expect(async () => {
-      const hasStats =
-        await page.getByText(/Lessons/i).first().isVisible().catch(() => false) ||
-        await page.getByText(/Achievements/i).first().isVisible().catch(() => false);
-      expect(hasStats).toBe(true);
+      await expect(page.getByText(/add child/i).first()).toBeVisible();
     }).toPass({ timeout: 10000 });
   });
 });

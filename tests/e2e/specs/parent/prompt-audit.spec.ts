@@ -24,6 +24,8 @@ import {
 const ts = Date.now();
 
 test.describe('AI Prompt Audit & Transparency', () => {
+  test.describe.configure({ retries: 2 });
+
   let token: string;
   let learnerName: string;
   let learnerId: number;

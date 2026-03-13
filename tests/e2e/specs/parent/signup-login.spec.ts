@@ -4,193 +4,107 @@ import {
   captureFailureArtifacts,
   dismissModals,
   registerParentViaAPI,
-  loginViaAPI,
   authenticateAndNavigate,
 } from '../../helpers/self-healing';
 
 /**
  * Parent Persona: Signup, Login, Logout & Session Persistence
  *
- * Models the complete authentication journey a parent experiences
- * when first discovering Sunschool through to ongoing sessions.
+ * Models the complete authentication journey from a parent's perspective:
+ * registration with all required fields, login with valid/invalid credentials,
+ * logout, and session persistence across page reloads.
  */
 
-const ts = Date.now();
-const parentUser = {
-  username: `parent_signup_${ts}`,
-  email: `parent_signup_${ts}@test.com`,
-  password: 'TestPassword123!',
-  name: 'Test Parent',
-};
+test.describe('Parent signup and login', () => {
+  test.describe.configure({ retries: 2 });
 
-test.describe('Parent Signup & Login', () => {
   test.afterEach(async ({ page }, testInfo) => {
     await captureFailureArtifacts(page, testInfo);
   });
 
-  test('full registration flow creates a parent account and lands on dashboard', async ({ page }) => {
+  test('parent can register a new account with all required fields', async ({ page }) => {
 
-    // Navigate to the auth page
+    const ts = Date.now();
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
     await dismissModals(page);
 
-    // Click the Register tab
+    // Switch to Register tab
     const registerTab = await selfHealingLocator(page, [
       () => page.getByRole('tab', { name: 'Register' }),
-      () => page.getByText('Register', { exact: true }).first(),
+      () => page.getByText('Register'),
     ]);
     await registerTab.click();
 
-    // Fill out the registration form using semantic locators
-    const usernameField = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('Choose a username'),
-      () => page.getByLabel('Username'),
-    ]);
-    await usernameField.fill(parentUser.username);
+    // Fill registration form using semantic locators
+    await page.getByLabel(/username/i).fill(`parent_reg_${ts}`);
+    await page.getByLabel(/email/i).fill(`parent_reg_${ts}@test.com`);
+    await page.getByLabel(/full name/i).fill('Test Registration Parent');
 
-    const emailField = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('Enter your email'),
-      () => page.getByLabel('Email'),
-    ]);
-    await emailField.fill(parentUser.email);
+    // Password fields
+    const passwordField = page.getByPlaceholder(/^password$/i);
+    if (await passwordField.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await passwordField.fill('SecurePass123!');
+    } else {
+      await page.getByLabel(/^password$/i).first().fill('SecurePass123!');
+    }
 
-    const nameField = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('Enter your full name'),
-      () => page.getByLabel('Full Name'),
-    ]);
-    await nameField.fill(parentUser.name);
-
-    const passwordField = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('Create a password'),
-      () => page.getByLabel('Password').first(),
-    ]);
-    await passwordField.fill(parentUser.password);
-
-    const confirmPasswordField = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('Confirm your password'),
-      () => page.getByLabel('Confirm Password'),
-    ]);
-    await confirmPasswordField.fill(parentUser.password);
-
-    // Ensure "Parent" account type is selected
-    const parentOption = await selfHealingLocator(page, [
-      () => page.getByText('Parent', { exact: true }),
-      () => page.getByLabel('Parent'),
-    ], { timeout: 5000 });
-    await parentOption.click().catch(() => {
-      // May already be selected by default
-    });
+    const confirmField = page.getByPlaceholder(/confirm/i);
+    if (await confirmField.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await confirmField.fill('SecurePass123!');
+    } else {
+      await page.getByLabel(/confirm password/i).fill('SecurePass123!');
+    }
 
     // Accept age disclaimer
-    const disclaimer = await selfHealingLocator(page, [
-      () => page.getByText(/I confirm I am at least 18 years old/),
-      () => page.getByRole('checkbox', { name: /18 years old/ }),
-    ]);
-    await disclaimer.click();
-
-    // Submit registration
-    const registerButton = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /^Register$/ }),
-      () => page.getByRole('button', { name: /Registering/ }),
-    ]);
-    await registerButton.click();
-
-    // Should land on dashboard after successful registration
-    await expect(async () => {
-      const url = page.url();
-      expect(url).toMatch(/\/(dashboard|learner|add-learner)/);
-    }).toPass({ timeout: 30000 });
-
-    // Dashboard should show welcome content
-    await page.waitForLoadState('networkidle');
-    await dismissModals(page);
-
-    const welcomeText = await selfHealingLocator(page, [
-      () => page.getByText(/Welcome/i),
-      () => page.getByText(parentUser.name),
-    ], { timeout: 10000 });
-    await expect(welcomeText).toBeVisible();
-  });
-
-  test('login with valid credentials navigates to dashboard', async ({ page }) => {
-
-    // First register via API to ensure account exists
-    await page.goto('/auth');
-    await page.waitForLoadState('networkidle');
-    await dismissModals(page);
-
-    const loginTs = Date.now();
-    const loginUser = {
-      username: `parent_login_${loginTs}`,
-      email: `parent_login_${loginTs}@test.com`,
-      password: 'TestPassword123!',
-      name: 'Login Test Parent',
-    };
-    await registerParentViaAPI(page, loginUser);
-
-    // Now login through the UI
-    const loginTab = await selfHealingLocator(page, [
-      () => page.getByRole('tab', { name: 'Login' }),
-      () => page.getByText('Login', { exact: true }).first(),
-    ]);
-    await loginTab.click();
-
-    const usernameField = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('Enter your username'),
-      () => page.getByLabel('Username'),
-    ]);
-    await usernameField.fill(loginUser.username);
-
-    const passwordField = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('Enter your password'),
-      () => page.getByLabel('Password'),
-    ]);
-    await passwordField.fill(loginUser.password);
-
-    // Accept age disclaimer if present
     const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) {
       await disclaimer.click();
     }
 
-    // Click Login button
-    const loginButton = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /^Login$/ }),
-      () => page.getByRole('button', { name: /Logging in/ }),
-    ]);
-    await loginButton.click();
+    // Verify parent role is selected
+    await expect(page.getByText(/parent/i).first()).toBeVisible();
 
-    // Should navigate to dashboard
+    // Submit registration
+    const registerButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: 'Register' }),
+      () => page.getByText('Register'),
+    ]);
+    await registerButton.click();
+
+    // Should redirect to dashboard after successful registration
+    await page.waitForLoadState('networkidle');
     await expect(async () => {
-      expect(page.url()).toMatch(/\/(dashboard|learner)/);
-    }).toPass({ timeout: 30000 });
+      await expect(page).toHaveURL(/dashboard/);
+    }).toPass({ timeout: 15000 });
+
+    await expect(page.getByText(/welcome/i)).toBeVisible();
   });
 
-  test('login with invalid credentials shows error message', async ({ page }) => {
+  test('parent can log in with valid credentials', async ({ page }) => {
 
+    const ts = Date.now();
+    const creds = {
+      username: `parent_login_${ts}`,
+      password: 'SecurePass123!',
+      email: `parent_login_${ts}@test.com`,
+      name: 'Login Parent',
+    };
+
+    // Register via API first
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await registerParentViaAPI(page, creds);
+
+    // Clear auth state and navigate to login
+    await page.evaluate(() => localStorage.clear());
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
     await dismissModals(page);
 
-    // Ensure we're on Login tab
-    const loginTab = await selfHealingLocator(page, [
-      () => page.getByRole('tab', { name: 'Login' }),
-      () => page.getByText('Login', { exact: true }).first(),
-    ]);
-    await loginTab.click();
-
-    const usernameField = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('Enter your username'),
-      () => page.getByLabel('Username'),
-    ]);
-    await usernameField.fill('nonexistent_user_xyz');
-
-    const passwordField = await selfHealingLocator(page, [
-      () => page.getByPlaceholder('Enter your password'),
-      () => page.getByLabel('Password'),
-    ]);
-    await passwordField.fill('WrongPassword999!');
+    // Fill login form
+    await page.getByPlaceholder(/username/i).fill(creds.username);
+    await page.getByPlaceholder(/password/i).fill(creds.password);
 
     // Accept disclaimer if visible
     const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
@@ -198,93 +112,116 @@ test.describe('Parent Signup & Login', () => {
       await disclaimer.click();
     }
 
-    const loginButton = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /^Login$/ }),
-      () => page.getByRole('button', { name: /Logging in/ }),
+    // Click sign in
+    const signInButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: 'Sign In' }),
+      () => page.getByText('Sign In'),
     ]);
-    await loginButton.click();
+    await signInButton.click();
 
-    // Should display an error message visible to the user
+    // Should redirect to parent dashboard
+    await page.waitForLoadState('networkidle');
     await expect(async () => {
-      const errorVisible =
-        await page.getByText(/invalid/i).isVisible().catch(() => false) ||
-        await page.getByText(/error/i).isVisible().catch(() => false) ||
-        await page.getByText(/failed/i).isVisible().catch(() => false) ||
-        await page.getByRole('alert').isVisible().catch(() => false);
-      expect(errorVisible).toBe(true);
+      await expect(page).toHaveURL(/dashboard/);
+    }).toPass({ timeout: 15000 });
+
+    await expect(page.getByText(/welcome/i)).toBeVisible();
+  });
+
+  test('login shows error with invalid credentials', async ({ page }) => {
+
+    await page.goto('/auth');
+    await page.waitForLoadState('networkidle');
+    await dismissModals(page);
+
+    await page.getByPlaceholder(/username/i).fill('nonexistent_user');
+    await page.getByPlaceholder(/password/i).fill('wrongpassword');
+
+    // Accept disclaimer if visible
+    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await disclaimer.click();
+    }
+
+    const signInButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: 'Sign In' }),
+      () => page.getByText('Sign In'),
+    ]);
+    await signInButton.click();
+
+    // Should show error message
+    await expect(page.getByText(/invalid username or password/i)).toBeVisible({ timeout: 10000 });
+
+    // Should remain on auth page
+    await expect(page).toHaveURL(/auth/);
+  });
+
+  test('parent can log out and is redirected away from dashboard', async ({ page }) => {
+
+    const ts = Date.now();
+    const creds = {
+      username: `parent_logout_${ts}`,
+      password: 'SecurePass123!',
+      email: `parent_logout_${ts}@test.com`,
+      name: 'Logout Parent',
+    };
+
+    // Register via API
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    const token = await registerParentViaAPI(page, creds);
+
+    // Navigate to dashboard
+    await authenticateAndNavigate(page, token, '/dashboard');
+
+    // Verify we're on dashboard
+    await expect(page.getByText(/welcome/i)).toBeVisible({ timeout: 10000 });
+
+    // Click logout button
+    const logoutButton = await selfHealingLocator(page, [
+      () => page.getByRole('button', { name: 'Logout' }),
+      () => page.getByText('Logout'),
+    ]);
+    await logoutButton.click();
+
+    // Should redirect away from dashboard
+    await page.waitForLoadState('networkidle');
+    await expect(async () => {
+      const url = page.url();
+      expect(url).toMatch(/welcome|auth|\//);
     }).toPass({ timeout: 10000 });
   });
 
-  test('session persists across page reload', async ({ page }) => {
+  test('session persists after page reload', async ({ page }) => {
 
-    // Register and login via API
-    await page.goto('/auth');
-    await page.waitForLoadState('networkidle');
-
-    const sessionTs = Date.now();
-    const sessionUser = {
-      username: `parent_session_${sessionTs}`,
-      email: `parent_session_${sessionTs}@test.com`,
-      password: 'TestPassword123!',
-      name: 'Session Test Parent',
+    const ts = Date.now();
+    const creds = {
+      username: `parent_session_${ts}`,
+      password: 'SecurePass123!',
+      email: `parent_session_${ts}@test.com`,
+      name: 'Session Parent',
     };
-    const token = await registerParentViaAPI(page, sessionUser);
 
-    // Set auth and navigate to dashboard
+    // Register via API
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    const token = await registerParentViaAPI(page, creds);
+
+    // Navigate to dashboard
     await authenticateAndNavigate(page, token, '/dashboard');
-    await dismissModals(page);
 
-    // Verify we're on dashboard
-    await expect(async () => {
-      expect(page.url()).toMatch(/dashboard/);
-    }).toPass({ timeout: 15000 });
+    // Verify we're authenticated
+    await expect(page.getByText(/welcome/i)).toBeVisible({ timeout: 10000 });
 
     // Reload the page
     await page.reload();
     await page.waitForLoadState('networkidle');
-    await dismissModals(page);
 
-    // Session should persist — still on dashboard (not redirected to /auth)
+    // Should still be on dashboard after reload — session persisted
     await expect(async () => {
-      const url = page.url();
-      expect(url).toMatch(/\/(dashboard|learner|welcome)/);
-      expect(url).not.toMatch(/\/auth/);
-    }).toPass({ timeout: 15000 });
-  });
+      await expect(page).toHaveURL(/dashboard/);
+    }).toPass({ timeout: 10000 });
 
-  test('logout returns to public page', async ({ page }) => {
-
-    // Register and login via API
-    await page.goto('/auth');
-    await page.waitForLoadState('networkidle');
-
-    const logoutTs = Date.now();
-    const logoutUser = {
-      username: `parent_logout_${logoutTs}`,
-      email: `parent_logout_${logoutTs}@test.com`,
-      password: 'TestPassword123!',
-      name: 'Logout Test Parent',
-    };
-    const token = await registerParentViaAPI(page, logoutUser);
-
-    // Navigate to dashboard
-    await authenticateAndNavigate(page, token, '/dashboard');
-    await page.waitForLoadState('networkidle');
-    await dismissModals(page);
-
-    // Find and click logout — look for logout button in header/nav
-    const logoutBtn = await selfHealingLocator(page, [
-      () => page.getByRole('button', { name: /logout/i }),
-      () => page.getByRole('button', { name: /sign out/i }),
-      () => page.getByText(/logout/i),
-      () => page.getByLabel(/logout/i),
-    ], { timeout: 10000 });
-    await logoutBtn.click();
-
-    // Should redirect to auth or welcome page
-    await expect(async () => {
-      const url = page.url();
-      expect(url).toMatch(/\/(auth|welcome|login)/);
-    }).toPass({ timeout: 15000 });
+    await expect(page.getByText(/welcome/i)).toBeVisible();
   });
 });

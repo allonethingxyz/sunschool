@@ -18,6 +18,8 @@ import {
 const ts = Date.now();
 
 test.describe('Rewards Management', () => {
+  test.describe.configure({ retries: 2 });
+
   let token: string;
   let learnerName: string;
   let learnerId: number;

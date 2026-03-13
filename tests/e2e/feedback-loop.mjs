@@ -51,7 +51,6 @@ function sfTaskCreate({ title, description, priority, tags }) {
   }
 
   try {
-    // Build sf task create command
     const args = ['sf', 'task', 'create', '--title', JSON.stringify(title)];
     if (priority) args.push('--priority', String(priority));
     if (sfPlan) args.push('--plan', JSON.stringify(sfPlan));
@@ -59,7 +58,6 @@ function sfTaskCreate({ title, description, priority, tags }) {
     const cmd = args.join(' ');
     const result = execSync(cmd, { encoding: 'utf8', timeout: 15000 });
 
-    // Extract task ID from output
     const taskIdMatch = result.match(/([a-z]{2}-[a-z0-9]+)/);
     const taskId = taskIdMatch ? taskIdMatch[1] : null;
 

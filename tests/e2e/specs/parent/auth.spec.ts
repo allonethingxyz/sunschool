@@ -1,7 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { selfHealingLocator } from '../../helpers/self-healing';
+import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
 
 test.describe('Authentication flow', () => {
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      await captureFailureArtifacts(page, testInfo.title);
+    }
+  });
+
   test('should display login form', async ({ page }) => {
     await page.goto('/');
 

@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
 
 /**
  * Comprehensive workflow validation tests for Sunschool.

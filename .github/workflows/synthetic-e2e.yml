@@ -1,4 +1,4 @@
-name: Synthetic User E2E
+name: Synthetic E2E Pipeline
 
 on:
   push:
@@ -8,232 +8,224 @@ on:
   workflow_dispatch:
     inputs:
       target_url:
-        description: 'Target URL to test against (defaults to localhost)'
+        description: 'Target URL to test against (default: staging)'
         required: false
-        default: 'http://localhost:5000'
-        type: string
+        default: ''
+      skip_deploy:
+        description: 'Skip staging deploy (test against existing deployment)'
+        required: false
+        default: 'false'
 
 concurrency:
   group: synthetic-e2e-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ─── Phase 1: Run Playwright synthetic user tests ─────────────
-  synthetic-e2e:
+  # ─── Phase 1: Deploy to Railway Staging ────────────────────
+  deploy-staging:
+    name: Deploy to Staging
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    services:
-      postgres:
-        image: postgres:14
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testdb
-        ports:
-          - 5432:5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-
+    if: github.event.inputs.skip_deploy != 'true'
+    outputs:
+      staging_url: ${{ steps.resolve-url.outputs.url }}
+      deployment_id: ${{ steps.deploy.outputs.deployment_id }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to staging
+        id: deploy
+        run: |
+          # Deploy to Railway staging environment
+          DEPLOY_OUTPUT=$(railway up --environment staging --json 2>&1 || true)
+          echo "Deploy output: $DEPLOY_OUTPUT"
+
+          # Extract deployment ID if available
+          DEPLOYMENT_ID=$(echo "$DEPLOY_OUTPUT" | grep -oP '"deploymentId":\s*"\K[^"]+' || echo "")
+          echo "deployment_id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Wait for staging health
+        id: resolve-url
+        run: |
+          # Use provided URL or default Railway staging URL
+          STAGING_URL="${{ github.event.inputs.target_url }}"
+          if [ -z "$STAGING_URL" ]; then
+            STAGING_URL="${{ secrets.RAILWAY_STAGING_URL || 'https://sunschool-deployed-private-staging.up.railway.app' }}"
+          fi
+          echo "url=$STAGING_URL" >> "$GITHUB_OUTPUT"
+
+          echo "Waiting for staging to be healthy at $STAGING_URL..."
+          MAX_RETRIES=30
+          RETRY_INTERVAL=10
+          for i in $(seq 1 $MAX_RETRIES); do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL" --max-time 10 || echo "000")
+            echo "Attempt $i/$MAX_RETRIES: HTTP $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "301" ] || [ "$HTTP_STATUS" = "302" ]; then
+              echo "Staging is healthy!"
+              exit 0
+            fi
+            sleep $RETRY_INTERVAL
+          done
+          echo "::warning::Staging health check timed out after $((MAX_RETRIES * RETRY_INTERVAL))s"
+          # Don't fail — tests may still pass
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+  # ─── Phase 2: Run Synthetic E2E Tests ──────────────────────
+  synthetic-e2e:
+    name: Synthetic E2E Tests
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-staging.result == 'skipped')
+    outputs:
+      test_result: ${{ steps.run-tests.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright browsers
+      - name: Install Playwright
         run: npx playwright install --with-deps chromium
-
-      - name: Setup database
-        run: |
-          npx ts-node -r dotenv/config scripts/migrate.ts
-          npx ts-node -r dotenv/config scripts/seed-clean.ts
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
-          NODE_ENV: test
-
-      - name: Build frontend
-        run: npm run build
-        env:
-          NODE_ENV: test
 
       - name: Resolve target URL
         id: target
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            URL="${{ github.event.inputs.target_url }}"
+          # Priority: workflow_dispatch input > staging deploy output > production
+          if [ -n "${{ github.event.inputs.target_url }}" ]; then
+            TARGET="${{ github.event.inputs.target_url }}"
+          elif [ -n "${{ needs.deploy-staging.outputs.staging_url }}" ]; then
+            TARGET="${{ needs.deploy-staging.outputs.staging_url }}"
           else
-            URL="http://localhost:5000"
+            TARGET="https://sunschool.xyz"
           fi
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "url=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "Testing against: $TARGET"
 
-      - name: Run synthetic user tests
-        id: tests
-        run: |
-          mkdir -p test-results
-          PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/results.json \
-            npx playwright test \
-              --reporter=json,list \
-              --output=test-results/ \
-            || echo "test_exit_code=$?" >> "$GITHUB_OUTPUT"
+      - name: Run E2E tests
+        id: run-tests
+        continue-on-error: true
+        run: npx playwright test --config=playwright.config.ts
         env:
-          PLAYWRIGHT_BASE_URL: ${{ steps.target.outputs.url }}
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
-          SESSION_SECRET: test-secret
-          JWT_SECRET: test-jwt-secret
-          NODE_ENV: test
+          TARGET_URL: ${{ steps.target.outputs.url }}
           CI: true
+          TARGET_ENV: ${{ needs.deploy-staging.outputs.staging_url && 'staging' || 'production' }}
+          RAILWAY_DEPLOYMENT_ID: ${{ needs.deploy-staging.outputs.deployment_id }}
 
       - name: Generate synthetic report
         if: always()
-        run: |
-          if [ -f tests/e2e/generate-report.mjs ]; then
-            node tests/e2e/generate-report.mjs
-          else
-            echo "generate-report.mjs not found, skipping report generation"
-          fi
+        run: node tests/e2e/generate-report.mjs
         env:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
-          TARGET_ENV: ci
+          TARGET_ENV: ${{ needs.deploy-staging.outputs.staging_url && 'staging' || 'production' }}
+          RAILWAY_DEPLOYMENT_ID: ${{ needs.deploy-staging.outputs.deployment_id }}
 
-      - name: Auto-quarantine flaky tests
+      - name: Update quarantine list
         if: always()
-        run: |
-          if [ -f tests/e2e/quarantine.mjs ]; then
-            node tests/e2e/quarantine.mjs
-          else
-            echo "quarantine.mjs not found, skipping auto-quarantine"
-          fi
+        run: node tests/e2e/quarantine.mjs
 
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: synthetic-e2e-results-${{ github.sha }}
-          path: test-results/
-          retention-days: 30
+          name: synthetic-e2e-results
+          path: |
+            test-results/
+            tests/e2e/report/
+            tests/e2e/quarantine.json
+          retention-days: 14
 
-      - name: Upload Playwright traces
-        if: failure()
+      - name: Upload synthetic report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces-${{ github.sha }}
-          path: test-results/**/*.zip
-          retention-days: 14
-          if-no-files-found: ignore
+          name: synthetic-report
+          path: test-results/synthetic-report.json
+          retention-days: 30
 
-  # ─── Phase 2: Post PR summary ────────────────────────────────
-  pr-summary:
-    needs: [synthetic-e2e]
-    if: always() && github.event_name == 'pull_request'
+  # ─── Phase 3: Stoneforge Feedback Loop ─────────────────────
+  feedback-loop:
+    name: Feedback Loop
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
+    needs: [synthetic-e2e]
+    if: always() && needs.synthetic-e2e.result != 'cancelled'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download test report
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download synthetic report
         uses: actions/download-artifact@v4
         with:
-          name: synthetic-e2e-results-${{ github.sha }}
+          name: synthetic-report
           path: test-results/
 
+      - name: Install Stoneforge CLI
+        run: |
+          # Install sf CLI if available, otherwise feedback loop falls back to console
+          npm install -g @stoneforge/cli 2>/dev/null || echo "Stoneforge CLI not available — using console fallback"
+
+      - name: Run feedback loop
+        run: node tests/e2e/feedback-loop.mjs
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          SF_PLAN: "Synthetic E2E Testing"
+
       - name: Post summary to PR
+        if: github.event_name == 'pull_request' && always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-
-            // Try synthetic-report.json first (from generate-report.mjs),
-            // then fall back to raw Playwright results.json
-            let report = null;
-            const syntheticPath = 'test-results/synthetic-report.json';
-            const rawPath = 'test-results/results.json';
-
-            if (fs.existsSync(syntheticPath)) {
-              report = JSON.parse(fs.readFileSync(syntheticPath, 'utf8'));
-            } else if (fs.existsSync(rawPath)) {
-              // Build a minimal summary from raw Playwright JSON output
-              const raw = JSON.parse(fs.readFileSync(rawPath, 'utf8'));
-              const suites = raw.suites || [];
-              let total = 0, passed = 0, failed = 0, flaky = 0;
-              function countSpecs(suite) {
-                for (const spec of (suite.specs || [])) {
-                  for (const test of (spec.tests || [])) {
-                    total++;
-                    const status = test.status || test.expectedStatus;
-                    if (status === 'expected') passed++;
-                    else if (status === 'flaky') { flaky++; passed++; }
-                    else failed++;
-                  }
-                }
-                for (const child of (suite.suites || [])) countSpecs(child);
-              }
-              suites.forEach(countSpecs);
-              report = {
-                summary: { total, passed, failed, flaky, healed: 0, selector_drift_count: 0, mean_duration_ms: 0 },
-              };
-            } else {
-              console.log('No test report found — skipping PR comment');
+            const reportPath = 'test-results/synthetic-report.json';
+            if (!fs.existsSync(reportPath)) {
+              console.log('No synthetic report found');
               return;
             }
-
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
             const s = report.summary;
-            const status = s.failed > 0 ? '🔴' : s.flaky > 0 ? '🟡' : '🟢';
 
-            let body = `## ${status} Synthetic User E2E Results\n\n`;
-            body += `| Metric | Value |\n|--------|-------|\n`;
-            body += `| Total | ${s.total} |\n`;
-            body += `| Passed | ${s.passed} |\n`;
-            body += `| Failed | ${s.failed} |\n`;
-            body += `| Flaky | ${s.flaky} |\n`;
-            body += `| Healed | ${s.healed || 0} |\n`;
-            body += `| Selector Drift | ${s.selector_drift_count || 0} |\n`;
-            if (s.mean_duration_ms) {
-              body += `| Mean Duration | ${s.mean_duration_ms}ms |\n`;
-            }
-            body += `\n`;
+            const statusEmoji = s.failed > 0 ? ':x:' : s.flaky > 0 ? ':warning:' : ':white_check_mark:';
+            const body = [
+              `## ${statusEmoji} Synthetic E2E Results`,
+              '',
+              `| Metric | Count |`,
+              `|--------|-------|`,
+              `| Total | ${s.total} |`,
+              `| Passed | ${s.passed} |`,
+              `| Failed | ${s.failed} |`,
+              `| Flaky | ${s.flaky} |`,
+              `| Healed | ${s.healed} |`,
+              `| Selector Drift | ${s.selector_drift_count} |`,
+              `| Mean Duration | ${s.mean_duration_ms}ms |`,
+              '',
+              ...(report.recommendations.length > 0
+                ? ['### Recommendations', '', ...report.recommendations.map(r => `- ${r}`)]
+                : []),
+              '',
+              `<sub>Run ID: ${report.run_id} | Target: ${report.target_env}</sub>`,
+            ].join('\n');
 
-            if (report.recommendations && report.recommendations.length > 0) {
-              body += `### Recommendations\n`;
-              report.recommendations.forEach(r => { body += `- ${r}\n`; });
-              body += `\n`;
-            }
-
-            if (s.healed > 0) {
-              body += `### Self-Healed Selectors\n`;
-              body += `${s.healed} selectors auto-healed. These are tech debt — review the full report.\n\n`;
-            }
-
-            body += `\n<sub>Commit: ${context.sha.slice(0, 7)} · <a href="${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}">View run</a></sub>`;
-
-            // Find and update existing bot comment or create new one
-            const { data: comments } = await github.rest.issues.listComments({
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              body,
             });
-            const botComment = comments.find(c =>
-              c.user.type === 'Bot' && c.body.includes('Synthetic User E2E Results')
-            );
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }

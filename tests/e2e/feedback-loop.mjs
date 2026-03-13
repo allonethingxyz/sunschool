@@ -8,10 +8,11 @@
  *   - P3: Selector drift (tech debt)
  *   - P3: Flaky tests
  *
- * NOTE: Stoneforge integration is stubbed — tasks are logged to console.
- * Real wiring will be added in a future task.
+ * Uses the Stoneforge CLI (`sf task create`) to create real tasks.
+ * Falls back to console logging if `sf` is not available.
  */
 import { readFileSync, existsSync } from 'fs';
+import { execSync } from 'child_process';
 
 const REPORT_FILE = 'test-results/synthetic-report.json';
 
@@ -24,25 +25,68 @@ const report = JSON.parse(readFileSync(REPORT_FILE, 'utf8'));
 const gitSha = process.env.GITHUB_SHA || report.git_sha || 'unknown';
 const gitRef = process.env.GITHUB_REF || report.git_branch || 'unknown';
 const runId = process.env.GITHUB_RUN_ID || '';
-const repoUrl = 'https://github.com/allonethingxyz/sunschool';
+const repoUrl = process.env.REPO_URL || 'https://github.com/allonethingxyz/sunschool-deployed-private';
+const sfPlan = process.env.SF_PLAN || '';
+
+// Check if Stoneforge CLI is available
+let sfAvailable = false;
+try {
+  execSync('sf --version', { stdio: 'ignore' });
+  sfAvailable = true;
+} catch {
+  console.log('Stoneforge CLI not found — falling back to console logging.');
+}
 
 /**
- * Stub: Log task that would be created via Stoneforge CLI.
- * Real implementation will use `sf task create` commands.
+ * Create a Stoneforge task via CLI, or log to console as fallback.
  */
 function sfTaskCreate({ title, description, priority, tags }) {
-  console.log(`\n  [STUB] Would create Stoneforge task:`);
-  console.log(`    Title: ${title}`);
-  console.log(`    Priority: P${priority}`);
-  console.log(`    Tags: ${(tags || []).join(', ')}`);
-  if (description) {
-    console.log(`    Description: ${description.substring(0, 200)}...`);
+  if (!sfAvailable) {
+    console.log(`\n  [LOG] Task (P${priority}): ${title}`);
+    console.log(`    Tags: ${(tags || []).join(', ')}`);
+    if (description) {
+      console.log(`    Description: ${description.substring(0, 200)}...`);
+    }
+    return null;
   }
-  return `stub-task-${Date.now()}`;
+
+  try {
+    const args = ['sf', 'task', 'create', '--title', JSON.stringify(title)];
+    if (priority) args.push('--priority', String(priority));
+    if (sfPlan) args.push('--plan', JSON.stringify(sfPlan));
+
+    const cmd = args.join(' ');
+    const result = execSync(cmd, { encoding: 'utf8', timeout: 15000 });
+
+    const taskIdMatch = result.match(/([a-z]{2}-[a-z0-9]+)/);
+    const taskId = taskIdMatch ? taskIdMatch[1] : null;
+
+    if (taskId) {
+      console.log(`  Created task ${taskId}: ${title}`);
+    } else {
+      console.log(`  Created task: ${title}`);
+    }
+    return taskId;
+  } catch (err) {
+    console.error(`  Failed to create task: ${title}`);
+    console.error(`    Error: ${err.message}`);
+    return null;
+  }
+}
+
+// ─── Skip feedback if all tests passed ───────────────────────
+const failures = report.results.filter(r => r.status === 'fail');
+const drifted = report.results.flatMap(r =>
+  (r.healed_selectors || []).map(h => ({ test: r.test, ...h }))
+);
+const flaky = report.results.filter(r => r.status === 'flake');
+
+if (failures.length === 0 && drifted.length === 0 && flaky.length === 0) {
+  console.log('\nAll tests passed cleanly — no tasks to create.');
+  process.exit(0);
 }
 
 // ─── Create tasks for failures (P1 regressions) ──────────────
-const failures = report.results.filter(r => r.status === 'fail');
 for (const r of failures) {
   sfTaskCreate({
     title: `[E2E REGRESSION] ${r.test}`,
@@ -65,10 +109,6 @@ for (const r of failures) {
 }
 
 // ─── Create tasks for selector drift (P3 tech debt) ──────────
-const drifted = report.results.flatMap(r =>
-  (r.healed_selectors || []).map(h => ({ test: r.test, ...h }))
-);
-
 if (drifted.length > 0) {
   sfTaskCreate({
     title: `[SELECTOR DRIFT] ${drifted.length} locators auto-healed — update needed`,
@@ -108,7 +148,6 @@ if (autoFixable.length > 0) {
 }
 
 // ─── Create tasks for flaky tests (P3) ───────────────────────
-const flaky = report.results.filter(r => r.status === 'flake');
 for (const f of flaky) {
   sfTaskCreate({
     title: `[FLAKE] ${f.test} — investigate instability`,

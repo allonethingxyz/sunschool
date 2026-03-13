@@ -53,7 +53,6 @@ test.describe('Rewards Management', () => {
   });
 
   test('rewards page loads with Rewards Center heading', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -73,7 +72,6 @@ test.describe('Rewards Management', () => {
   });
 
   test('create a new reward with title and point cost', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -126,7 +124,6 @@ test.describe('Rewards Management', () => {
   });
 
   test('reward form supports emoji icon selection', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -186,7 +183,6 @@ test.describe('Rewards Management', () => {
   });
 
   test('rewards page has tabs for Rewards, Requests, and Settings', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');
@@ -228,7 +224,6 @@ test.describe('Rewards Management', () => {
   });
 
   test('view redemption requests tab (empty state for new account)', async ({ page }) => {
-    test.retry(2);
 
     await page.goto('/auth');
     await page.waitForLoadState('networkidle');

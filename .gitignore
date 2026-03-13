@@ -11,3 +11,7 @@ node_modules
 
 # Admin credentials
 admin-credentials.txt
+
+# Stoneforge
+.stoneforge/
+/.stoneforge/.worktrees/

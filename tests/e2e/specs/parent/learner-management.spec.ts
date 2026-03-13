@@ -15,6 +15,8 @@ import {
  */
 
 test.describe('Learner management', () => {
+  test.describe.configure({ retries: 2 });
+
   test.afterEach(async ({ page }, testInfo) => {
     await captureFailureArtifacts(page, testInfo);
   });

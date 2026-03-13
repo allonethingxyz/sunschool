@@ -7,11 +7,12 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      target_url:
-        description: 'Target URL to test against'
-        required: false
-        default: 'http://localhost:5000'
-        type: string
+      target_env:
+        description: 'Target environment'
+        required: true
+        default: 'local'
+        type: choice
+        options: [local, production]
 
 concurrency:
   group: synthetic-e2e-${{ github.ref }}
@@ -22,18 +23,6 @@ jobs:
   synthetic-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
-    services:
-      postgres:
-        image: postgres:14
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testdb
-        ports:
-          - 5432:5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
 
@@ -48,14 +37,6 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Setup database
-        run: |
-          npx ts-node -r dotenv/config scripts/migrate.ts
-          npx ts-node -r dotenv/config scripts/seed-clean.ts
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
-          NODE_ENV: test
-
       - name: Build frontend
         run: npm run build
         env:
@@ -65,20 +46,25 @@ jobs:
         id: target
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            URL="${{ github.event.inputs.target_url }}"
+            ENV="${{ github.event.inputs.target_env }}"
           else
-            URL="http://localhost:5000"
+            ENV="local"
           fi
+
+          case "$ENV" in
+            local)      URL="http://localhost:5000" ;;
+            production) URL="${{ secrets.PRODUCTION_URL }}" ;;
+          esac
+
           echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "env=$ENV" >> "$GITHUB_OUTPUT"
 
       - name: Run synthetic user tests
         run: npx playwright test --reporter=json --output=test-results/
         env:
+          TARGET_URL: ${{ steps.target.outputs.url }}
           PLAYWRIGHT_BASE_URL: ${{ steps.target.outputs.url }}
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
-          SESSION_SECRET: test-secret
-          JWT_SECRET: test-jwt-secret
-          NODE_ENV: test
+          TARGET_ENV: ${{ steps.target.outputs.env }}
           CI: true
 
       - name: Generate synthetic report
@@ -87,6 +73,7 @@ jobs:
         env:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
+          TARGET_ENV: ${{ steps.target.outputs.env }}
 
       - name: Auto-quarantine flaky tests
         if: always()
@@ -155,9 +142,28 @@ jobs:
               body += `${s.healed} selectors auto-healed. These are tech debt — review the full report.\n`;
             }
 
-            await github.rest.issues.createComment({
+            // Update existing bot comment instead of creating duplicates
+            const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body
             });
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Synthetic User E2E Results')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

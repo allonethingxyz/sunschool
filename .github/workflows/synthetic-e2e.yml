@@ -69,7 +69,12 @@ jobs:
 
       - name: Generate synthetic report
         if: always()
-        run: node tests/e2e/generate-report.mjs
+        run: |
+          if [ -f tests/e2e/generate-report.mjs ]; then
+            node tests/e2e/generate-report.mjs
+          else
+            echo "generate-report.mjs not found, skipping report generation"
+          fi
         env:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
@@ -77,7 +82,12 @@ jobs:
 
       - name: Auto-quarantine flaky tests
         if: always()
-        run: node tests/e2e/quarantine.mjs
+        run: |
+          if [ -f tests/e2e/quarantine.mjs ]; then
+            node tests/e2e/quarantine.mjs
+          else
+            echo "quarantine.mjs not found, skipping auto-quarantine"
+          fi
 
       - name: Upload test artifacts
         if: always()
@@ -96,12 +106,15 @@ jobs:
           name: playwright-traces-${{ github.sha }}
           path: test-results/**/*.zip
           retention-days: 14
+          if-no-files-found: ignore
 
   # ─── Phase 2: Post PR summary ────────────────────────────────
   pr-summary:
     needs: [synthetic-e2e]
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 

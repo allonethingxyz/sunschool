@@ -10,7 +10,6 @@
  * Achievements are awarded automatically after quiz submission.
  */
 import { test, expect } from '@playwright/test';
-import { selfHealingLocator } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
   screenshot,
@@ -25,15 +24,15 @@ test.describe('Learner: Achievements', () => {
   });
 
   test('can view progress page with learning stats', async ({ page }) => {
-    await setupLearnerSession(page, 'achieve_view');
+    await setupLearnerSession(page, 'achieve');
 
     await page.goto('/progress');
     await page.waitForLoadState('networkidle');
     await screenshot(page, 'achieve-01-progress-page');
 
-    // Progress page should have some structural content
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    expect(bodyText.length).toBeGreaterThan(50);
+    // Progress page should have structural content
+    const headings = await page.getByRole('heading').count();
+    expect(headings).toBeGreaterThanOrEqual(1);
 
     // Look for progress-related elements using semantic locators
     const hasProgressTitle = await page.getByText(/Progress|Learning|Dashboard/i)
@@ -57,23 +56,26 @@ test.describe('Learner: Achievements', () => {
     const hasZeroCount = await page.getByText(/^0$/)
       .first().isVisible({ timeout: 3000 }).catch(() => false);
 
-    // The page should render
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    expect(bodyText).toBeTruthy();
+    // The page should render with at least a heading
+    const headings = await page.getByRole('heading').count();
+    expect(headings).toBeGreaterThanOrEqual(1);
   });
 
   test('achievements appear after completing a lesson with perfect score', async ({ page }) => {
     test.setTimeout(600_000);
-
     await setupLearnerSession(page, 'achieve_perfect');
 
     // Complete a lesson with perfect score
     const completed = await completeOneLesson(page);
 
     // Check achievements via API
-    const learnerId = await page.evaluate(() => localStorage.getItem('selectedLearnerId'));
+    const learnerId = await page.evaluate(() =>
+      localStorage.getItem('selectedLearnerId')
+    );
     const achievementsResult = await apiCall(
-      page, 'GET', `/api/achievements?learnerId=${learnerId}`
+      page,
+      'GET',
+      `/api/achievements?learnerId=${learnerId}`
     );
     const achievements = achievementsResult.data || [];
 
@@ -83,7 +85,6 @@ test.describe('Learner: Achievements', () => {
     await screenshot(page, 'achieve-03-after-lesson');
 
     if (completed) {
-      // After completing a lesson, at least FIRST_LESSON achievement should exist
       if (Array.isArray(achievements) && achievements.length > 0) {
         const hasAchievementSection = await page.getByText(/Achievement|Badge|Milestone/i)
           .first().isVisible({ timeout: 10000 }).catch(() => false);
@@ -95,7 +96,6 @@ test.describe('Learner: Achievements', () => {
 
   test('can view lesson history on progress page', async ({ page }) => {
     test.setTimeout(600_000);
-
     await setupLearnerSession(page, 'achieve_history');
 
     // Complete a lesson
@@ -107,13 +107,16 @@ test.describe('Learner: Achievements', () => {
     await screenshot(page, 'achieve-04-lesson-history');
 
     // Check lesson history via API
-    const learnerId = await page.evaluate(() => localStorage.getItem('selectedLearnerId'));
+    const learnerId = await page.evaluate(() =>
+      localStorage.getItem('selectedLearnerId')
+    );
     const historyResult = await apiCall(
-      page, 'GET', `/api/lessons?learnerId=${learnerId}`
+      page,
+      'GET',
+      `/api/lessons?learnerId=${learnerId}`
     );
     const history = historyResult.data || [];
 
-    // If a lesson was completed, history should have at least one entry
     if (Array.isArray(history) && history.length > 0) {
       const hasLessonEntry = await page.getByText(/Completed|Done|Score/i)
         .first().isVisible({ timeout: 10000 }).catch(() => false);
@@ -138,7 +141,7 @@ test.describe('Learner: Achievements', () => {
     const hasMasterySection = await page.getByText(/Mastery|Subject|Topics/i)
       .first().isVisible({ timeout: 10000 }).catch(() => false);
 
-    // The progress page should render with its structural elements
+    // The progress page should render with structural elements
     const headings = await page.getByRole('heading').count();
     expect(headings).toBeGreaterThanOrEqual(1);
   });

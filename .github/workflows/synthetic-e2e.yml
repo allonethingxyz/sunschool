@@ -1,0 +1,187 @@
+name: Synthetic User E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target URL to test against'
+        required: false
+        default: 'http://localhost:5000'
+        type: string
+
+concurrency:
+  group: synthetic-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Phase 1: Run Playwright synthetic user tests ─────────────
+  synthetic-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Setup database
+        run: |
+          npx ts-node -r dotenv/config scripts/migrate.ts
+          npx ts-node -r dotenv/config scripts/seed-clean.ts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+          NODE_ENV: test
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          NODE_ENV: test
+
+      - name: Resolve target URL
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.target_url }}" ]; then
+            URL="${{ github.event.inputs.target_url }}"
+          else
+            URL="http://localhost:5000"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Run synthetic user tests
+        run: npx playwright test --reporter=json --output=test-results/
+        env:
+          TARGET_URL: ${{ steps.target.outputs.url }}
+          PLAYWRIGHT_BASE_URL: ${{ steps.target.outputs.url }}
+          TARGET_ENV: local
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+          SESSION_SECRET: test-secret
+          JWT_SECRET: test-jwt-secret
+          NODE_ENV: test
+          CI: true
+
+      - name: Generate synthetic report
+        if: always()
+        run: node tests/e2e/generate-report.mjs
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+          TARGET_ENV: local
+
+      - name: Auto-quarantine flaky tests
+        if: always()
+        run: node tests/e2e/quarantine.mjs
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-e2e-results-${{ github.sha }}
+          path: |
+            test-results/
+            test-results/synthetic-report.json
+          retention-days: 30
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-${{ github.sha }}
+          path: test-results/**/*.zip
+          retention-days: 14
+
+  # ─── Phase 2: Post PR summary ────────────────────────────────
+  pr-summary:
+    needs: [synthetic-e2e]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download test report
+        uses: actions/download-artifact@v4
+        with:
+          name: synthetic-e2e-results-${{ github.sha }}
+          path: test-results/
+
+      - name: Post summary to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'test-results/synthetic-report.json';
+            if (!fs.existsSync(reportPath)) {
+              console.log('No synthetic report found');
+              return;
+            }
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const s = report.summary;
+            const status = s.failed > 0 ? '🔴' : s.flaky > 0 ? '🟡' : '🟢';
+
+            let body = `## ${status} Synthetic User E2E Results\n\n`;
+            body += `| Metric | Value |\n|--------|-------|\n`;
+            body += `| Total | ${s.total} |\n| Passed | ${s.passed} |\n`;
+            body += `| Failed | ${s.failed} |\n| Flaky | ${s.flaky} |\n`;
+            body += `| Healed | ${s.healed} |\n| Selector Drift | ${s.selector_drift_count} |\n`;
+            body += `| Mean Duration | ${s.mean_duration_ms}ms |\n\n`;
+
+            if (report.recommendations && report.recommendations.length > 0) {
+              body += `### Recommendations\n`;
+              report.recommendations.forEach(r => { body += `- ${r}\n`; });
+            }
+
+            if (s.healed > 0) {
+              body += `\n### Self-Healed Selectors\n`;
+              body += `${s.healed} selectors auto-healed. These are tech debt — review the full report.\n`;
+            }
+
+            // Find existing bot comment to update instead of creating duplicates
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Synthetic User E2E Results')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

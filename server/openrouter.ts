@@ -23,6 +23,7 @@ interface OpenRouterOptions {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
+  timeout?: number;
   response_format?: {
     type: 'json_schema';
     json_schema: any;
@@ -57,6 +58,8 @@ export async function askOpenRouter(options: OpenRouterOptions): Promise<OpenRou
     throw new Error('OPENROUTER_API_KEY is not set');
   }
 
+  const timeoutMs = options.timeout || 30000; // 30s default timeout
+
   try {
     const response = await axios.post<OpenRouterResponse>(API_URL, {
       model: options.model || 'openai/gpt-4o', // Default to gpt-4o
@@ -71,11 +74,15 @@ export async function askOpenRouter(options: OpenRouterOptions): Promise<OpenRou
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://sunschool.xyz',
         'X-Title': 'SUNSCHOOL - The Open Source AI Tutor'
-      }
+      },
+      timeout: timeoutMs,
     });
 
     return response.data;
   } catch (error) {
+    if (axios.isAxiosError(error) && error.code === 'ECONNABORTED') {
+      throw new Error(`OpenRouter API timeout after ${timeoutMs}ms`);
+    }
     if (axios.isAxiosError(error) && error.response) {
       throw new Error(`OpenRouter API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
     }

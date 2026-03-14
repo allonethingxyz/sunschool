@@ -69,7 +69,16 @@ export const SVG_MODEL_FALLBACKS: string[] = (process.env.SVG_MODEL_FALLBACKS ||
 export const IMAGE_MODEL_FALLBACKS: string[] = (process.env.IMAGE_MODEL_FALLBACKS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
 
+// Lesson generation model configuration
+export const LESSON_MODEL = process.env.LESSON_MODEL || 'google/gemini-2.0-flash-001';
+export const LESSON_MODEL_FALLBACKS: string[] = (process.env.LESSON_MODEL_FALLBACKS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
 // Built-in fallback chains (used when env overrides are empty)
+export const DEFAULT_LESSON_MODEL_FALLBACKS = [
+  'google/gemini-2.5-flash-preview',
+  'google/gemini-2.0-flash-001',
+];
 export const DEFAULT_SVG_MODEL_FALLBACKS = [
   'google/gemini-3.1-flash-lite-preview',
   'google/gemini-3-flash-preview',

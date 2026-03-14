@@ -941,9 +941,19 @@ export function registerRoutes(app: Express): Server {
           subject: finalSubject,
           difficulty: difficulty as 'beginner' | 'intermediate' | 'advanced',
         });
-      } catch (genErr) {
-        console.error('[Lesson] Generation failed:', genErr);
-        return res.status(503).json({ error: "Lesson generation failed after multiple attempts. Please try again." });
+      } catch (genErr: any) {
+        const errMsg = genErr?.message || String(genErr);
+        console.error('[Lesson] Generation failed:', {
+          topic,
+          gradeLevel,
+          subject: finalSubject,
+          error: errMsg,
+          stack: genErr?.stack,
+        });
+        return res.status(503).json({
+          error: "Lesson generation failed after multiple attempts. Please try again.",
+          details: process.env.NODE_ENV === 'development' ? errMsg : undefined,
+        });
       }
 
       // Retire any existing ACTIVE lesson — handle unique index conflict

@@ -5,6 +5,55 @@ import { saveBase64Image } from './image-storage';
 import { generateEducationalSVG } from './svg-llm-service';
 import { LESSON_PROMPTS, IMAGE_PROMPTS, getReadingLevelInstructions, getMathematicalNotationRules } from '../prompts';
 import { validateLessonSpec } from './lesson-validator';
+import { LESSON_MODEL, LESSON_MODEL_FALLBACKS, DEFAULT_LESSON_MODEL_FALLBACKS } from '../config/env';
+
+/** Ordered list of models to try: primary + fallbacks */
+function getLessonModelChain(): string[] {
+  const fallbacks = LESSON_MODEL_FALLBACKS.length > 0
+    ? LESSON_MODEL_FALLBACKS
+    : DEFAULT_LESSON_MODEL_FALLBACKS;
+  // Deduplicate while preserving order (primary first)
+  return [...new Set([LESSON_MODEL, ...fallbacks])];
+}
+
+/** Returns true for errors that indicate the model should be skipped */
+function isModelUnavailable(error: any): boolean {
+  const msg = error?.message || '';
+  return msg.includes('404') || msg.includes('402') || msg.includes('No endpoints found') || msg.includes('not available') || msg.includes('credits') || msg.includes('afford');
+}
+
+/**
+ * Robustly extract JSON from an LLM response that may contain markdown fences,
+ * preamble text, or trailing commentary around the actual JSON object/array.
+ */
+function extractJSON(raw: string): any {
+  // First try: strip leading/trailing fences and parse directly
+  let cleaned = raw
+    .replace(/^```(?:json)?\s*\n?/i, '')
+    .replace(/\n?```\s*$/i, '')
+    .trim();
+  try { return JSON.parse(cleaned); } catch { /* continue */ }
+
+  // Second try: find the first { or [ and match to its closing counterpart
+  const startObj = cleaned.indexOf('{');
+  const startArr = cleaned.indexOf('[');
+  const start = startObj >= 0 && (startArr < 0 || startObj < startArr) ? startObj : startArr;
+  if (start >= 0) {
+    const open = cleaned[start];
+    const close = open === '{' ? '}' : ']';
+    let depth = 0;
+    for (let i = start; i < cleaned.length; i++) {
+      if (cleaned[i] === open) depth++;
+      else if (cleaned[i] === close) depth--;
+      if (depth === 0) {
+        try { return JSON.parse(cleaned.slice(start, i + 1)); } catch { break; }
+      }
+    }
+  }
+
+  // Final try: original text as-is
+  return JSON.parse(raw);
+}
 
 // Create a simple ID generator since nanoid is causing ESM issues
 function generateId(length: number = 10): string {
@@ -228,35 +277,56 @@ export async function generateEnhancedLesson(
 ): Promise<EnhancedLessonSpec | null> {
   try {
     // 1. Generate the lesson content structure with OpenRouter
-    // We ask for JSON explicitly in the prompt and strip any fences from the response
-    // rather than relying on response_format (which has inconsistent support across models).
-    const structureResponse = await askOpenRouter({
-      messages: [
-        {
-          role: 'system',
-          content: buildEnhancedLessonPrompt(gradeLevel, topic, subject)
-        },
-        {
-          role: 'user',
-          content: `Create an educational lesson about "${topic}" for grade ${gradeLevel} students. Return only a JSON object.`
+    // Try each model in the fallback chain until one succeeds
+    const models = getLessonModelChain();
+    const lessonMessages = [
+      {
+        role: 'system' as const,
+        content: buildEnhancedLessonPrompt(gradeLevel, topic, subject)
+      },
+      {
+        role: 'user' as const,
+        content: `Create an educational lesson about "${topic}" for grade ${gradeLevel} students. Return only a JSON object.`
+      }
+    ];
+
+    let content: any = null;
+    let usedModel = models[0];
+
+    for (const model of models) {
+      try {
+        const structureResponse = await askOpenRouter({
+          messages: lessonMessages,
+          model,
+          temperature: 0.7,
+          timeout: 45000, // 45s timeout for lesson generation
+        });
+
+        // Validate we have a response
+        if (!structureResponse.choices || !structureResponse.choices[0]?.message?.content) {
+          throw new Error('Empty response from OpenRouter for lesson structure');
         }
-      ],
-      model: 'google/gemini-2.0-flash-001',
-      temperature: 0.7,
-    });
-    
-    // Validate we have a response
-    if (!structureResponse.choices || !structureResponse.choices[0]?.message?.content) {
-      throw new Error('Empty response from OpenRouter for lesson structure');
+
+        // Parse the response with robust JSON extraction
+        const rawContent = structureResponse.choices[0].message.content;
+        content = extractJSON(rawContent);
+        usedModel = model;
+        break;
+      } catch (err: any) {
+        if (isModelUnavailable(err) && model !== models[models.length - 1]) {
+          console.warn(`[Lesson] Model ${model} unavailable (${err.message}), trying next fallback`);
+          continue;
+        }
+        // For the last model or non-model errors, re-throw
+        throw err;
+      }
     }
 
-    // Parse the response — strip any markdown code fences the model may add
-    const rawContent = structureResponse.choices[0].message.content;
-    const jsonText = rawContent
-      .replace(/^```(?:json)?\s*\n?/i, '')
-      .replace(/\n?```\s*$/i, '')
-      .trim();
-    const content = JSON.parse(jsonText);
+    if (!content) {
+      throw new Error('All lesson models exhausted — no valid response');
+    }
+
+    console.log(`[Lesson] Generated content with model: ${usedModel}`);
     
     // Initialize our enhanced lesson spec
     const enhancedLesson: EnhancedLessonSpec = {
@@ -462,6 +532,7 @@ export async function generateLessonWithRetry(
   } = options;
 
   let lastError: Error | undefined;
+  const attemptErrors: string[] = [];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -480,14 +551,25 @@ export async function generateLessonWithRetry(
       // Validate the spec — throws if invalid
       validateLessonSpec(spec);
 
+      if (attempt > 1) {
+        console.log(`[LessonRetry] Succeeded on attempt ${attempt}/${maxRetries} for "${topic}"`);
+      }
       return spec;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`[LessonRetry] Attempt ${attempt}/${maxRetries} failed: ${lastError.message}`);
+      const errorSummary = `Attempt ${attempt}: ${lastError.message}`;
+      attemptErrors.push(errorSummary);
+      console.warn(`[LessonRetry] ${errorSummary} (topic="${topic}", grade=${gradeLevel})`);
+
+      // If this is a timeout or API error, add a brief delay before retrying
+      if (lastError.message.includes('timeout') || lastError.message.includes('API error')) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
     }
   }
 
-  throw new Error(`Lesson generation failed after ${maxRetries} attempts: ${lastError?.message}`);
+  const allErrors = attemptErrors.join(' | ');
+  throw new Error(`Lesson generation failed after ${maxRetries} attempts: ${allErrors}`);
 }
 
 /**
@@ -507,26 +589,44 @@ export async function generateEnhancedQuestions(
       ? `\n\nAvailable lesson image IDs you can reference (use ONE imageId per question if the question can be illustrated): ${enhancedLesson.images.map(i => `"${i.id}" (${i.description})`).join(', ')}`
       : '';
 
-    const response = await askOpenRouter({
-      messages: [
-        {
-          role: 'system',
-          content: `You are an educational assessment expert. Create ${questionCount} multiple-choice questions based on the lesson content. Each question must have exactly 4 answer options with one correct answer. When a question can be enriched by referring to one of the available lesson images, include the image ID in the "imageId" field. Mark one question as type "image_based" if an image reference is included. Respond with ONLY a valid JSON array — no markdown, no code fences.`
-        },
-        {
-          role: 'user',
-          content: `Create ${questionCount} multiple-choice questions for a grade ${enhancedLesson.targetGradeLevel} lesson titled "${enhancedLesson.title}".${imageHint}\n\nLesson content:\n${lessonContent}\n\nReturn ONLY a JSON array. Format each question as: {"text":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"...","type":"multiple_choice","imageId":"<optional>"}`
-        }
-      ],
-      model: 'google/gemini-2.0-flash-001',
-      temperature: 0.7,
-    });
+    const models = getLessonModelChain();
+    const quizMessages = [
+      {
+        role: 'system' as const,
+        content: `You are an educational assessment expert. Create ${questionCount} multiple-choice questions based on the lesson content. Each question must have exactly 4 answer options with one correct answer. When a question can be enriched by referring to one of the available lesson images, include the image ID in the "imageId" field. Mark one question as type "image_based" if an image reference is included. Respond with ONLY a valid JSON array — no markdown, no code fences.`
+      },
+      {
+        role: 'user' as const,
+        content: `Create ${questionCount} multiple-choice questions for a grade ${enhancedLesson.targetGradeLevel} lesson titled "${enhancedLesson.title}".${imageHint}\n\nLesson content:\n${lessonContent}\n\nReturn ONLY a JSON array. Format each question as: {"text":"...","options":["A","B","C","D"],"correctIndex":0,"explanation":"...","type":"multiple_choice","imageId":"<optional>"}`
+      }
+    ];
 
-    const rawQText = response.choices[0].message.content
-      .replace(/^```(?:json)?\s*\n?/i, '')
-      .replace(/\n?```\s*$/i, '')
-      .trim();
-    const rawQuestions: any[] = JSON.parse(rawQText);
+    let rawQuestions: any[] | null = null;
+
+    for (const model of models) {
+      try {
+        const response = await askOpenRouter({
+          messages: quizMessages,
+          model,
+          temperature: 0.7,
+          timeout: 30000, // 30s timeout for quiz generation
+        });
+
+        rawQuestions = extractJSON(response.choices[0].message.content);
+        console.log(`[Quiz] Generated questions with model: ${model}`);
+        break;
+      } catch (err: any) {
+        if (isModelUnavailable(err) && model !== models[models.length - 1]) {
+          console.warn(`[Quiz] Model ${model} unavailable (${err.message}), trying next fallback`);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!rawQuestions || !Array.isArray(rawQuestions)) {
+      throw new Error('All quiz models exhausted — no valid response');
+    }
 
     return rawQuestions.map(q => {
       // Clean up imageId: only keep it if it actually references an existing image

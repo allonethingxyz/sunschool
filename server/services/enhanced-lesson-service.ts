@@ -484,6 +484,12 @@ export async function generateLessonWithRetry(
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       console.warn(`[LessonRetry] Attempt ${attempt}/${maxRetries} failed: ${lastError.message}`);
+
+      // Exponential backoff before next retry (500ms, 1s, 2s, ...)
+      if (attempt < maxRetries) {
+        const delay = Math.min(500 * Math.pow(2, attempt - 1), 4000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   }
 

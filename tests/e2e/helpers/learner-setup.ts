@@ -279,10 +279,8 @@ export async function completeOneLesson(
   }
 
   const questions = lessonResult.data.spec.questions;
-  const answers = questions.map((q: any, i: number) => ({
-    questionIndex: i,
-    selectedIndex: q.correctIndex ?? 0,
-  }));
+  // Server expects answers as a plain number[] of selected answer indices
+  const answers = questions.map((q: any) => q.correctIndex ?? 0);
 
   const learnerId = await page.evaluate(() =>
     Number(localStorage.getItem('selectedLearnerId'))

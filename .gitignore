@@ -4,6 +4,7 @@ node_modules
 # Claude container secrets
 .env.claude
 .env
+.env.test
 
 # Bridge IPC (runtime files)
 .claude/host-request/

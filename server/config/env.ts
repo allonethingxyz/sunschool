@@ -56,6 +56,9 @@ export const BITTENSOR_WALLET_HOTKEY = process.env.BITTENSOR_WALLET_HOTKEY;
 // For Perplexity integration
 export const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY || '';
 
+// LLM Request Timeout (milliseconds) — applies to all OpenRouter text-generation calls
+export const LLM_REQUEST_TIMEOUT = parseInt(process.env.LLM_REQUEST_TIMEOUT || '45000');
+
 // Image Generation Configuration
 export const IMAGE_PROVIDER = process.env.IMAGE_PROVIDER || 'svg-llm'; // 'svg-llm' | 'openrouter' | 'stability'
 export const OPENROUTER_IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-3.1-pro-preview';

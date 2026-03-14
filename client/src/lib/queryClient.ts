@@ -210,8 +210,8 @@ export const apiRequest = async (
       headers,
       // Force response as JSON to prevent potential response type issues
       responseType: 'json',
-      // Add timeout to prevent hanging requests
-      timeout: 30000, // 30 second timeout
+      // Timeout: longer for AI lesson generation endpoints, standard for everything else
+      timeout: url.includes('/lessons/create') || url.includes('/lessons/next') ? 60000 : 30000,
       // Only accept 2xx status codes for auth endpoints to ensure token presence
       validateStatus: (status) => {
         if (isAuthRequest) {

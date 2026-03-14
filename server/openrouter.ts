@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { LLM_REQUEST_TIMEOUT } from './config/env';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -58,6 +59,7 @@ export async function askOpenRouter(options: OpenRouterOptions): Promise<OpenRou
   }
 
   try {
+    const startTime = Date.now();
     const response = await axios.post<OpenRouterResponse>(API_URL, {
       model: options.model || 'openai/gpt-4o', // Default to gpt-4o
       messages: options.messages,
@@ -71,13 +73,24 @@ export async function askOpenRouter(options: OpenRouterOptions): Promise<OpenRou
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://sunschool.xyz',
         'X-Title': 'SUNSCHOOL - The Open Source AI Tutor'
-      }
+      },
+      timeout: LLM_REQUEST_TIMEOUT,
     });
+
+    const elapsed = Date.now() - startTime;
+    if (elapsed > 30000) {
+      console.warn(`[OpenRouter] Slow response: ${elapsed}ms for model ${options.model || 'openai/gpt-4o'}`);
+    }
 
     return response.data;
   } catch (error) {
-    if (axios.isAxiosError(error) && error.response) {
-      throw new Error(`OpenRouter API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+        throw new Error(`OpenRouter API timeout after ${LLM_REQUEST_TIMEOUT}ms for model ${options.model || 'openai/gpt-4o'}`);
+      }
+      if (error.response) {
+        throw new Error(`OpenRouter API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+      }
     }
     throw error;
   }

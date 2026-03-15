@@ -75,7 +75,7 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
                 </g>
               </svg>
             </View>
-            <Text style={styles.logoText}>SUNSCHOOL</Text>
+            {windowWidth >= 480 && <Text style={styles.logoText}>SUNSCHOOL</Text>}
           </TouchableOpacity>
 
           {user && (
@@ -94,9 +94,11 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
                     color={isActive(item.path) ? colors.secondary : colors.onPrimary}
                     aria-hidden="true"
                   />
-                  <Text style={[styles.navText, isActive(item.path) && styles.activeNavText]}>
-                    {item.label}
-                  </Text>
+                  {windowWidth >= 480 && (
+                    <Text style={[styles.navText, isActive(item.path) && styles.activeNavText]}>
+                      {item.label}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
@@ -173,7 +175,6 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
     zIndex: 100,
-    overflow: 'visible',
   },
   headerContent: {
     maxWidth: 1200,
@@ -182,12 +183,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    overflow: 'visible',
   },
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden' as any,
   },
   logoContainer: {
     flexDirection: 'row',
@@ -207,7 +210,7 @@ const styles = StyleSheet.create({
   navItems: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 24,
+    marginLeft: windowWidth >= 480 ? 24 : 8,
     gap: 4,
   },
   navItem: {
@@ -233,9 +236,10 @@ const styles = StyleSheet.create({
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: windowWidth >= 480 ? 8 : 4,
     zIndex: 1000,
     overflow: 'visible',
+    flexShrink: 0,
   },
   backButton: {
     flexDirection: 'row',

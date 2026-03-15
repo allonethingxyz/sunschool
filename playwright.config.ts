@@ -6,6 +6,8 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5000';
 const config: PlaywrightTestConfig = {
   testDir: './tests/e2e',
   timeout: 600000, // 10 minutes per test (lesson generation is slow)
+  workers: baseURL.includes('localhost') ? 4 : 2, // fewer workers against production to avoid 503s
+  fullyParallel: false, // serialize within spec files to reduce concurrent lesson generation
   // Only start local server if targeting localhost
   ...(baseURL.includes('localhost') ? {
     webServer: {

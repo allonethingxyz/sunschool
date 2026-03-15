@@ -84,6 +84,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     height: '100vh',
     backgroundColor: colors.background,
+    maxWidth: '100vw' as any,
   },
   content: {
     flex: 1,

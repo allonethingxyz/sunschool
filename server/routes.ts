@@ -1170,8 +1170,12 @@ export function registerRoutes(app: Express): Server {
     const lessonHistory = await storage.getLessonHistory(learnerId);
     const newAchievements = checkForAchievements(lessonHistory, updatedLesson);
 
-    // Award any new achievements
+    // Award any new achievements (skip duplicates)
+    const existingAchievements = await storage.getAchievements(ensureString(learnerId));
+    const existingTypes = new Set(existingAchievements.map(a => a.type));
+
     for (const achievement of newAchievements) {
+      if (existingTypes.has(achievement.type)) continue;
       await storage.createAchievement({
         learnerId: ensureString(learnerId),
         type: achievement.type,

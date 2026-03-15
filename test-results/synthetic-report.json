@@ -1,0 +1,15 @@
+{
+  "run_id": "feedback-test-001",
+  "timestamp": "2026-03-13T20:00:00.000Z",
+  "git_sha": "abc123def",
+  "git_branch": "refs/heads/main",
+  "target_env": "local",
+  "results": [
+    {"test": "Learner > should start lesson", "status": "pass", "duration_ms": 1000, "healed_selectors": [], "assertions_failed": [], "artifacts": []},
+    {"test": "Learner > quiz answers", "status": "fail", "duration_ms": 3000, "healed_selectors": [], "assertions_failed": ["Expected 'Submit' button to be visible"], "artifacts": ["test-results/quiz-fail.png"]},
+    {"test": "Learner > content display", "status": "healed", "duration_ms": 2000, "healed_selectors": [{"original": "getByRole('button', { name: 'Next' })", "resolved": "getByRole('button', { name: 'Next Lesson' })", "method": "ax_tree_fuzzy_match", "confidence": 0.92}], "assertions_failed": [], "artifacts": []},
+    {"test": "Learner > navigation", "status": "healed", "duration_ms": 800, "healed_selectors": [{"original": "getByRole('link', { name: 'Home' })", "resolved": "getByRole('link', { name: 'Home Page' })", "method": "ax_tree_exact", "confidence": 0.98}], "assertions_failed": [], "artifacts": []},
+    {"test": "Learner > achievement badge", "status": "flake", "duration_ms": 2100, "healed_selectors": [], "assertions_failed": ["Timeout"], "artifacts": []}
+  ],
+  "summary": {"total": 5, "passed": 1, "failed": 1, "flaky": 1, "healed": 2, "selector_drift_count": 2, "mean_duration_ms": 1780}
+}

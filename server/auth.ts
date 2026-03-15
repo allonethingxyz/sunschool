@@ -41,14 +41,15 @@ export async function setupAuth(app: Express) {
       const { username, password } = req.body;
       
       // Determine the request origin for CORS handling
-      const origin = req.headers.origin || req.headers.referer || 'unknown';
-      let isSunschool = false;
-      try {
-        const parsedOrigin = new URL(origin);
-        isSunschool = parsedOrigin.hostname === 'sunschool.xyz' || parsedOrigin.hostname.endsWith('.sunschool.xyz');
-      } catch (_e) { /* ignore invalid origin URL */ }
-      // For sunschool.xyz domain, add special CORS headers for authentication
-      if (isSunschool) {
+      const origin = req.headers.origin || '';
+      const allowedAuthOrigins = [
+        'https://sunschool.xyz',
+        'https://www.sunschool.xyz',
+        'http://localhost:5000',
+        'http://localhost:3000'
+      ];
+      // For explicitly allowed origins, add CORS headers for authentication
+      if (allowedAuthOrigins.includes(origin)) {
         res.header('Access-Control-Allow-Origin', origin);
         res.header('Access-Control-Allow-Credentials', 'true');
         res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
@@ -82,7 +83,7 @@ export async function setupAuth(app: Express) {
       return res.json({
         token,
         user: userWithoutPassword,
-        domain: isSunschool ? 'sunschool.xyz' : origin.split('://')[1]?.split(':')[0] || 'unknown'
+        domain: allowedAuthOrigins.includes(origin) && origin.includes('sunschool.xyz') ? 'sunschool.xyz' : new URL(origin || 'http://unknown').hostname
       });
     } catch (error) {
       console.error('Authentication endpoint error:', error);
@@ -145,15 +146,16 @@ export async function setupAuth(app: Express) {
 
   // Enhanced user info endpoint with cross-domain support
   app.get("/api/user", authenticateJwt, asyncHandler(async (req: AuthRequest, res: Response) => {
-    const origin = req.headers.origin || req.headers.referer || 'unknown';
-    let isSunschool = false;
-    try {
-      const parsedOrigin = new URL(origin);
-      isSunschool = parsedOrigin.hostname === 'sunschool.xyz' || parsedOrigin.hostname.endsWith('.sunschool.xyz');
-    } catch (_e) { /* ignore invalid origin URL */ }
+    const origin = req.headers.origin || '';
+    const allowedAuthOrigins = [
+      'https://sunschool.xyz',
+      'https://www.sunschool.xyz',
+      'http://localhost:5000',
+      'http://localhost:3000'
+    ];
 
-    if (isSunschool) {
-      // Add special CORS headers for sunschool.xyz domain
+    if (allowedAuthOrigins.includes(origin)) {
+      // Add CORS headers for explicitly allowed origins
       res.header('Access-Control-Allow-Origin', origin);
       res.header('Access-Control-Allow-Credentials', 'true');
       res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');

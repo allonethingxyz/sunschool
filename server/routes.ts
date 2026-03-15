@@ -208,11 +208,16 @@ export function registerRoutes(app: Express): Server {
     try {
       const { username, password } = req.body;
       
-      const origin = req.headers.origin || req.headers.referer || 'unknown';
-      const isSunschool = origin.includes('sunschool.xyz');
+      const origin = req.headers.origin || '';
+      const allowedAuthOrigins = [
+        'https://sunschool.xyz',
+        'https://www.sunschool.xyz',
+        'http://localhost:5000',
+        'http://localhost:3000'
+      ];
 
-      // For sunschool.xyz domain, add special CORS headers for authentication
-      if (isSunschool) {
+      // For explicitly allowed origins, add CORS headers for authentication
+      if (allowedAuthOrigins.includes(origin)) {
         res.header('Access-Control-Allow-Origin', origin);
         res.header('Access-Control-Allow-Credentials', 'true');
         res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
@@ -247,7 +252,7 @@ export function registerRoutes(app: Express): Server {
       return res.json({
         token,
         user: userWithoutPassword,
-        domain: isSunschool ? 'sunschool.xyz' : origin.split('://')[1]?.split(':')[0] || 'unknown'
+        domain: allowedAuthOrigins.includes(origin) && origin.includes('sunschool.xyz') ? 'sunschool.xyz' : new URL(origin || 'http://unknown').hostname
       });
     } catch (error) {
       console.error('Authentication endpoint error:', error);

@@ -26,15 +26,18 @@ if (isNeonDb) {
     idleTimeoutMillis: 60000,
     connectionTimeoutMillis: 10000,
     maxUses: 5000,
-    ssl: env.DATABASE_SSL ? { rejectUnauthorized: env.NODE_ENV === 'production' } : false,
+    // Neon supports verified TLS — always verify certificates
+    ssl: env.DATABASE_SSL ? { rejectUnauthorized: true } : false,
   });
   db = drizzleNeon(pool, { schema });
 } else {
   // Standard Postgres (local dev, Railway, or any non-Neon host)
   const { Pool: PgPool } = require('pg');
   const { drizzle: drizzlePg } = require('drizzle-orm/node-postgres');
+  // Verify TLS certificates in production to prevent MITM attacks;
+  // allow unverified in development for self-signed certs
   const sslConfig = isLocalDb ? false :
-    (env.DATABASE_SSL ? { rejectUnauthorized: false } : false);
+    (env.DATABASE_SSL ? { rejectUnauthorized: env.NODE_ENV === 'production' } : false);
   pool = new PgPool({
     connectionString: env.DATABASE_URL,
     max: 10,

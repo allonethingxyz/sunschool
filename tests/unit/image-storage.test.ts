@@ -2,6 +2,7 @@
  * Unit tests for image-storage path traversal protection.
  * Tests the validateSafePath helper that prevents directory traversal attacks.
  */
+import { describe, it, expect } from 'vitest';
 import path from 'path';
 
 // Import the validateSafePath function directly

@@ -219,12 +219,11 @@ SVG content is sanitized via a lightweight regex-based sanitizer in `server/serv
 - `npx playwright test` — E2E tests (auto-starts local server)
 - `PLAYWRIGHT_BASE_URL=https://sunschool.xyz npx playwright test` — E2E against production
 
-E2E test suites:
+E2E test suites live in `tests/e2e/specs/` organized by persona:
 
-| Test File | Coverage |
-|-----------|----------|
-| `child-lesson-flow.spec.ts` | Parent registration, child creation, learner mode, lesson generation, quiz, results |
-| `workflow-validation.spec.ts` | All 24 workflows: public pages, parent dashboard, learner mode, lesson + SVG validation, quiz, progress, goals, reports, rewards |
+| Directory | Specs | Coverage |
+|-----------|-------|----------|
+| `specs/learner/` | `lesson-flow`, `quiz-assessment`, `content-display`, `achievements`, `points-rewards` | Lesson generation, quiz flow, SVG/content rendering, achievements, points |
 
 Timeout: 10 min per test (AI generation). Screenshots saved to `tests/e2e/screenshots/`. See [workflows.md](workflows.md) for full workflow list.
 

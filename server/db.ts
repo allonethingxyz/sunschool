@@ -34,7 +34,7 @@ if (isNeonDb) {
   const { Pool: PgPool } = require('pg');
   const { drizzle: drizzlePg } = require('drizzle-orm/node-postgres');
   const sslConfig = isLocalDb ? false :
-    (env.DATABASE_SSL ? { rejectUnauthorized: false } : false);
+    (env.DATABASE_SSL ? { rejectUnauthorized: env.NODE_ENV === 'production' } : false);
   pool = new PgPool({
     connectionString: env.DATABASE_URL,
     max: 10,

@@ -63,7 +63,7 @@ exports.pool = new serverless_1.Pool({
     idleTimeoutMillis: 60000, // Give idle clients more time (1 minute)
     connectionTimeoutMillis: 10000, // Allow more time for connection establishment
     maxUses: 5000, // Close connections after fewer uses
-    ssl: env.DATABASE_SSL ? { rejectUnauthorized: false } : false, // Proper SSL configuration for production
+    ssl: env.DATABASE_SSL ? { rejectUnauthorized: env.NODE_ENV === 'production' } : false, // TLS verification enabled in production
 });
 // Add event listeners to the pool for better error tracking
 exports.pool.on('error', (err, client) => {

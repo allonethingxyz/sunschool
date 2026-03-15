@@ -45,7 +45,7 @@ async function runMigrations() {
       const { migrate: migratePg } = require('drizzle-orm/node-postgres/migrator');
       const pgPool = new PgPool({
         connectionString: dbUrl,
-        ssl: { rejectUnauthorized: false },
+        ssl: { rejectUnauthorized: process.env.NODE_ENV === 'production' },
       });
       const pgDb = drizzlePg(pgPool, { schema });
       await migratePg(pgDb, { migrationsFolder });

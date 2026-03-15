@@ -207,7 +207,7 @@ From SAST scan (Bandit + Semgrep, Feb 2026):
 | Priority | Finding | Status |
 |----------|---------|--------|
 | MEDIUM | CORS origin substring match (`server/auth.ts`) | Tighten to exact domain match |
-| MEDIUM | TLS `rejectUnauthorized: false` (`server/db.ts`) | Enable in production with CA cert |
+| ~~MEDIUM~~ | ~~TLS `rejectUnauthorized: false` (`server/db.ts`)~~ | **FIXED** — TLS verification enabled in production (`rejectUnauthorized: NODE_ENV === 'production'`) |
 | MEDIUM | Path traversal in `image-storage.ts` | Add resolved path validation |
 | LOW | SVG innerHTML rendering | Server-side DOMPurify mitigates; consider client-side pass |
 

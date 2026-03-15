@@ -4,6 +4,19 @@ import path from 'path';
 // Directory to store images
 const IMAGES_DIR = path.join(process.cwd(), 'public', 'images');
 
+/**
+ * Validates that a resolved file path stays within the allowed base directory.
+ * Prevents directory traversal attacks via ../ in user-supplied inputs.
+ */
+export function validateSafePath(baseDir: string, untrustedPath: string): string {
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedFull = path.resolve(baseDir, untrustedPath);
+  if (!resolvedFull.startsWith(resolvedBase + path.sep) && resolvedFull !== resolvedBase) {
+    throw new Error('Path traversal detected');
+  }
+  return resolvedFull;
+}
+
 // Ensure the images directory exists
 function ensureImageDirExists() {
   if (!fs.existsSync(IMAGES_DIR)) {
@@ -29,8 +42,8 @@ export async function saveBase64Image(base64Data: string, fileName: string): Pro
     const timestamp = Date.now();
     const fullFileName = `${safeFileName}_${timestamp}.png`;
     
-    // Full path to save the image
-    const filePath = path.join(IMAGES_DIR, fullFileName);
+    // Full path to save the image (validated against traversal)
+    const filePath = validateSafePath(IMAGES_DIR, fullFileName);
     
     // Convert base64 to buffer and save
     const buffer = Buffer.from(base64Data, 'base64');
@@ -52,10 +65,7 @@ export async function saveBase64Image(base64Data: string, fileName: string): Pro
 export function readImage(imagePath: string): Buffer {
   try {
     const publicDir = path.join(process.cwd(), 'public');
-    const fullPath = path.resolve(publicDir, imagePath);
-    if (!fullPath.startsWith(publicDir + path.sep)) {
-      throw new Error('Path traversal detected');
-    }
+    const fullPath = validateSafePath(publicDir, imagePath);
     return fs.readFileSync(fullPath);
   } catch (error) {
     console.error(`Error reading image from ${imagePath}:`, error);
@@ -70,10 +80,7 @@ export function readImage(imagePath: string): Buffer {
 export function deleteImage(imagePath: string): void {
   try {
     const publicDir = path.join(process.cwd(), 'public');
-    const fullPath = path.resolve(publicDir, imagePath);
-    if (!fullPath.startsWith(publicDir + path.sep)) {
-      throw new Error('Path traversal detected');
-    }
+    const fullPath = validateSafePath(publicDir, imagePath);
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath);
     }

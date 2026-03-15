@@ -21,7 +21,7 @@ SET spec = jsonb_build_object(
       'type', 'key_concepts'
     )
   ),
-  'questions', COALESCE(spec->'questions', '[]'::jsonb),
+  'questions', COALESCE((spec->'questions')::jsonb, '[]'::jsonb),
   'images', '[]'::jsonb,
   'diagrams', '[]'::jsonb,
   'keywords', '[]'::jsonb,

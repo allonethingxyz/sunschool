@@ -19,13 +19,15 @@ import {
   apiCall,
 } from '../../helpers/learner-setup';
 
+// QUARANTINE: All quiz-assessment tests depend on lesson generation, which returns
+// 503 on production (tracked in el-1mbp). Un-skip when the backend is restored.
 test.describe('Learner: Quiz Assessment', () => {
   test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
   });
 
-  test('can navigate to quiz pre-screen from lesson', async ({ page }) => {
+  test.skip('can navigate to quiz pre-screen from lesson', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'quiz');
 
@@ -71,7 +73,7 @@ test.describe('Learner: Quiz Assessment', () => {
     expect(hasGetReady || hasQuestion || hasStartQuiz).toBeTruthy();
   });
 
-  test('can answer quiz questions and see options', async ({ page }) => {
+  test.skip('can answer quiz questions and see options', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'quiz_answer');
 
@@ -136,7 +138,7 @@ test.describe('Learner: Quiz Assessment', () => {
     expect(hasContent).toBeTruthy();
   });
 
-  test('can submit quiz and view results with score', async ({ page }) => {
+  test.skip('can submit quiz and view results with score', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'quiz_submit');
 
@@ -223,7 +225,7 @@ test.describe('Learner: Quiz Assessment', () => {
     expect(hasResults || hasPoints || hasPercentage || hasKeepGoing).toBeTruthy();
   });
 
-  test('can return to learner home after quiz completion', async ({ page }) => {
+  test.skip('can return to learner home after quiz completion', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'quiz_home');
 

@@ -15,6 +15,7 @@ import {
   generateAndWaitForLesson,
   createRewardGoal,
   apiCall,
+  canGenerateLessons,
 } from '../../helpers/learner-setup';
 
 test.describe('Learner: Points & Rewards', () => {
@@ -26,20 +27,18 @@ test.describe('Learner: Points & Rewards', () => {
   test('can view point balance on learner home', async ({ page }) => {
     await setupLearnerSession(page, 'reward');
 
-    await page.goto('/learner');
-    await page.waitForLoadState('networkidle');
+    // setupLearnerSession already navigates to /learner
     await screenshot(page, 'points-01-learner-home');
 
-    // The learner home should render with structural content
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
+    // Learner home should render with learner-specific content
+    // (Note: learner home uses Text components, not semantic headings)
+    const hasLearnerContent = await page.getByText(/Hello|Current Lesson|Random Lesson/i)
+      .first().isVisible({ timeout: 10_000 }).catch(() => false);
+    expect(hasLearnerContent).toBeTruthy();
   });
 
   test('can check point balance via API and see it reflected', async ({ page }) => {
     await setupLearnerSession(page, 'reward_balance');
-
-    await page.goto('/learner');
-    await page.waitForLoadState('networkidle');
 
     // Check points balance via API
     const learnerId = await page.evaluate(() =>
@@ -70,9 +69,9 @@ test.describe('Learner: Points & Rewards', () => {
     await page.waitForLoadState('networkidle');
     await screenshot(page, 'points-03-goals-page');
 
-    // The goals page should render
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(0);
+    // The goals page should render with content
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
 
     // If a goal was created, it should appear on the page
     if (goalId) {
@@ -120,9 +119,18 @@ test.describe('Learner: Points & Rewards', () => {
     }
   });
 
+  // QUARANTINE: Depends on lesson generation (503 on production, tracked in el-1mbp).
+  // Gracefully handles failure via try/catch — skips assertions when lesson gen fails.
   test('points are awarded after completing a quiz', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'reward_quiz');
+
+    // Fast-fail check: skip if lesson generation is unavailable
+    const serverCanGenerate = await canGenerateLessons(page);
+    if (!serverCanGenerate) {
+      test.skip(true, 'QUARANTINE: Lesson generation returns 503 (tracked in el-1mbp)');
+      return;
+    }
 
     // Check initial balance
     const learnerId = await page.evaluate(() =>
@@ -140,7 +148,8 @@ test.describe('Learner: Points & Rewards', () => {
     try {
       lessonId = await generateAndWaitForLesson(page, 'Math');
     } catch {
-      // Skip if lesson creation failed
+      // Lesson generation unavailable (503) — skip remainder
+      test.skip(true, 'QUARANTINE: Lesson generation returns 503 (tracked in el-1mbp)');
       return;
     }
 
@@ -178,8 +187,9 @@ test.describe('Learner: Points & Rewards', () => {
     await page.waitForLoadState('networkidle');
     await screenshot(page, 'points-05-after-quiz');
 
-    // Verify page rendered
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
+    // Verify learner content rendered
+    const hasLearnerContent = await page.getByText(/Hello|Current Lesson/i)
+      .first().isVisible({ timeout: 10_000 }).catch(() => false);
+    expect(hasLearnerContent).toBeTruthy();
   });
 });

@@ -20,13 +20,15 @@ import {
   waitForLessonLoaded,
 } from '../../helpers/learner-setup';
 
+// QUARANTINE: All content-display tests depend on lesson generation, which returns
+// 503 on production (tracked in el-1mbp). Un-skip when the backend is restored.
 test.describe('Learner: Content Display', () => {
   test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
   });
 
-  test('lesson content renders text sections with headings and paragraphs', async ({ page }) => {
+  test.skip('lesson content renders text sections with headings and paragraphs', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'content');
 
@@ -61,7 +63,7 @@ test.describe('Learner: Content Display', () => {
     }
   });
 
-  test('lesson page displays SVG illustrations or images', async ({ page }) => {
+  test.skip('lesson page displays SVG illustrations or images', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'content_img');
 
@@ -102,7 +104,7 @@ test.describe('Learner: Content Display', () => {
     expect(hasLargeVisual).toBe(true);
   });
 
-  test('lesson content is rendered at appropriate grade level', async ({ page }) => {
+  test.skip('lesson content is rendered at appropriate grade level', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'content_grade');
 
@@ -152,7 +154,7 @@ test.describe('Learner: Content Display', () => {
     expect(headings).toBeGreaterThanOrEqual(1);
   });
 
-  test('quiz questions render with answer options and visual elements', async ({ page }) => {
+  test.skip('quiz questions render with answer options and visual elements', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'content_quiz');
 
@@ -205,7 +207,7 @@ test.describe('Learner: Content Display', () => {
     await screenshot(page, 'content-04-quiz-all-questions');
   });
 
-  test('learner home displays knowledge graph or learning overview', async ({ page }) => {
+  test.skip('learner home displays knowledge graph or learning overview', async ({ page }) => {
     test.setTimeout(600_000);
     await setupLearnerSession(page, 'content_graph');
 

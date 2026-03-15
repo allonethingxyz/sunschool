@@ -83,8 +83,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     height: '100vh',
-    backgroundColor: colors.background,
     maxWidth: '100vw' as any,
+    overflow: 'hidden' as any,
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -92,7 +93,8 @@ const styles = StyleSheet.create({
     maxWidth: 1200,
     marginHorizontal: 'auto',
     padding: 20,
-    overflow: 'auto' as any,
+    overflowX: 'hidden' as any,
+    overflowY: 'auto' as any,
   },
 });
 

@@ -69,10 +69,12 @@ Complete list of all user-facing workflows organized by role.
 
 ## E2E Test Coverage
 
-Tests in `tests/e2e/` verify these workflows against the live deployment:
+Tests in `tests/e2e/specs/` verify these workflows, organized by persona:
 
 | Test File | Workflows Covered |
 |-----------|------------------|
-| `auth.spec.ts` | #2 (login form, error handling) |
-| `child-lesson-flow.spec.ts` | #2, #14, #16, #6, #7, #8, #9 (full parent→learner flow) |
-| `workflow-validation.spec.ts` | All 24 workflows with SVG rendering validation (17 tests) |
+| `specs/learner/lesson-flow.spec.ts` | Lesson generation, content navigation, quiz entry |
+| `specs/learner/quiz-assessment.spec.ts` | Quiz pre-screen, answering questions, results |
+| `specs/learner/content-display.spec.ts` | SVG rendering, text sections, visual content validation |
+| `specs/learner/achievements.spec.ts` | Achievement milestones, badges |
+| `specs/learner/points-rewards.spec.ts` | Points earned, rewards system |

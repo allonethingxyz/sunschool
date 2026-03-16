@@ -57,6 +57,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden' as any,
   },
   footerContent: {
     flexDirection: 'row',

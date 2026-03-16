@@ -1,0 +1,287 @@
+{
+  "role": "WebArea",
+  "name": "SUNSCHOOL - Powered bySunschool AI Tutor",
+  "children": [
+    {
+      "role": "link",
+      "name": "Skip to main content"
+    },
+    {
+      "role": "link",
+      "name": "SUNSCHOOL home"
+    },
+    {
+      "role": "link",
+      "name": "Dashboard"
+    },
+    {
+      "role": "link",
+      "name": "Documentation (opens in new window)"
+    },
+    {
+      "role": "button",
+      "name": "Support and feedback"
+    },
+    {
+      "role": "link",
+      "name": "GitHub"
+    },
+    {
+      "role": "link",
+      "name": "X (Twitter)"
+    },
+    {
+      "role": "link",
+      "name": "Instagram"
+    },
+    {
+      "role": "link",
+      "name": "Facebook"
+    },
+    {
+      "role": "text",
+      "name": "PARENT"
+    },
+    {
+      "role": "text",
+      "name": "Welcome, "
+    },
+    {
+      "role": "text",
+      "name": "Quiz_submit User"
+    },
+    {
+      "role": "text",
+      "name": "!"
+    },
+    {
+      "role": "text",
+      "name": "Add your child to get started"
+    },
+    {
+      "role": "text",
+      "name": "Child's Name"
+    },
+    {
+      "role": "textbox",
+      "name": "Enter child's name"
+    },
+    {
+      "role": "text",
+      "name": "Grade Level"
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "K"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "1"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "2"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "3"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "4"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "5"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "6"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "7"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "8"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "9"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "10"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "11"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "12"
+        }
+      ]
+    },
+    {
+      "role": "generic",
+      "name": "",
+      "children": [
+        {
+          "role": "text",
+          "name": "ADD CHILD"
+        }
+      ]
+    },
+    {
+      "role": "text",
+      "name": "© "
+    },
+    {
+      "role": "text",
+      "name": "2026"
+    },
+    {
+      "role": "text",
+      "name": " SUNSCHOOL, LLC. All rights reserved."
+    },
+    {
+      "role": "link",
+      "name": "Privacy Policy"
+    },
+    {
+      "role": "text",
+      "name": "|"
+    },
+    {
+      "role": "link",
+      "name": "Terms of Service"
+    },
+    {
+      "role": "text",
+      "name": "|"
+    },
+    {
+      "role": "link",
+      "name": "All One Thing Labs (opens in new window)"
+    },
+    {
+      "role": "text",
+      "name": "|"
+    },
+    {
+      "role": "link",
+      "name": "Documentation (opens in new window)"
+    },
+    {
+      "role": "link",
+      "name": "GitHub"
+    },
+    {
+      "role": "link",
+      "name": "X (Twitter)"
+    },
+    {
+      "role": "link",
+      "name": "Instagram"
+    },
+    {
+      "role": "link",
+      "name": "Facebook"
+    },
+    {
+      "role": "button",
+      "name": "Logout"
+    },
+    {
+      "role": "heading",
+      "name": "Login successful",
+      "level": 3
+    },
+    {
+      "role": "button",
+      "name": ""
+    },
+    {
+      "role": "text",
+      "name": "Welcome back, Quiz_submit User!"
+    }
+  ]
+}

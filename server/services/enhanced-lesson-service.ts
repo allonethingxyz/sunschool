@@ -440,9 +440,44 @@ export async function generateEnhancedLesson(
 }
 
 /**
- * Generate a lesson with retry and validation.
+ * Classify whether an error is retryable or fatal.
+ * Fatal errors short-circuit immediately — no point wasting retries.
+ */
+function isRetryableError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+
+  // Fatal: authentication/authorization errors
+  if (message.includes('401') || message.includes('403') || message.includes('unauthorized') || message.includes('forbidden')) {
+    return false;
+  }
+
+  // Fatal: JSON parse errors from a valid response (malformed AI output that won't change)
+  // But NOT connection-level errors that happen to mention JSON
+  if (message.includes('json') && message.includes('parse') && !message.includes('timeout') && !message.includes('econnreset')) {
+    return false;
+  }
+
+  // Retryable: rate limits, service unavailable, network errors
+  if (message.includes('429') || message.includes('503') || message.includes('rate limit')) {
+    return true;
+  }
+  if (message.includes('econnreset') || message.includes('etimedout') || message.includes('enotfound') || message.includes('socket hang up')) {
+    return true;
+  }
+
+  // Retryable: validation failures (AI may produce better content next attempt)
+  if (message.includes('insufficient questions') || message.includes('returned null') || message.includes('validation')) {
+    return true;
+  }
+
+  // Default: treat unknown errors as retryable (conservative — don't lose the attempt)
+  return true;
+}
+
+/**
+ * Generate a lesson with retry, exponential backoff, and error classification.
  * This is the ONLY function any route or background job should call.
- * Throws if all attempts fail.
+ * Throws if all attempts fail or a fatal error is encountered.
  */
 export async function generateLessonWithRetry(
   gradeLevel: number,
@@ -452,6 +487,7 @@ export async function generateLessonWithRetry(
     subject?: string;
     difficulty?: 'beginner' | 'intermediate' | 'advanced';
     maxRetries?: number;
+    baseDelay?: number;
   } = {}
 ): Promise<EnhancedLessonSpec> {
   const {
@@ -459,6 +495,7 @@ export async function generateLessonWithRetry(
     subject,
     difficulty = 'beginner',
     maxRetries = 3,
+    baseDelay = 2000,
   } = options;
 
   let lastError: Error | undefined;
@@ -483,7 +520,30 @@ export async function generateLessonWithRetry(
       return spec;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`[LessonRetry] Attempt ${attempt}/${maxRetries} failed: ${lastError.message}`);
+      const retryable = isRetryableError(lastError);
+
+      // Log structured retry context
+      console.warn(`[LessonRetry] Attempt ${attempt}/${maxRetries} failed`, {
+        attempt,
+        maxRetries,
+        error: lastError.message,
+        retryable,
+        topic,
+        gradeLevel,
+      });
+
+      // Fatal errors: throw immediately, don't waste retries
+      if (!retryable) {
+        console.warn(`[LessonRetry] Fatal error detected, aborting retries`);
+        throw lastError;
+      }
+
+      // Exponential backoff before next attempt (skip delay after last attempt)
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        console.warn(`[LessonRetry] Waiting ${delay}ms before attempt ${attempt + 1}`);
+        await new Promise(r => setTimeout(r, delay));
+      }
     }
   }
 

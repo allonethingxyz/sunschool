@@ -8,9 +8,9 @@ import { synchronizeToExternalDatabase } from "./sync-utils";
 import { InsertDbSyncConfig } from "../shared/schema";
 import { USE_AI } from "./config/flags";
 import { db, pool, withRetry } from "./db";
-import { sql, count } from "drizzle-orm";
+import { sql, count, eq, and } from "drizzle-orm";
 import crypto from "crypto";
-import { users } from "../shared/schema";
+import { users, lessons } from "../shared/schema";
 // content-generator used by image-generation-router, not directly by routes
 import { pointsService } from "./services/points-service";
 import { activityService } from "./services/activity-service";
@@ -939,6 +939,18 @@ export function registerRoutes(app: Express): Server {
         finalCategory = getSubjectCategory(finalSubject);
       }
 
+      // Check for stale ACTIVE lessons before generation
+      // If an ACTIVE lesson exists, was created >30min ago, and has no completedAt, it's stuck
+      const existingActive = await storage.getActiveLesson(targetLearnerId);
+      if (existingActive) {
+        const ageMs = Date.now() - new Date(existingActive.createdAt!).getTime();
+        const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+        if (ageMs > STALE_THRESHOLD_MS && !existingActive.completedAt) {
+          console.warn(`[Lesson] Auto-retiring stale lesson ${existingActive.id}, created ${existingActive.createdAt}`);
+          await storage.updateLessonStatus(existingActive.id, "DONE", 0);
+        }
+      }
+
       // Single generation path with retry and validation
       let spec;
       try {
@@ -949,6 +961,20 @@ export function registerRoutes(app: Express): Server {
       } catch (genErr) {
         console.error('[Lesson] Generation failed:', genErr);
         return res.status(503).json({ error: "Lesson generation failed after multiple attempts. Please try again." });
+      }
+
+      // Assert lesson spec integrity before saving
+      if (!spec.title) {
+        console.error('[Lesson] Generated spec missing title');
+        return res.status(503).json({ error: "Lesson generation produced invalid content (missing title). Please try again." });
+      }
+      if (!spec.sections || spec.sections.length < 2) {
+        console.error('[Lesson] Generated spec has insufficient sections:', spec.sections?.length ?? 0);
+        return res.status(503).json({ error: "Lesson generation produced invalid content (insufficient sections). Please try again." });
+      }
+      if (!spec.questions || spec.questions.length < 2) {
+        console.error('[Lesson] Generated spec has insufficient questions:', spec.questions?.length ?? 0);
+        return res.status(503).json({ error: "Lesson generation produced invalid content (insufficient questions). Please try again." });
       }
 
       // Retire any existing ACTIVE lesson — handle unique index conflict
@@ -1896,6 +1922,37 @@ export function registerRoutes(app: Express): Server {
       : Number(authReq.user!.id);
     const summary = await rewardsService.getRewardSummaryForLearner(learnerId);
     res.json(summary);
+  }));
+
+  // ── Stale lesson cleanup (admin-only) ──────────────────────────────────
+  app.get("/api/lessons/cleanup", hasRole(["ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
+    // Find all ACTIVE lessons older than 1 hour with no quiz answers
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const cutoff = new Date(Date.now() - ONE_HOUR_MS);
+
+    const activeRows = await db.select()
+      .from(lessons)
+      .where(eq(lessons.status, "ACTIVE"));
+
+    let cleaned = 0;
+    for (const lesson of activeRows) {
+      const createdAt = lesson.createdAt ? new Date(lesson.createdAt) : null;
+      if (!createdAt || createdAt >= cutoff) continue;
+
+      // Check for quiz answers via raw SQL (quizAnswers table)
+      const answerResult = await pool.query(
+        'SELECT COUNT(*) as cnt FROM quiz_answers WHERE lesson_id = $1',
+        [lesson.id]
+      );
+      const hasAnswers = parseInt(answerResult.rows[0]?.cnt ?? '0', 10) > 0;
+      if (hasAnswers) continue;
+
+      await storage.updateLessonStatus(lesson.id, "DONE", 0);
+      console.warn(`[Cleanup] Retired stale lesson ${lesson.id}, created ${lesson.createdAt}`);
+      cleaned++;
+    }
+
+    return res.json({ cleaned, message: `Retired ${cleaned} stale lesson(s)` });
   }));
 
   // Error handling middleware

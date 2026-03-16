@@ -5,10 +5,10 @@ import { storage } from "./storage";
 import { checkForAchievements } from "./utils";
 import { asyncHandler, authenticateJwt, hasRoleMiddleware, AuthRequest, comparePasswords, generateToken, hashPassword } from "./middleware/auth";
 import { synchronizeToExternalDatabase } from "./sync-utils";
-import { InsertDbSyncConfig } from "../shared/schema";
+import { InsertDbSyncConfig, lessons, quizAnswers } from "../shared/schema";
 import { USE_AI } from "./config/flags";
 import { db, pool, withRetry } from "./db";
-import { sql, count } from "drizzle-orm";
+import { sql, count, eq, and, lt } from "drizzle-orm";
 import crypto from "crypto";
 import { users } from "../shared/schema";
 // content-generator used by image-generation-router, not directly by routes
@@ -951,9 +951,30 @@ export function registerRoutes(app: Express): Server {
         return res.status(503).json({ error: "Lesson generation failed after multiple attempts. Please try again." });
       }
 
+      // Assert lesson spec integrity before saving
+      if (!spec.title) {
+        console.error('[Lesson] Spec missing title, aborting insert');
+        return res.status(500).json({ error: "Lesson generation produced invalid content (missing title)" });
+      }
+      if (!spec.sections || spec.sections.length < 2) {
+        console.error('[Lesson] Spec has insufficient sections:', spec.sections?.length ?? 0);
+        return res.status(500).json({ error: "Lesson generation produced invalid content (insufficient sections)" });
+      }
+      if (!spec.questions || spec.questions.length < 2) {
+        console.error('[Lesson] Spec has insufficient questions:', spec.questions?.length ?? 0);
+        return res.status(500).json({ error: "Lesson generation produced invalid content (insufficient questions)" });
+      }
+
       // Retire any existing ACTIVE lesson — handle unique index conflict
+      // Also auto-retire stale lessons (>30min with no completedAt) that may be stuck
       const previousLesson = await storage.getActiveLesson(targetLearnerId);
       if (previousLesson) {
+        const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+        const lessonAge = Date.now() - new Date(previousLesson.createdAt!).getTime();
+        const isStale = lessonAge > STALE_THRESHOLD_MS && !previousLesson.completedAt;
+        if (isStale) {
+          console.warn(`[Lesson] Auto-retiring stale lesson ${previousLesson.id}, created ${previousLesson.createdAt}`);
+        }
         await storage.updateLessonStatus(previousLesson.id, "DONE", 0);
       }
 
@@ -993,20 +1014,31 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Background image generation
+      // Background image generation with error handling and timeout
       const lessonId = newLesson.id;
       const savedSpec = spec;
+      const IMAGE_GENERATION_TIMEOUT_MS = 120_000;
       backgroundTask(`images-${lessonId}`, async () => {
-        const { images, diagrams } = await generateLessonImages(
-          savedSpec, topic, gradeLevel, finalSubject
-        );
-        if (images?.length) {
-          const imgPaths = images
-            .filter((img: any) => img.path)
-            .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
-          const mergedSpec = { ...savedSpec, images, diagrams: diagrams || [] };
-          await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
-          console.log(`[BG] Images generated for lesson ${lessonId}`);
+        try {
+          const imageGenPromise = generateLessonImages(
+            savedSpec, topic, gradeLevel, finalSubject
+          );
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Image generation timed out after ${IMAGE_GENERATION_TIMEOUT_MS / 1000}s`)), IMAGE_GENERATION_TIMEOUT_MS)
+          );
+          const { images, diagrams } = await Promise.race([imageGenPromise, timeoutPromise]);
+          if (images?.length) {
+            const imgPaths = images
+              .filter((img: any) => img.path)
+              .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
+            const mergedSpec = { ...savedSpec, images, diagrams: diagrams || [] };
+            await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
+            console.log(`[BG] Images generated for lesson ${lessonId}`);
+          }
+        } catch (err) {
+          console.error(`[BG] Image generation failed for lesson ${lessonId}:`, err);
+          const failedSpec = { ...savedSpec, imageGenerationFailed: true };
+          await storage.updateLessonImages(lessonId, failedSpec, []);
         }
       });
 
@@ -1015,6 +1047,97 @@ export function registerRoutes(app: Express): Server {
       console.error('Error creating custom lesson:', error);
       return res.status(500).json({ error: "Failed to generate lesson content" });
     }
+  }));
+
+  // Admin endpoint to clean up stale ACTIVE lessons
+  app.get("/api/lessons/cleanup", hasRole(["ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
+    const ONE_HOUR_AGO = new Date(Date.now() - 60 * 60 * 1000);
+
+    // Find all ACTIVE lessons older than 1 hour
+    const staleLessons = await db.select({ id: lessons.id })
+      .from(lessons)
+      .where(
+        and(
+          eq(lessons.status, "ACTIVE"),
+          lt(lessons.createdAt, ONE_HOUR_AGO)
+        )
+      );
+
+    // Filter to only those with no quiz answers
+    let cleanedCount = 0;
+    for (const stale of staleLessons) {
+      const answerCount = await db.select({ count: count() })
+        .from(quizAnswers)
+        .where(eq(quizAnswers.lessonId, stale.id));
+      const hasAnswers = answerCount[0]?.count > 0;
+      if (!hasAnswers) {
+        await storage.updateLessonStatus(stale.id, "DONE", 0);
+        console.warn(`[Cleanup] Retired stale lesson ${stale.id}`);
+        cleanedCount++;
+      }
+    }
+
+    return res.json({ cleaned: cleanedCount });
+  }));
+
+  // Retry image generation for a lesson where images failed
+  app.post("/api/lessons/:lessonId/retry-images", isAuthenticated, asyncHandler(async (req: AuthRequest, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const lessonId = req.params.lessonId;
+    const lesson = await storage.getLessonById(lessonId);
+
+    if (!lesson) {
+      return res.status(404).json({ error: "Lesson not found" });
+    }
+
+    // Authorization check
+    if (
+      req.user.role !== "ADMIN" &&
+      ensureString(req.user.id) !== lesson.learnerId.toString() &&
+      !(req.user.role === "PARENT" && (await storage.getUsersByParentId(req.user.id)).some(u => u.id === lesson.learnerId))
+    ) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const spec = lesson.spec as any;
+    if (!spec) {
+      return res.status(400).json({ error: "Lesson has no spec" });
+    }
+
+    // Clear the failure flag before retrying
+    const clearedSpec = { ...spec, imageGenerationFailed: false };
+    await storage.updateLessonImages(lessonId, clearedSpec, lesson.imagePaths || []);
+
+    // Re-trigger background image generation
+    const IMAGE_GENERATION_TIMEOUT_MS = 120_000;
+    backgroundTask(`retry-images-${lessonId}`, async () => {
+      try {
+        const imageGenPromise = generateLessonImages(
+          clearedSpec, spec.title, spec.targetGradeLevel, lesson.subject || ''
+        );
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Image generation timed out after ${IMAGE_GENERATION_TIMEOUT_MS / 1000}s`)), IMAGE_GENERATION_TIMEOUT_MS)
+        );
+        const { images, diagrams } = await Promise.race([imageGenPromise, timeoutPromise]);
+        if (images?.length) {
+          const imgPaths = images
+            .filter((img: any) => img.path)
+            .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
+          const mergedSpec = { ...clearedSpec, images, diagrams: diagrams || [], imageGenerationFailed: false };
+          await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
+          console.log(`[BG] Retry images generated for lesson ${lessonId}`);
+        }
+      } catch (err) {
+        console.error(`[BG] Retry image generation failed for lesson ${lessonId}:`, err);
+        const failedSpec = { ...clearedSpec, imageGenerationFailed: true };
+        await storage.updateLessonImages(lessonId, failedSpec, []);
+      }
+    });
+
+    return res.json({ message: "Image generation retry started" });
   }));
 
   // Get a specific lesson by ID

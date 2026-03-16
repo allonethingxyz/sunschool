@@ -145,6 +145,8 @@ export type EnhancedLessonSpec = {
   relatedTopics: string[];
   estimatedDuration: number;
   difficultyLevel: "beginner" | "intermediate" | "advanced";
+  /** Set to true when background image generation fails */
+  imageGenerationFailed?: boolean;
 };
 
 // Lessons table

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { apiRequest } from '../lib/queryClient';
 import { colors, typography, commonStyles } from '../styles/theme';
@@ -16,10 +16,16 @@ import { ChevronRight, ArrowLeft } from 'react-feather';
 import EnhancedLessonContent from '../components/EnhancedLessonContent';
 import { useMode } from '../context/ModeContext';
 
+const IMAGE_POLL_TIMEOUT_MS = 120_000; // 2 minutes
+
 const ActiveLessonPage = () => {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { selectedLearner } = useMode();
   const [isLoading, setIsLoading] = useState(true);
+  const [imagesFailed, setImagesFailed] = useState(false);
+  const [retryingImages, setRetryingImages] = useState(false);
+  const pollingStartRef = useRef<number | null>(null);
 
   // Use context learnerId, falling back to localStorage if context hasn't hydrated yet
   const learnerId = selectedLearner?.id ?? (() => {
@@ -43,8 +49,31 @@ const ActiveLessonPage = () => {
     // Re-poll every 5s while images are still being generated in the background
     refetchInterval: (query) => {
       const d = query.state.data as any;
-      if (!d?.spec?.images?.length) return 5000;
+
+      // Stop polling if image generation explicitly failed
+      if (d?.spec?.imageGenerationFailed) {
+        setImagesFailed(true);
+        pollingStartRef.current = null;
+        return false;
+      }
+
+      if (!d?.spec?.images?.length) {
+        // Track when polling started
+        if (!pollingStartRef.current) pollingStartRef.current = Date.now();
+        // Stop polling after timeout
+        if (Date.now() - pollingStartRef.current > IMAGE_POLL_TIMEOUT_MS) {
+          setImagesFailed(true);
+          pollingStartRef.current = null;
+          return false;
+        }
+        return 5000;
+      }
+
       const hasReal = d.spec.images.some((img: any) => img.svgData || img.base64Data || img.path);
+      if (hasReal) {
+        pollingStartRef.current = null;
+        setImagesFailed(false);
+      }
       return hasReal ? false : 5000;
     },
   });
@@ -61,6 +90,23 @@ const ActiveLessonPage = () => {
       setIsLoading(false);
     }
   }, [queryLoading, lesson, learnerId, fetchStatus]);
+
+  const handleRetryImages = useCallback(async () => {
+    if (!lesson?.id || retryingImages) return;
+    setRetryingImages(true);
+    setImagesFailed(false);
+    try {
+      await apiRequest('POST', `/api/lessons/${lesson.id}/retry-images`);
+      // Reset polling timer and re-enable polling
+      pollingStartRef.current = Date.now();
+      queryClient.invalidateQueries({ queryKey: ['/api/lessons/active', learnerId] });
+    } catch (err) {
+      console.error('Failed to retry image generation:', err);
+      setImagesFailed(true);
+    } finally {
+      setRetryingImages(false);
+    }
+  }, [lesson?.id, retryingImages, learnerId, queryClient]);
 
   const handleStartQuiz = () => {
     if (lesson) {
@@ -134,9 +180,25 @@ const ActiveLessonPage = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {imagesFailed && (
+          <View style={styles.imageFailedBanner}>
+            <Text style={styles.imageFailedText}>
+              Images could not be generated for this lesson. The lesson content is still available.
+            </Text>
+            <TouchableOpacity
+              style={[styles.retryButton, retryingImages && styles.retryButtonDisabled]}
+              onPress={handleRetryImages}
+              disabled={retryingImages}
+            >
+              <Text style={styles.retryButtonText}>
+                {retryingImages ? 'Retrying...' : 'Retry images'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.lessonContent}>
           <Text style={styles.lessonTitle}>{lesson.spec.title}</Text>
-          
+
           <EnhancedLessonContent enhancedSpec={lesson.spec} />
         </View>
 
@@ -271,6 +333,34 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     ...commonStyles.buttonText,
+  },
+  imageFailedBanner: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  imageFailedText: {
+    ...typography.body2,
+    color: '#E65100',
+    marginBottom: 8,
+  },
+  retryButton: {
+    backgroundColor: '#FF9800',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignSelf: 'flex-start' as const,
+  },
+  retryButtonDisabled: {
+    opacity: 0.6,
+  },
+  retryButtonText: {
+    ...typography.body2,
+    color: '#FFFFFF',
+    fontWeight: '600' as const,
   },
 });
 

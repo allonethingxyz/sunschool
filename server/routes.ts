@@ -45,10 +45,24 @@ function hasRole(roles: string[]) {
   };
 }
 
-function backgroundTask(name: string, fn: () => Promise<void>) {
+function backgroundTask(name: string, fn: () => Promise<void>, opts?: { timeoutMs?: number; onError?: (err: unknown) => Promise<void> }) {
   setImmediate(async () => {
-    try { await fn(); }
-    catch (err) { console.error(`[BG] ${name} failed:`, err); }
+    try {
+      if (opts?.timeoutMs) {
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`[BG] ${name} timed out after ${opts.timeoutMs}ms`)), opts.timeoutMs)
+        );
+        await Promise.race([fn(), timeout]);
+      } else {
+        await fn();
+      }
+    } catch (err) {
+      console.error(`[BG] ${name} failed:`, err);
+      if (opts?.onError) {
+        try { await opts.onError(err); }
+        catch (e2) { console.error(`[BG] ${name} onError handler failed:`, e2); }
+      }
+    }
   });
 }
 
@@ -993,7 +1007,7 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Background image generation
+      // Background image generation with timeout and error recovery
       const lessonId = newLesson.id;
       const savedSpec = spec;
       backgroundTask(`images-${lessonId}`, async () => {
@@ -1008,6 +1022,13 @@ export function registerRoutes(app: Express): Server {
           await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
           console.log(`[BG] Images generated for lesson ${lessonId}`);
         }
+      }, {
+        timeoutMs: 120_000,
+        onError: async (err) => {
+          console.error(`[BG] Image generation failed for lesson ${lessonId}:`, err);
+          const failedSpec = { ...savedSpec, imageGenerationFailed: true };
+          await storage.updateLessonImages(lessonId, failedSpec, []);
+        },
       });
 
       return res.json(newLesson);
@@ -1040,6 +1061,62 @@ export function registerRoutes(app: Express): Server {
     }
 
     return res.status(403).json({ error: "Forbidden" });
+  }));
+
+  // Retry image generation for a lesson
+  app.post("/api/lessons/:lessonId/retry-images", isAuthenticated, asyncHandler(async (req: AuthRequest, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const lessonId = req.params.lessonId;
+    const lesson = await storage.getLessonById(lessonId);
+
+    if (!lesson) {
+      return res.status(404).json({ error: "Lesson not found" });
+    }
+
+    // Check permission
+    if (
+      req.user.role !== "ADMIN" &&
+      ensureString(req.user.id) !== lesson.learnerId.toString() &&
+      !(req.user.role === "PARENT" && (await storage.getUsersByParentId(req.user.id)).some(u => u.id === lesson.learnerId))
+    ) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const spec = lesson.spec as any;
+    if (!spec?.imageGenerationFailed) {
+      return res.status(400).json({ error: "Image generation did not fail for this lesson" });
+    }
+
+    // Clear the failure flag immediately
+    const clearedSpec = { ...spec, imageGenerationFailed: false };
+    await storage.updateLessonImages(lessonId, clearedSpec, []);
+
+    // Re-trigger background image generation
+    backgroundTask(`retry-images-${lessonId}`, async () => {
+      const { images, diagrams } = await generateLessonImages(
+        clearedSpec, spec.title, spec.targetGradeLevel, lesson.subject || ''
+      );
+      if (images?.length) {
+        const imgPaths = images
+          .filter((img: any) => img.path)
+          .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
+        const mergedSpec = { ...clearedSpec, images, diagrams: diagrams || [] };
+        await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
+        console.log(`[BG] Retry: Images generated for lesson ${lessonId}`);
+      }
+    }, {
+      timeoutMs: 120_000,
+      onError: async (err) => {
+        console.error(`[BG] Retry: Image generation failed for lesson ${lessonId}:`, err);
+        const failedSpec = { ...clearedSpec, imageGenerationFailed: true };
+        await storage.updateLessonImages(lessonId, failedSpec, []);
+      },
+    });
+
+    return res.json({ message: "Image generation retrying" });
   }));
 
   // Get lesson history

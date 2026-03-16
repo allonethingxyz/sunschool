@@ -323,10 +323,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    maxWidth: '100%',
   },
   content: {
     flex: 1,
     padding: 24,
+    maxWidth: '100%',
   },
   welcomeText: {
     ...typography.h3,

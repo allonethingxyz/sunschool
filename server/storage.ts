@@ -520,21 +520,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActiveLesson(learnerId: string | number): Promise<Lesson | undefined> {
-    try {
-      const result = await db.select()
-        .from(lessons)
-        .where(and(eq(lessons.learnerId, Number(Number(learnerId))), eq(lessons.status, "ACTIVE")))
-        .orderBy(desc(lessons.createdAt))
-        .limit(1);
-      const lessonList = Array.isArray(result) ? result : [result];
-      if (lessonList.length > 0) {
-        return lessonList[0] as Lesson;
-      }
-      return undefined;
-    } catch (error) {
-      console.error("Error in getActiveLesson:", error);
-      return undefined;
+    // Throws on actual DB errors (connection failure, etc.) so callers can
+    // distinguish "no active lesson" (undefined) from "database is down" (throw).
+    const result = await db.select()
+      .from(lessons)
+      .where(and(eq(lessons.learnerId, Number(Number(learnerId))), eq(lessons.status, "ACTIVE")))
+      .orderBy(desc(lessons.createdAt))
+      .limit(1);
+    const lessonList = Array.isArray(result) ? result : [result];
+    if (lessonList.length > 0) {
+      return lessonList[0] as Lesson;
     }
+    return undefined;
   }
 
   async getLearnerLessons(learnerId: string | number): Promise<Lesson[]> {

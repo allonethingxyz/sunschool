@@ -135,20 +135,21 @@ export async function authenticateJwt(req: AuthRequest, res: Response, next: Nex
   }
   
   // Determine origin for CORS handling
-  const origin = req.headers.origin || req.headers.referer || 'unknown';
-  let isSunschool = false;
-  try {
-    const parsedOrigin = new URL(origin);
-    isSunschool = parsedOrigin.hostname === 'sunschool.xyz' || parsedOrigin.hostname.endsWith('.sunschool.xyz');
-  } catch (_e) { /* ignore invalid origin URL */ }
-  
+  const origin = req.headers.origin || '';
+  const allowedAuthOrigins = [
+    'https://sunschool.xyz',
+    'https://www.sunschool.xyz',
+    'http://localhost:5000',
+    'http://localhost:3000'
+  ];
+
   if (!token) {
     res.status(401).json({ error: 'No authorization token provided' });
     return;
   }
-  
-  // For sunschool.xyz domain, add CORS headers to ensure the response works
-  if (isSunschool) {
+
+  // For explicitly allowed origins, add CORS headers to ensure the response works
+  if (allowedAuthOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');

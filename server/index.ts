@@ -72,17 +72,16 @@ app.use(cors({
     // Define allowed origins
     const allowedOrigins = [
       'https://sunschool.xyz',
-      'http://sunschool.xyz',
       'https://www.sunschool.xyz',
       'http://localhost:5000',
       'http://localhost:3000'
     ];
     
     // Check if the request origin is in our allowed list
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('replit.dev')) {
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(null, true);
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,

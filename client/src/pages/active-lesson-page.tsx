@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,24 @@ import {
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { apiRequest } from '../lib/queryClient';
 import { colors, typography, commonStyles } from '../styles/theme';
-import { ChevronRight, ArrowLeft } from 'react-feather';
+import { ChevronRight, ArrowLeft, RefreshCw } from 'react-feather';
 import EnhancedLessonContent from '../components/EnhancedLessonContent';
 import { useMode } from '../context/ModeContext';
+
+const IMAGE_POLLING_TIMEOUT_MS = 120_000; // 2 minutes
 
 const ActiveLessonPage = () => {
   const [, setLocation] = useLocation();
   const { selectedLearner } = useMode();
   const [isLoading, setIsLoading] = useState(true);
+  const [imagePollingTimedOut, setImagePollingTimedOut] = useState(false);
+  const [isRetryingImages, setIsRetryingImages] = useState(false);
+  const pollingStartRef = useRef<number | null>(null);
+  const queryClient = useQueryClient();
 
   // Use context learnerId, falling back to localStorage if context hasn't hydrated yet
   const learnerId = selectedLearner?.id ?? (() => {
@@ -43,11 +49,61 @@ const ActiveLessonPage = () => {
     // Re-poll every 5s while images are still being generated in the background
     refetchInterval: (query) => {
       const d = query.state.data as any;
-      if (!d?.spec?.images?.length) return 5000;
+
+      // Stop polling if server flagged image generation as failed
+      if (d?.spec?.imageGenerationFailed) return false;
+
+      // Stop polling if client-side timeout reached
+      if (imagePollingTimedOut) return false;
+
+      if (!d?.spec?.images?.length) {
+        // Track when we started polling for images
+        if (pollingStartRef.current === null) {
+          pollingStartRef.current = Date.now();
+        }
+        // Check if we've exceeded the polling timeout
+        if (Date.now() - pollingStartRef.current > IMAGE_POLLING_TIMEOUT_MS) {
+          setImagePollingTimedOut(true);
+          return false;
+        }
+        return 5000;
+      }
       const hasReal = d.spec.images.some((img: any) => img.svgData || img.base64Data || img.path);
-      return hasReal ? false : 5000;
+      if (hasReal) {
+        // Images arrived — reset polling state
+        pollingStartRef.current = null;
+        return false;
+      }
+      // Still waiting for real image data
+      if (pollingStartRef.current === null) {
+        pollingStartRef.current = Date.now();
+      }
+      if (Date.now() - pollingStartRef.current > IMAGE_POLLING_TIMEOUT_MS) {
+        setImagePollingTimedOut(true);
+        return false;
+      }
+      return 5000;
     },
   });
+
+  const imageGenerationFailed = !!(lesson as any)?.spec?.imageGenerationFailed || imagePollingTimedOut;
+
+  const handleRetryImages = useCallback(async () => {
+    if (!lesson) return;
+    setIsRetryingImages(true);
+    try {
+      await apiRequest('POST', `/api/lessons/${lesson.id}/retry-images`);
+      // Reset polling state so it starts polling again
+      pollingStartRef.current = null;
+      setImagePollingTimedOut(false);
+      // Invalidate to start refetching
+      queryClient.invalidateQueries({ queryKey: ['/api/lessons/active', learnerId] });
+    } catch (err) {
+      console.error('Failed to retry image generation:', err);
+    } finally {
+      setIsRetryingImages(false);
+    }
+  }, [lesson, learnerId, queryClient]);
 
   useEffect(() => {
     if (!queryLoading && lesson) {
@@ -134,9 +190,31 @@ const ActiveLessonPage = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {imageGenerationFailed && (
+          <View style={styles.imageFailureBanner}>
+            <Text style={styles.imageFailureText}>
+              Images could not be generated for this lesson. The lesson content is still available.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={handleRetryImages}
+              disabled={isRetryingImages}
+            >
+              {isRetryingImages ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <>
+                  <RefreshCw size={16} color={colors.primary} />
+                  <Text style={styles.retryButtonText}>Retry images</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.lessonContent}>
           <Text style={styles.lessonTitle}>{lesson.spec.title}</Text>
-          
+
           <EnhancedLessonContent enhancedSpec={lesson.spec} />
         </View>
 
@@ -271,6 +349,38 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     ...commonStyles.buttonText,
+  },
+  imageFailureBanner: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  imageFailureText: {
+    ...typography.body2,
+    color: '#E65100',
+    flex: 1,
+    minWidth: 200,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    gap: 6,
+  },
+  retryButtonText: {
+    ...typography.body2,
+    color: colors.primary,
+    fontWeight: '600',
   },
 });
 

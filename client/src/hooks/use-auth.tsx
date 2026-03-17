@@ -56,21 +56,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const init = async () => {
       try {
-        // First, clear any potentially corrupted state to start fresh
+        // Read the stored token BEFORE clearing any state
+        const token = await AsyncStorage.getItem('AUTH_TOKEN');
+        const hasValidToken = !!token && token.length > 20;
+
+        // Clear cached query data (but NOT the auth token — we need to validate it first)
         try {
           await setAuthToken(null);
-          await AsyncStorage.removeItem('AUTH_TOKEN');
           await queryPersister.removeClient();
-
-          // Remove any other cached data that might cause persistence issues
           await AsyncStorage.removeItem('LEARNER_APP_CACHE');
         } catch (clearError) {
           console.error('Initial state cleanup error (continuing):', clearError);
         }
-
-        // Now explicitly check if we have a token in storage and validate it
-        const token = await AsyncStorage.getItem('AUTH_TOKEN');
-        const hasValidToken = !!token && token.length > 20;
 
         // Only proceed with validation if we have what appears to be a valid token
         if (hasValidToken) {

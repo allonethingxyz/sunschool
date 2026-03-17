@@ -17,6 +17,7 @@ import {
   screenshot,
   generateAndWaitForLesson,
   apiCall,
+  spaNavigate,
 } from '../../helpers/learner-setup';
 
 test.describe('Learner: Quiz Assessment', () => {
@@ -32,9 +33,8 @@ test.describe('Learner: Quiz Assessment', () => {
     const lessonId = await generateAndWaitForLesson(page);
     expect(lessonId).toBeTruthy();
 
-    // Navigate to lesson page
-    await page.goto('/lesson');
-    await page.waitForLoadState('networkidle');
+    // Navigate to lesson page (SPA navigate to preserve auth state)
+    await spaNavigate(page, '/lesson');
     await page.getByText('Loading your personalized lesson...')
       .waitFor({ state: 'hidden', timeout: 120000 })
       .catch(() => {});
@@ -57,7 +57,7 @@ test.describe('Learner: Quiz Assessment', () => {
       await page.waitForLoadState('networkidle');
     } else {
       // Navigate directly to quiz page
-      await page.goto(`/quiz/${lessonId}`);
+      await spaNavigate(page, `/quiz/${lessonId}`);
       await page.waitForLoadState('networkidle');
     }
 
@@ -249,7 +249,7 @@ test.describe('Learner: Quiz Assessment', () => {
     });
 
     // Navigate to learner home
-    await page.goto('/learner');
+    await spaNavigate(page, '/learner');
     await page.waitForLoadState('networkidle');
     await screenshot(page, 'quiz-07-back-to-home');
 

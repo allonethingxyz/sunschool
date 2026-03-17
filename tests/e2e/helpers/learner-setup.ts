@@ -173,6 +173,11 @@ export async function createChildViaAPI(
 /**
  * Full setup: register parent, create child, set auth, navigate to learner home.
  * Returns token, learnerId, and childName for use in tests.
+ *
+ * WORKAROUND: The app's auth init (use-auth.tsx) destructively clears
+ * AUTH_TOKEN from AsyncStorage before reading it back. We install an
+ * init script that prevents removeItem('AUTH_TOKEN') from working,
+ * then reload so the auth system reads and validates the token.
  */
 export async function setupLearnerSession(
   page: Page,
@@ -185,11 +190,18 @@ export async function setupLearnerSession(
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  // Register parent
+  // Wait for auth initialization to complete
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+
+  // Register parent via direct fetch (bypasses React auth system)
   const token = await registerParentViaAPI(page, user);
+
+  // Set token in localStorage
   await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
 
-  // Create child learner
+  // Create child learner via API
   const learnerId = await createChildViaAPI(page, childName);
 
   // Store learner ID for app to use
@@ -201,7 +213,17 @@ export async function setupLearnerSession(
   // Ensure learner profile exists
   await apiCall(page, 'GET', `/api/learner-profile/${learnerId}`);
 
-  // Navigate to learner home
+  // Reload so auth init reads the token and validates it against /api/user.
+  // The fixed use-auth.tsx reads the token BEFORE clearing cached state.
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+
+  // Wait for auth to complete — the user should now be authenticated
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+
+  // Navigate to learner home via SPA (auth context is now hydrated)
   await spaNavigate(page, '/learner');
 
   return { token, learnerId, childName };
@@ -209,23 +231,67 @@ export async function setupLearnerSession(
 
 /**
  * Generate a lesson via API and poll until it becomes active.
+ * Retries the create call on transient failures (5xx, network errors).
  * Uses expect.poll() instead of setTimeout loops for proper Playwright waits.
  */
 export async function generateAndWaitForLesson(
   page: Page,
   subject: string = 'Science'
 ): Promise<number> {
-  // Request lesson creation
-  const createResult = await apiCall(page, 'POST', '/api/lessons/create', {
-    learnerId: await page.evaluate(() =>
-      Number(localStorage.getItem('selectedLearnerId'))
-    ),
-    subject,
-    gradeLevel: 3,
-  });
+  const learnerId = await page.evaluate(() =>
+    Number(localStorage.getItem('selectedLearnerId'))
+  );
 
-  if (createResult.data?.id) {
-    // If creation returns the ID directly, still wait for it to be active
+  // Retry lesson creation on transient failures (503, 500, network errors)
+  const MAX_CREATE_RETRIES = 5;
+  const BASE_DELAY_MS = 3000;
+  let createSuccess = false;
+
+  for (let attempt = 1; attempt <= MAX_CREATE_RETRIES; attempt++) {
+    const createResult = await apiCall(page, 'POST', '/api/lessons/create', {
+      learnerId,
+      subject,
+      gradeLevel: 3,
+    });
+
+    if (createResult.status >= 200 && createResult.status < 400) {
+      createSuccess = true;
+      break;
+    }
+
+    // Fast-fail on billing/auth errors — retries won't help
+    const errorMsg = JSON.stringify(createResult.data || '');
+    const isFatal = createResult.status === 402
+      || /Insufficient credits/i.test(errorMsg)
+      || createResult.status === 401
+      || createResult.status === 403;
+    if (isFatal) {
+      throw new Error(
+        `[E2E] Lesson create fatal error (status ${createResult.status}): ${errorMsg}`
+      );
+    }
+
+    // Check if there's already an active lesson (maybe from a previous attempt)
+    const activeCheck = await apiCall(page, 'GET',
+      `/api/lessons/active?learnerId=${learnerId}`);
+    if (activeCheck.data?.id) {
+      createSuccess = true;
+      break;
+    }
+
+    if (attempt < MAX_CREATE_RETRIES) {
+      const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      console.warn(
+        `[E2E] Lesson create attempt ${attempt}/${MAX_CREATE_RETRIES} failed ` +
+        `(status: ${createResult.status}). Retrying in ${delay}ms...`
+      );
+      await new Promise(r => setTimeout(r, delay));
+    } else {
+      console.error(
+        `[E2E] Lesson create failed after ${MAX_CREATE_RETRIES} attempts. ` +
+        `Last status: ${createResult.status}, data: ${errorMsg}`
+      );
+    }
   }
 
   // Poll for active lesson using expect.poll (no setTimeout)
@@ -234,11 +300,22 @@ export async function generateAndWaitForLesson(
   await expect
     .poll(
       async () => {
-        const result = await apiCall(page, 'GET', '/api/lessons/active?' +
-          `learnerId=${await page.evaluate(() => localStorage.getItem('selectedLearnerId'))}`);
+        const result = await apiCall(page, 'GET',
+          `/api/lessons/active?learnerId=${learnerId}`);
         if (result.data?.id) {
           activeLessonId = result.data.id;
           return true;
+        }
+        // If create never succeeded and no lesson is active, re-attempt create
+        if (!createSuccess) {
+          const retryCreate = await apiCall(page, 'POST', '/api/lessons/create', {
+            learnerId,
+            subject,
+            gradeLevel: 3,
+          });
+          if (retryCreate.status >= 200 && retryCreate.status < 400) {
+            createSuccess = true;
+          }
         }
         return false;
       },

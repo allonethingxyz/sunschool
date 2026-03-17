@@ -960,6 +960,11 @@ export function registerRoutes(app: Express): Server {
         });
       } catch (genErr) {
         console.error('[Lesson] Generation failed:', genErr);
+        const errMsg = genErr instanceof Error ? genErr.message : String(genErr);
+        // Return 402 for billing issues so clients can distinguish from transient failures
+        if (/API error: 402/.test(errMsg) || /Insufficient credits/.test(errMsg)) {
+          return res.status(402).json({ error: "AI service billing issue. Please check OpenRouter credits." });
+        }
         return res.status(503).json({ error: "Lesson generation failed after multiple attempts. Please try again." });
       }
 

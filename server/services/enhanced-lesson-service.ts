@@ -483,7 +483,23 @@ export async function generateLessonWithRetry(
       return spec;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`[LessonRetry] Attempt ${attempt}/${maxRetries} failed: ${lastError.message}`);
+      const errMsg = lastError.message;
+
+      // Fatal errors — don't waste retries (401 unauthorized, 402 no credits, 403 forbidden)
+      const isFatal = /API error: 40[123]/.test(errMsg) || /API key/.test(errMsg) || /Insufficient credits/.test(errMsg);
+      if (isFatal) {
+        console.error(`[LessonRetry] Fatal error on attempt ${attempt}/${maxRetries}: ${errMsg}`);
+        throw lastError;
+      }
+
+      const isLastAttempt = attempt === maxRetries;
+      if (!isLastAttempt) {
+        const delay = 3000 * Math.pow(2, attempt - 1);
+        console.warn(`[LessonRetry] Attempt ${attempt}/${maxRetries} failed (retrying in ${delay}ms): ${errMsg}`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        console.warn(`[LessonRetry] Attempt ${attempt}/${maxRetries} failed (no more retries): ${errMsg}`);
+      }
     }
   }
 

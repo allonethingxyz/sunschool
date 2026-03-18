@@ -124,12 +124,12 @@ export function registerRoutes(app: Express): Server {
     const { username, email, name, role, password, parentId } = req.body;
 
     if (!username || !email || !name || !role || !password) {
-      res.status(400).json({ error: "Missing required fields" });
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
     // Verify role is valid
     if (!["ADMIN", "PARENT", "LEARNER"].includes(role)) {
-      res.status(400).json({ error: "Invalid role" });
+      return res.status(400).json({ error: "Invalid role" });
     }
 
     try {

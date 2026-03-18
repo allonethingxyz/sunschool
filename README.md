@@ -128,7 +128,7 @@ PORT=5000
 
 ```bash
 # Development
-npm run dev
+npm run deploy
 
 # Production
 npm run build

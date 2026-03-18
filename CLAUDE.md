@@ -10,7 +10,7 @@ Sunschool is an AI-powered K-12 learning platform. This is the open-source repo 
 ## Key Commands
 ```bash
 npm ci                                    # Install deps
-npm run dev                               # Start dev server
+npm run deploy                            # Start dev server
 npx tsc --noEmit                          # Type check
 npx eslint server/ shared/ --max-warnings 999  # Lint
 

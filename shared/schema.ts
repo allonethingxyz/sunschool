@@ -147,10 +147,31 @@ export type EnhancedLessonSpec = {
   difficultyLevel: "beginner" | "intermediate" | "advanced";
 };
 
+// Lesson Templates table — shared lesson content library
+export const lessonTemplates = pgTable("lesson_templates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  contentHash: varchar("content_hash", { length: 64 }).notNull(),
+  subject: text("subject").notNull(),
+  gradeLevel: integer("grade_level").notNull(),
+  topic: text("topic").notNull(),
+  difficulty: text("difficulty", { enum: ["beginner", "intermediate", "advanced"] }).default("beginner").notNull(),
+  spec: jsonb("spec").$type<EnhancedLessonSpec>().notNull(),
+  title: text("title").notNull(),
+  timesServed: integer("times_served").notNull().default(0),
+  avgScore: integer("avg_score"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_template_content_hash").on(table.contentHash),
+  index("idx_template_subject_grade").on(table.subject, table.gradeLevel, table.difficulty),
+  index("idx_template_topic").on(table.topic),
+]);
+
 // Lessons table
 export const lessons = pgTable("lessons", {
   id: text("id").primaryKey().notNull(),
   learnerId: integer("learner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  templateId: uuid("template_id").references(() => lessonTemplates.id, { onDelete: "set null" }),
   moduleId: text("module_id"),
   status: lessonStatusEnum("status").notNull().default("QUEUED"),
   subject: text("subject"),
@@ -220,6 +241,9 @@ export type InsertUser = typeof users.$inferInsert;
 
 export type LearnerProfile = typeof learnerProfiles.$inferSelect;
 export type InsertLearnerProfile = typeof learnerProfiles.$inferInsert;
+
+export type LessonTemplate = typeof lessonTemplates.$inferSelect;
+export type InsertLessonTemplate = typeof lessonTemplates.$inferInsert;
 
 export type Lesson = typeof lessons.$inferSelect;
 export type InsertLesson = typeof lessons.$inferInsert;

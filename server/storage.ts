@@ -1,14 +1,15 @@
-import { users, lessons, learnerProfiles, achievements, dbSyncConfigs } from "../shared/schema";
+import { users, lessons, learnerProfiles, achievements, dbSyncConfigs, lessonTemplates } from "../shared/schema";
 import crypto from "crypto";
-import type { 
-  User, InsertUser, 
-  Lesson, InsertLesson, 
-  LearnerProfile, InsertLearnerProfile, 
+import type {
+  User, InsertUser,
+  Lesson, InsertLesson,
+  LearnerProfile, InsertLearnerProfile,
   Achievement, InsertAchievement,
-  DbSyncConfig, InsertDbSyncConfig
+  DbSyncConfig, InsertDbSyncConfig,
+  LessonTemplate, InsertLessonTemplate
 } from "../shared/schema";
 import { db, pool, withRetry, checkDatabaseConnection } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 // Type for upserting users from Replit auth
 export interface UpsertUser {
@@ -54,6 +55,13 @@ export interface IStorage {
   updateSyncConfig(id: string, data: Partial<InsertDbSyncConfig>): Promise<DbSyncConfig | undefined>;
   deleteSyncConfig(id: string): Promise<boolean>;
   updateSyncStatus(id: string, status: "IDLE" | "IN_PROGRESS" | "FAILED" | "COMPLETED", errorMessage?: string): Promise<DbSyncConfig | undefined>;
+
+  // Lesson template operations
+  findTemplateByHash(contentHash: string): Promise<LessonTemplate | undefined>;
+  findTemplatesBySubjectGrade(subject: string, gradeLevel: number, difficulty?: string): Promise<LessonTemplate[]>;
+  createTemplate(template: InsertLessonTemplate): Promise<LessonTemplate>;
+  incrementTemplateServed(templateId: string): Promise<void>;
+  updateTemplateAvgScore(templateId: string, newScore: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -737,6 +745,76 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error deleting user:', error);
       return false;
+    }
+  }
+
+  // Lesson template operations
+  async findTemplateByHash(contentHash: string): Promise<LessonTemplate | undefined> {
+    try {
+      const result = await db.select().from(lessonTemplates)
+        .where(eq(lessonTemplates.contentHash, contentHash))
+        .limit(1);
+      const rows = Array.isArray(result) ? result : [result];
+      return rows.length > 0 ? rows[0] as LessonTemplate : undefined;
+    } catch (error) {
+      console.error('Error in findTemplateByHash:', error);
+      return undefined;
+    }
+  }
+
+  async findTemplatesBySubjectGrade(subject: string, gradeLevel: number, difficulty?: string): Promise<LessonTemplate[]> {
+    try {
+      const conditions = [
+        eq(lessonTemplates.subject, subject),
+        eq(lessonTemplates.gradeLevel, gradeLevel),
+      ];
+      if (difficulty) {
+        conditions.push(eq(lessonTemplates.difficulty, difficulty as any));
+      }
+      const result = await db.select().from(lessonTemplates)
+        .where(and(...conditions))
+        .orderBy(desc(lessonTemplates.timesServed));
+      return Array.isArray(result) ? result as LessonTemplate[] : [result as LessonTemplate];
+    } catch (error) {
+      console.error('Error in findTemplatesBySubjectGrade:', error);
+      return [];
+    }
+  }
+
+  async createTemplate(template: InsertLessonTemplate): Promise<LessonTemplate> {
+    const result = await db.insert(lessonTemplates).values(template).returning();
+    const row = Array.isArray(result) ? result[0] : result;
+    return row as LessonTemplate;
+  }
+
+  async incrementTemplateServed(templateId: string): Promise<void> {
+    try {
+      await db.update(lessonTemplates)
+        .set({
+          timesServed: sql`${lessonTemplates.timesServed} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(lessonTemplates.id, templateId));
+    } catch (error) {
+      console.error('Error in incrementTemplateServed:', error);
+    }
+  }
+
+  async updateTemplateAvgScore(templateId: string, newScore: number): Promise<void> {
+    try {
+      // Running average: new_avg = ((old_avg * (served-1)) + newScore) / served
+      // For simplicity, use a weighted update via raw SQL
+      await pool.query(`
+        UPDATE lesson_templates
+        SET avg_score = CASE
+          WHEN avg_score IS NULL THEN $1
+          ELSE ROUND((avg_score * (times_served - 1) + $1)::numeric / GREATEST(times_served, 1))::integer
+        END,
+        updated_at = NOW()
+        WHERE id = $2
+      `, [newScore, templateId]);
+    } catch (error) {
+      console.error('Error in updateTemplateAvgScore:', error);
     }
   }
 }

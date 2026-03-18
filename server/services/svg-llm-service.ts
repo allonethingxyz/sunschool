@@ -16,6 +16,12 @@ function isModelUnavailable(error: any): boolean {
   return msg.includes('404') || msg.includes('402') || msg.includes('No endpoints found') || msg.includes('not available') || msg.includes('credits') || msg.includes('afford');
 }
 
+/** Returns true for billing errors (402/credits) — all models share the same account so no point trying fallbacks */
+function isBillingError(error: any): boolean {
+  const msg = error?.message || '';
+  return msg.includes('402') || msg.includes('credits') || msg.includes('afford') || msg.includes('Insufficient');
+}
+
 /**
  * Lightweight SVG sanitizer — removes dangerous tags, attributes, and external
  * references.  This replaces isomorphic-dompurify (which pulls in jsdom →
@@ -185,6 +191,10 @@ export async function generateEducationalSVG(
         description: `Educational illustration of ${concept} for grade ${gradeLevel}`,
       };
     } catch (error: any) {
+      if (isBillingError(error)) {
+        console.error(`[SVG] Billing error (${model}): ${error.message}. All models share billing — aborting chain.`);
+        return null;
+      }
       if (isModelUnavailable(error) && model !== models[models.length - 1]) {
         console.warn(`[SVG] Model ${model} unavailable (${error.message}), trying next fallback`);
         continue;
@@ -246,6 +256,10 @@ export async function generateDiagramSVG(
         type: diagramType,
       };
     } catch (error: any) {
+      if (isBillingError(error)) {
+        console.error(`[SVG] Billing error (${model}): ${error.message}. All models share billing — aborting chain.`);
+        return null;
+      }
       if (isModelUnavailable(error) && model !== models[models.length - 1]) {
         console.warn(`[SVG] Model ${model} unavailable (${error.message}), trying next fallback`);
         continue;

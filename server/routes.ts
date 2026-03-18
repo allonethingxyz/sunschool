@@ -29,6 +29,7 @@ function isAuthenticated(req: Request, res: Response, next: NextFunction): void 
 // Import services
 import('./services/subject-recommendation');
 import { generateLessonWithRetry, generateLessonImages } from './services/enhanced-lesson-service';
+import { findOrCreateTemplate } from './services/lesson-template-service';
 import { storeQuizAnswers, extractConceptTags } from './services/quiz-tracking-service';
 import { bulkUpdateMasteryFromAnswers, getConceptsNeedingReinforcement } from './services/mastery-service';
 import { storeQuestionHashes, getRecentQuestions } from './services/question-deduplication';
@@ -951,19 +952,32 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Single generation path with retry and validation
+      // Use shared lesson library: reuse existing template or generate new one
       let spec;
+      let templateId: string | undefined;
       try {
-        spec = await generateLessonWithRetry(gradeLevel, topic, {
-          subject: finalSubject,
-          difficulty: difficulty as 'beginner' | 'intermediate' | 'advanced',
-        });
+        const templateResult = await findOrCreateTemplate(
+          storage,
+          finalSubject,
+          gradeLevel,
+          topic || finalSubject,
+          difficulty || 'beginner',
+          () => generateLessonWithRetry(gradeLevel, topic, {
+            subject: finalSubject,
+            difficulty: difficulty as 'beginner' | 'intermediate' | 'advanced',
+          })
+        );
+        spec = templateResult.spec;
+        templateId = templateResult.templateId;
       } catch (genErr) {
         console.error('[Lesson] Generation failed:', genErr);
         const errMsg = genErr instanceof Error ? genErr.message : String(genErr);
         // Return 402 for billing issues so clients can distinguish from transient failures
         if (/API error: 402/.test(errMsg) || /Insufficient credits/.test(errMsg)) {
           return res.status(402).json({ error: "AI service billing issue. Please check OpenRouter credits." });
+        }
+        if (/API error: 403/.test(errMsg) || /Key limit exceeded/.test(errMsg)) {
+          return res.status(402).json({ error: "AI service key limit exceeded. The OpenRouter API key's monthly spending limit needs to be increased at https://openrouter.ai/settings/keys" });
         }
         return res.status(503).json({ error: "Lesson generation failed after multiple attempts. Please try again." });
       }
@@ -993,6 +1007,7 @@ export function registerRoutes(app: Express): Server {
         newLesson = await storage.createLesson({
           id: crypto.randomUUID(),
           learnerId: Number(targetLearnerId),
+          templateId,
           moduleId: "custom-" + Date.now(),
           status: "ACTIVE",
           subject: finalSubject,
@@ -1011,6 +1026,7 @@ export function registerRoutes(app: Express): Server {
           newLesson = await storage.createLesson({
             id: crypto.randomUUID(),
             learnerId: Number(targetLearnerId),
+            templateId,
             moduleId: "custom-" + Date.now(),
             status: "ACTIVE",
             subject: finalSubject,
@@ -1154,6 +1170,13 @@ export function registerRoutes(app: Express): Server {
     // Update lesson status
     const updatedLesson = await storage.updateLessonStatus(lessonId, "DONE", score);
 
+    // Update template average score if this lesson came from the library
+    if (lesson.templateId) {
+      storage.updateTemplateAvgScore(lesson.templateId, score).catch(err =>
+        console.error('[Library] Failed to update template avg score:', err)
+      );
+    }
+
     // Use the lesson's learner ID (not req.user.id) so that points, mastery,
     // and analytics are attributed to the child even when a parent submits.
     const learnerId: number = typeof lesson.learnerId === 'number' ? lesson.learnerId : parseInt(String(lesson.learnerId), 10);
@@ -1293,15 +1316,23 @@ export function registerRoutes(app: Express): Server {
       const { getSubjectCategory } = await import('./services/subject-recommendation');
       const nextCategory = getSubjectCategory(nextSubject);
 
-      // Use the single generation path with retry+validation
-      const spec = await generateLessonWithRetry(profile.gradeLevel, nextSubject, {
-        subject: nextSubject,
-        difficulty: 'beginner',
-      });
+      // Use shared lesson library for pre-generation too
+      const { spec, templateId } = await findOrCreateTemplate(
+        storage,
+        nextSubject,
+        profile.gradeLevel,
+        nextSubject,
+        'beginner',
+        () => generateLessonWithRetry(profile.gradeLevel, nextSubject, {
+          subject: nextSubject,
+          difficulty: 'beginner',
+        })
+      );
 
       const queued = await storage.createLesson({
         id: crypto.randomUUID(),
         learnerId: Number(learnerId),
+        templateId,
         moduleId: "auto-" + Date.now(),
         status: "ACTIVE",
         subject: nextSubject,

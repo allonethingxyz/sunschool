@@ -1,0 +1,21 @@
+{
+  "name": "Sunschool — AI-Powered Learning",
+  "short_name": "Sunschool",
+  "description": "Open-source AI tutor with personalized lessons for K-12 students. Parents own the prompt.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8faff",
+  "theme_color": "#4A90D9",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    },
+    {
+      "src": "/images/sunschool-logo.png",
+      "type": "image/png",
+      "sizes": "1208x250"
+    }
+  ]
+}

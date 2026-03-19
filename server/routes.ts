@@ -33,6 +33,7 @@ import { findOrCreateTemplate } from './services/lesson-template-service';
 import { storeQuizAnswers, extractConceptTags } from './services/quiz-tracking-service';
 import { bulkUpdateMasteryFromAnswers, getConceptsNeedingReinforcement } from './services/mastery-service';
 import { storeQuestionHashes, getRecentQuestions } from './services/question-deduplication';
+import { validatePromptInput, delimitUserInput } from './services/prompt-safety';
 
 function hasRole(roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -623,6 +624,22 @@ export function registerRoutes(app: Express): Server {
       return res.status(400).json({ error: "No valid update data provided" });
     }
 
+    // Validate subjects arrays — these flow into LLM prompts during lesson pre-generation
+    const validateSubjectArray = async (arr: any[], fieldName: string) => {
+      if (!Array.isArray(arr)) return;
+      for (const item of arr) {
+        const val = typeof item === 'string' ? item : item?.name || item?.subject;
+        if (val) {
+          const check = await validatePromptInput(val);
+          if (!check.safe) {
+            return res.status(400).json({ error: `Invalid ${fieldName}: ${check.reason}` });
+          }
+        }
+      }
+    };
+    if (subjects) { const r = await validateSubjectArray(subjects, 'subject'); if (r) return r; }
+    if (recommendedSubjects) { const r = await validateSubjectArray(recommendedSubjects, 'recommended subject'); if (r) return r; }
+
     // Check authorization for parents
     if (req.user?.role === "PARENT") {
       try {
@@ -902,6 +919,26 @@ export function registerRoutes(app: Express): Server {
 
     if (!gradeLevel || !learnerId) {
       return res.status(400).json({ error: "Missing required fields: gradeLevel, learnerId" });
+    }
+
+    // Validate prompt safety on user-provided text fields
+    if (topic) {
+      const topicCheck = await validatePromptInput(topic);
+      if (!topicCheck.safe) {
+        return res.status(400).json({ error: `Invalid topic: ${topicCheck.reason}` });
+      }
+    }
+    if (subject) {
+      const subjectCheck = await validatePromptInput(subject);
+      if (!subjectCheck.safe) {
+        return res.status(400).json({ error: `Invalid subject: ${subjectCheck.reason}` });
+      }
+    }
+    if (category) {
+      const categoryCheck = await validatePromptInput(category);
+      if (!categoryCheck.safe) {
+        return res.status(400).json({ error: `Invalid category: ${categoryCheck.reason}` });
+      }
     }
 
     // Validate user permissions

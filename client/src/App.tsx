@@ -31,6 +31,7 @@ import { PlausibleAnalytics } from './components/PlausibleAnalytics';
 import { useAuth } from './hooks/use-auth';
 import { ModeProvider } from './context/ModeContext';
 import AppLayout from './components/AppLayout';
+import { usePageTitle } from './hooks/use-page-title';
 
 // Home redirect component to handle auth status
 const HomeRedirect = () => {
@@ -57,6 +58,8 @@ const HomeRedirect = () => {
 };
 
 export default function App() {
+  usePageTitle();
+
   return (
     <div className="app-container">
       <PlausibleAnalytics

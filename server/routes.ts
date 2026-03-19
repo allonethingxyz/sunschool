@@ -1044,16 +1044,23 @@ export function registerRoutes(app: Express): Server {
       const lessonId = newLesson.id;
       const savedSpec = spec;
       backgroundTask(`images-${lessonId}`, async () => {
-        const { images, diagrams } = await generateLessonImages(
+        const { images: generatedImages, diagrams } = await generateLessonImages(
           savedSpec, topic, gradeLevel, finalSubject
         );
-        if (images?.length) {
-          const imgPaths = images
+        if (generatedImages?.length) {
+          const imgPaths = generatedImages
             .filter((img: any) => img.path)
             .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
-          const mergedSpec = { ...savedSpec, images, diagrams: diagrams || [] };
+          // Merge generated images into the original spec images by ID,
+          // preserving metadata for images that weren't generated (over the cap)
+          const generatedById = new Map(generatedImages.map((img: any) => [img.id, img]));
+          const mergedImages = (savedSpec.images || []).map((origImg: any) => {
+            const generated = generatedById.get(origImg.id);
+            return generated ? { ...origImg, ...generated } : origImg;
+          });
+          const mergedSpec = { ...savedSpec, images: mergedImages, diagrams: diagrams || [] };
           await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
-          console.log(`[BG] Images generated for lesson ${lessonId}`);
+          console.log(`[BG] Images generated for lesson ${lessonId} (${generatedImages.length} generated, ${mergedImages.length} total)`);
         }
       });
 

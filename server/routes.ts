@@ -33,7 +33,7 @@ import { findOrCreateTemplate } from './services/lesson-template-service';
 import { storeQuizAnswers, extractConceptTags } from './services/quiz-tracking-service';
 import { bulkUpdateMasteryFromAnswers, getConceptsNeedingReinforcement } from './services/mastery-service';
 import { storeQuestionHashes, getRecentQuestions } from './services/question-deduplication';
-import { validatePromptInput, delimitUserInput } from './services/prompt-safety';
+import { validatePromptInput } from './services/prompt-safety';
 
 function hasRole(roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {

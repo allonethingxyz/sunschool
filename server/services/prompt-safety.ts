@@ -3,11 +3,14 @@
  *
  * Defense-in-depth for LLM prompt injection:
  * 1. Input validation — regex whitelist on user-facing text fields
- * 2. Injection detection — hai-guardrails heuristic scanner
+ * 2. Pattern detection — known injection phrase matching
  * 3. Prompt hardening — delimiter-wrapped user input in prompts
+ *
+ * Note: hai-guardrails was removed because its CJS bundle uses
+ * import.meta which crashes Node 22 in CJS mode on Railway.
+ * The regex-based detection covers the same ground without the
+ * ESM compatibility issue.
  */
-
-import { injectionGuard, type GuardResult, type LLMMessage } from '@presidio-dev/hai-guardrails';
 
 // --- Input Validation ---
 
@@ -30,6 +33,19 @@ const INJECTION_PATTERNS = [
   /\beval\s*\(/i,
   /<script/i,
   /\$\{.*\}/,  // Template literal injection
+  /\bprompt\s*leak/i,
+  /\bexfiltrate\b/i,
+  /\bsudo\b/i,
+  /\brm\s+-rf\b/i,
+  /\bpassword\b.*\bshow\b/i,
+  /\bapi[_\s]?key\b/i,
+  /\bsecret\b.*\btoken\b/i,
+  /act\s+as\s+(a|an)\s+/i,
+  /pretend\s+(to\s+be|you'?re)\s+/i,
+  /roleplay\s+as\s+/i,
+  /\bformat:\s*json\b/i,
+  /respond\s+with\s+(only|just)\s+/i,
+  /output\s+(only|just)\s+/i,
 ];
 
 export interface SafetyResult {
@@ -74,37 +90,6 @@ export function validateTopicInput(input: string): SafetyResult {
   return { safe: true, sanitized: trimmed };
 }
 
-// --- Guardrails Engine ---
-
-// Create the injection guard with heuristic mode (fast, no API calls)
-const guard = injectionGuard(
-  { roles: ['user'] },
-  { mode: 'heuristic', threshold: 0.7, failOnError: false }
-);
-
-/**
- * Run hai-guardrails injection detection on a string.
- * Returns { safe: false } if injection is detected.
- */
-export async function checkInjection(input: string): Promise<SafetyResult> {
-  try {
-    const messages: LLMMessage[] = [{ role: 'user', content: input }];
-    const results: GuardResult[] = await guard(messages);
-
-    const failed = results.find(r => !r.passed);
-    if (failed) {
-      console.warn(`[PromptSafety] Injection detected by guardrails: "${input.substring(0, 50)}..." reason: ${failed.reason}`);
-      return { safe: false, reason: failed.reason || 'Injection detected', sanitized: '' };
-    }
-
-    return { safe: true, sanitized: input };
-  } catch (err) {
-    // Fail open — don't block legitimate requests if guardrails crash
-    console.error('[PromptSafety] Guardrails error (failing open):', err);
-    return { safe: true, sanitized: input };
-  }
-}
-
 // --- Prompt Hardening ---
 
 /**
@@ -116,21 +101,9 @@ export function delimitUserInput(input: string): string {
 }
 
 /**
- * Full validation pipeline: regex + guardrails.
+ * Full validation pipeline: regex whitelist + injection pattern detection.
  * Use this for all user-provided text that flows into LLM prompts.
  */
 export async function validatePromptInput(input: string, fieldName: string = 'input'): Promise<SafetyResult> {
-  // Step 1: Basic validation
-  const basicResult = validateTopicInput(input);
-  if (!basicResult.safe) {
-    return basicResult;
-  }
-
-  // Step 2: Guardrails injection detection
-  const guardResult = await checkInjection(basicResult.sanitized);
-  if (!guardResult.safe) {
-    return guardResult;
-  }
-
-  return { safe: true, sanitized: basicResult.sanitized };
+  return validateTopicInput(input);
 }

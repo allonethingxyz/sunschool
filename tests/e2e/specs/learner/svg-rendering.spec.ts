@@ -6,7 +6,7 @@
  * Checks both the API response (spec.images[].svgData) and the
  * rendered DOM for visible SVG paths/circles/text.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import {
   setupLearnerSession,
   screenshot,
@@ -15,6 +15,21 @@ import {
   waitForLessonLoaded,
   spaNavigate,
 } from '../../helpers/learner-setup';
+
+/**
+ * Switch to learner mode so LearnerRoute paths render properly.
+ * Sets preferredMode in localStorage and reloads to re-initialize ModeContext.
+ */
+async function switchToLearnerMode(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('preferredMode', 'LEARNER');
+  });
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+}
 
 test.describe('Learner: SVG Rendering', () => {
   test.describe.configure({ retries: 2 });
@@ -104,7 +119,8 @@ test.describe('Learner: SVG Rendering', () => {
       )
       .toBeGreaterThanOrEqual(1);
 
-    // Navigate to the lesson page and wait for content
+    // Switch to learner mode and navigate to the lesson page
+    await switchToLearnerMode(page);
     await spaNavigate(page, '/lesson');
     await page.waitForLoadState('networkidle');
     await waitForLessonLoaded(page);

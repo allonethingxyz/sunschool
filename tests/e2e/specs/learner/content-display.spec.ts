@@ -10,7 +10,7 @@
  *
  * All assertions are structural — AI-generated content varies per request.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { selfHealingLocator } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
@@ -20,6 +20,21 @@ import {
   waitForLessonLoaded,
   spaNavigate,
 } from '../../helpers/learner-setup';
+
+/**
+ * Switch to learner mode so LearnerRoute paths render properly.
+ * Sets preferredMode in localStorage and reloads to re-initialize ModeContext.
+ */
+async function switchToLearnerMode(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('preferredMode', 'LEARNER');
+  });
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+}
 
 test.describe('Learner: Content Display', () => {
   test.describe.configure({ retries: 2 });
@@ -34,6 +49,7 @@ test.describe('Learner: Content Display', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
+    await switchToLearnerMode(page);
     await spaNavigate(page, '/lesson');
     await page.waitForLoadState('networkidle');
     await waitForLessonLoaded(page);
@@ -69,6 +85,7 @@ test.describe('Learner: Content Display', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Math');
     expect(lessonId).toBeTruthy();
 
+    await switchToLearnerMode(page);
     await spaNavigate(page, '/lesson');
     await page.waitForLoadState('networkidle');
     await waitForLessonLoaded(page);
@@ -149,6 +166,7 @@ test.describe('Learner: Content Display', () => {
     }
 
     // Verify content renders on the page
+    await switchToLearnerMode(page);
     await spaNavigate(page, '/lesson');
     await page.waitForLoadState('networkidle');
     await waitForLessonLoaded(page);
@@ -167,6 +185,7 @@ test.describe('Learner: Content Display', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
+    await switchToLearnerMode(page);
     await spaNavigate(page, `/quiz/${lessonId}`);
     await page.waitForLoadState('networkidle');
 
@@ -219,6 +238,7 @@ test.describe('Learner: Content Display', () => {
 
     await generateAndWaitForLesson(page, 'Science');
 
+    await switchToLearnerMode(page);
     await spaNavigate(page, '/learner');
     await page.waitForLoadState('networkidle');
     await screenshot(page, 'content-05-knowledge-graph');

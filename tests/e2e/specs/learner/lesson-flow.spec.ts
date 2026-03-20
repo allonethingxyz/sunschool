@@ -9,7 +9,7 @@
  *
  * AI content is variable — assertions are structural, not textual.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
@@ -18,6 +18,21 @@ import {
   spaNavigate,
   waitForLessonLoaded,
 } from '../../helpers/learner-setup';
+
+/**
+ * Switch to learner mode so LearnerRoute paths render properly.
+ * Sets preferredMode in localStorage and reloads to re-initialize ModeContext.
+ */
+async function switchToLearnerMode(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('preferredMode', 'LEARNER');
+  });
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+}
 
 const TEST_NAME = 'lesson-flow';
 
@@ -36,7 +51,8 @@ test.describe('Learner: Lesson Flow', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
-    // Navigate to learner home (SPA navigate to preserve auth)
+    // Switch to learner mode and navigate to learner home
+    await switchToLearnerMode(page);
     await spaNavigate(page, '/learner');
     await screenshot(page, `${TEST_NAME}-01-learner-home`);
 
@@ -104,7 +120,8 @@ test.describe('Learner: Lesson Flow', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
-    // Navigate to learner home (SPA navigate to preserve auth)
+    // Switch to learner mode and navigate to learner home
+    await switchToLearnerMode(page);
     await spaNavigate(page, '/learner');
 
     // Verify the lesson card has structural content

@@ -28,6 +28,12 @@ async function navigateAsLearner(page: Page, path: string): Promise<void> {
   }, { timeout: 15000 }).catch(() => {});
 }
 
+/** react-native-web renders Text as <div>, not <h1>-<h6>, so getByRole('heading') won't find them */
+async function expectPageHasContent(page: Page): Promise<void> {
+  const bodyText = await page.evaluate(() => document.body.innerText);
+  expect(bodyText.length).toBeGreaterThan(50);
+}
+
 test.describe('Learner: Achievements', () => {
   test.describe.configure({ retries: 2 });
   test.beforeEach(async ({ page }) => {
@@ -41,10 +47,9 @@ test.describe('Learner: Achievements', () => {
     await screenshot(page, 'achieve-01-progress-page');
 
     // Progress page should have structural content
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
+    await expectPageHasContent(page);
 
-    // Look for progress-related elements using semantic locators
+    // Look for progress-related elements
     const hasProgressTitle = await page.getByText(/Progress|Learning|Dashboard/i)
       .first().isVisible({ timeout: 10000 }).catch(() => false);
     const hasStats = await page.getByText(/Lessons|Score|Completed|Average/i)
@@ -59,15 +64,16 @@ test.describe('Learner: Achievements', () => {
     await navigateAsLearner(page, '/progress');
     await screenshot(page, 'achieve-02-zero-state');
 
-    // New learner should see empty/zero state
-    const hasNoAchievements = await page.getByText(/no achievements|start learning|complete.*lesson/i)
-      .isVisible({ timeout: 5000 }).catch(() => false);
-    const hasZeroCount = await page.getByText(/^0$/)
-      .first().isVisible({ timeout: 3000 }).catch(() => false);
+    // The page should render with content
+    await expectPageHasContent(page);
 
-    // The page should render with at least a heading
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
+    // New learner should see zero-state indicators
+    const hasZeroIndicator = await page.getByText(/0 Lessons|Beginner|Level 1/i)
+      .first().isVisible({ timeout: 5000 }).catch(() => false);
+    const hasProgressLabel = await page.getByText(/My Progress/i)
+      .first().isVisible({ timeout: 5000 }).catch(() => false);
+
+    expect(hasZeroIndicator || hasProgressLabel).toBeTruthy();
   });
 
   test('achievements appear after completing a lesson with perfect score', async ({ page }) => {
@@ -94,7 +100,7 @@ test.describe('Learner: Achievements', () => {
 
     if (completed) {
       if (Array.isArray(achievements) && achievements.length > 0) {
-        const hasAchievementSection = await page.getByText(/Achievement|Badge|Milestone/i)
+        const hasAchievementSection = await page.getByText(/Achievement|Badge|Milestone|Trophies/i)
           .first().isVisible({ timeout: 10000 }).catch(() => false);
 
         expect(hasAchievementSection || achievements.length > 0).toBeTruthy();
@@ -143,12 +149,12 @@ test.describe('Learner: Achievements', () => {
     await navigateAsLearner(page, '/progress');
     await screenshot(page, 'achieve-05-mastery');
 
-    // Check for subject mastery section using semantic locators
-    const hasMasterySection = await page.getByText(/Mastery|Subject|Topics/i)
-      .first().isVisible({ timeout: 10000 }).catch(() => false);
+    // The progress page should render with content
+    await expectPageHasContent(page);
 
-    // The progress page should render with structural elements
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
+    // Check for progress/mastery indicators
+    const hasProgressLabel = await page.getByText(/My Progress|Mastery|Subject|Topics/i)
+      .first().isVisible({ timeout: 10000 }).catch(() => false);
+    expect(hasProgressLabel).toBeTruthy();
   });
 });

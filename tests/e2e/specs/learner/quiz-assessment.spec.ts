@@ -267,8 +267,9 @@ test.describe('Learner: Quiz Assessment', () => {
     await screenshot(page, 'quiz-07-back-to-home');
 
     // Verify page rendered with substantial content
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
+    // react-native-web renders Text as <div>, not <h1>-<h6>
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
   });
 
   test.afterEach(async ({ page }, testInfo) => {

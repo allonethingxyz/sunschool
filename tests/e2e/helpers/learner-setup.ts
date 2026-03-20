@@ -53,8 +53,13 @@ export async function registerParentViaAPI(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
     });
-    const data = await res.json();
-    return { token: data.token, status: res.status };
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text);
+      return { token: data.token, status: res.status };
+    } catch {
+      return { token: null, status: res.status, body: text.substring(0, 200) };
+    }
   }, { ...user, role: 'PARENT' });
 
   if (!result.token) {
@@ -74,8 +79,13 @@ export async function loginViaAPI(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(creds),
     });
-    const data = await res.json();
-    return { token: data.token, status: res.status };
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text);
+      return { token: data.token, status: res.status };
+    } catch {
+      return { token: null, status: res.status, body: text.substring(0, 200) };
+    }
   }, { username: user.username, password: user.password });
 
   if (!result.token) {

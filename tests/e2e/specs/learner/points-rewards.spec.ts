@@ -41,8 +41,9 @@ test.describe('Learner: Points & Rewards', () => {
     await screenshot(page, 'points-01-learner-home');
 
     // The learner home should render with structural content
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
+    // react-native-web renders Text as <div>, not <h1>-<h6>
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
   });
 
   test('can check point balance via API and see it reflected', async ({ page }) => {
@@ -78,9 +79,9 @@ test.describe('Learner: Points & Rewards', () => {
     await navigateAsLearner(page, '/goals');
     await screenshot(page, 'points-03-goals-page');
 
-    // The goals page should render
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(0);
+    // The goals page should render with content
+    const goalsBodyText = await page.evaluate(() => document.body.innerText);
+    expect(goalsBodyText.length).toBeGreaterThan(50);
 
     // If a goal was created, it should appear on the page
     if (goalId) {
@@ -185,7 +186,8 @@ test.describe('Learner: Points & Rewards', () => {
     await screenshot(page, 'points-05-after-quiz');
 
     // Verify page rendered
-    const headings = await page.getByRole('heading').count();
-    expect(headings).toBeGreaterThanOrEqual(1);
+    // react-native-web renders Text as <div>, not <h1>-<h6>
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
   });
 });

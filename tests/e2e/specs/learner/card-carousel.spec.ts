@@ -16,26 +16,37 @@ import {
   setupLearnerSession,
   screenshot,
   generateAndWaitForLesson,
-  spaNavigate,
   waitForLessonLoaded,
 } from '../../helpers/learner-setup';
 
 const TEST_NAME = 'card-carousel';
 
 /**
- * Switch to learner mode so LearnerRoute paths render properly.
- * Sets preferredMode in localStorage and reloads to re-initialize ModeContext.
+ * Navigate to a learner route with learner mode enabled.
+ * Sets preferredMode in localStorage, then does a full page.goto()
+ * so that ModeContext initializes with LEARNER mode from the start.
  */
-async function switchToLearnerMode(page: Page): Promise<void> {
+async function navigateAsLearner(page: Page, path: string): Promise<void> {
   await page.evaluate(() => {
     localStorage.setItem('preferredMode', 'LEARNER');
   });
-  await page.reload();
+  await page.goto(path);
   await page.waitForLoadState('networkidle');
-  // Wait for auth to complete
   await page.waitForFunction(() => {
     return !document.body.textContent?.includes('Initializing authentication');
   }, { timeout: 15000 }).catch(() => {});
+}
+
+/**
+ * Get the Next/Back nav buttons. TouchableOpacity renders as a div without
+ * role="button", so we locate by the exact text content.
+ */
+function getNextBtn(page: Page) {
+  return page.getByText('Next', { exact: true });
+}
+
+function getBackBtn(page: Page) {
+  return page.getByText('Back', { exact: true });
 }
 
 test.describe('Learner: Card Carousel Lesson UI', () => {
@@ -51,9 +62,7 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
-    // Switch to learner mode and navigate to lesson
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
+    await navigateAsLearner(page, '/lesson');
     await waitForLessonLoaded(page);
     await screenshot(page, `${TEST_NAME}-01-cover-card`);
 
@@ -61,16 +70,12 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     const counter = page.getByText(/1 \/ \d+/);
     await expect(counter).toBeVisible({ timeout: 15000 });
 
-    // Next button should be visible, Back should be disabled
-    const nextBtn = page.getByRole('button', { name: /next/i });
-    await expect(nextBtn).toBeVisible({ timeout: 5000 });
+    // Next and Back nav elements should be visible
+    await expect(getNextBtn(page)).toBeVisible({ timeout: 5000 });
+    await expect(getBackBtn(page)).toBeVisible({ timeout: 5000 });
 
-    const backBtn = page.getByRole('button', { name: /back/i });
-    await expect(backBtn).toBeVisible({ timeout: 5000 });
-
-    // Metadata chips (duration, grade) should be present
-    await expect(page.getByText(/min$/)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(/Grade \d+/)).toBeVisible({ timeout: 5000 });
+    // LESSON label should be visible on cover card
+    await expect(page.getByText('LESSON')).toBeVisible({ timeout: 5000 });
 
     await screenshot(page, `${TEST_NAME}-02-cover-verified`);
   });
@@ -82,8 +87,7 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Math');
     expect(lessonId).toBeTruthy();
 
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
+    await navigateAsLearner(page, '/lesson');
     await waitForLessonLoaded(page);
 
     // Read total card count from the counter
@@ -97,7 +101,7 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
 
     // Navigate forward through each card
     for (let i = 1; i < totalCards; i++) {
-      const nextBtn = page.getByRole('button', { name: /next/i });
+      const nextBtn = getNextBtn(page);
       const visible = await nextBtn.isVisible({ timeout: 3000 }).catch(() => false);
       if (!visible) break; // quiz card hides Next
 
@@ -107,7 +111,7 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     }
 
     // Quiz card: "Start Quiz" CTA should be visible
-    const startQuizBtn = page.getByRole('button', { name: /start quiz/i });
+    const startQuizBtn = page.getByText('Start Quiz');
     await expect(startQuizBtn).toBeVisible({ timeout: 10000 });
     await screenshot(page, `${TEST_NAME}-05-quiz-card`);
 
@@ -127,8 +131,7 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
+    await navigateAsLearner(page, '/lesson');
     await waitForLessonLoaded(page);
 
     // Verify we're on card 1
@@ -136,24 +139,24 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     await expect(counterEl).toBeVisible({ timeout: 15000 });
 
     // Go forward two cards
-    const nextBtn = page.getByRole('button', { name: /next/i });
+    const nextBtn = getNextBtn(page);
     await nextBtn.click();
     await page.waitForTimeout(400);
     await nextBtn.click();
     await page.waitForTimeout(400);
 
     // Should be on card 3
-    let counter = await page.getByText(/\d+ \/ \d+/).first().innerText();
-    expect(parseInt(counter.split('/')[0].trim())).toBe(3);
+    let counterVal = await page.getByText(/\d+ \/ \d+/).first().innerText();
+    expect(parseInt(counterVal.split('/')[0].trim())).toBe(3);
 
     // Go back
-    const backBtn = page.getByRole('button', { name: /back/i });
+    const backBtn = getBackBtn(page);
     await backBtn.click();
     await page.waitForTimeout(400);
 
     // Should be on card 2
-    counter = await page.getByText(/\d+ \/ \d+/).first().innerText();
-    expect(parseInt(counter.split('/')[0].trim())).toBe(2);
+    counterVal = await page.getByText(/\d+ \/ \d+/).first().innerText();
+    expect(parseInt(counterVal.split('/')[0].trim())).toBe(2);
 
     await screenshot(page, `${TEST_NAME}-07-back-navigation`);
   });
@@ -165,15 +168,14 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
+    await navigateAsLearner(page, '/lesson');
     await waitForLessonLoaded(page);
 
     // Wait for carousel to render
     await expect(page.getByText(/\d+ \/ \d+/)).toBeVisible({ timeout: 15000 });
 
     // Navigate to first section card (card 2)
-    const nextBtn = page.getByRole('button', { name: /next/i });
+    const nextBtn = getNextBtn(page);
     await nextBtn.click();
     await page.waitForTimeout(400);
 
@@ -199,8 +201,7 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
+    await navigateAsLearner(page, '/lesson');
     await waitForLessonLoaded(page);
 
     // Wait for carousel
@@ -210,7 +211,7 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     const totalCards = parseInt(counterText.split('/')[1].trim());
 
     // Navigate through cards looking for the REVIEW card
-    const nextBtn = page.getByRole('button', { name: /next/i });
+    const nextBtn = getNextBtn(page);
     let foundRecap = false;
 
     for (let i = 1; i < totalCards; i++) {

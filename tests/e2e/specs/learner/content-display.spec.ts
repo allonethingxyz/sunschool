@@ -18,18 +18,18 @@ import {
   generateAndWaitForLesson,
   apiCall,
   waitForLessonLoaded,
-  spaNavigate,
 } from '../../helpers/learner-setup';
 
 /**
- * Switch to learner mode so LearnerRoute paths render properly.
- * Sets preferredMode in localStorage and reloads to re-initialize ModeContext.
+ * Navigate to a learner route with learner mode enabled.
+ * Sets preferredMode in localStorage, then does a full page.goto()
+ * so that ModeContext initializes with LEARNER mode from the start.
  */
-async function switchToLearnerMode(page: Page): Promise<void> {
+async function navigateAsLearner(page: Page, path: string): Promise<void> {
   await page.evaluate(() => {
     localStorage.setItem('preferredMode', 'LEARNER');
   });
-  await page.reload();
+  await page.goto(path);
   await page.waitForLoadState('networkidle');
   await page.waitForFunction(() => {
     return !document.body.textContent?.includes('Initializing authentication');
@@ -49,9 +49,7 @@ test.describe('Learner: Content Display', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/lesson');
     await waitForLessonLoaded(page);
 
     await screenshot(page, 'content-01-text-sections');
@@ -85,9 +83,7 @@ test.describe('Learner: Content Display', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Math');
     expect(lessonId).toBeTruthy();
 
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/lesson');
     await waitForLessonLoaded(page);
 
     await screenshot(page, 'content-02-illustrations');
@@ -99,7 +95,8 @@ test.describe('Learner: Content Display', () => {
 
     const counterText = await page.getByText(/^\d+ \/ \d+$/).first().innerText({ timeout: 15000 });
     const totalCards = parseInt(counterText.split('/')[1].trim());
-    const nextBtn = page.getByRole('button', { name: /next/i });
+    // TouchableOpacity renders as div, not <button>, so use text locator
+    const nextBtn = page.getByText('Next', { exact: true });
 
     for (let i = 0; i < totalCards; i++) {
       // Count visual elements on current card
@@ -166,9 +163,7 @@ test.describe('Learner: Content Display', () => {
     }
 
     // Verify content renders on the page
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/lesson');
     await waitForLessonLoaded(page);
 
     await screenshot(page, 'content-03-grade-level');
@@ -185,9 +180,7 @@ test.describe('Learner: Content Display', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
-    await switchToLearnerMode(page);
-    await spaNavigate(page, `/quiz/${lessonId}`);
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, `/quiz/${lessonId}`);
 
     // Click Start Quiz if pre-quiz screen appears
     const startBtn = page.getByText('Start Quiz');
@@ -238,9 +231,7 @@ test.describe('Learner: Content Display', () => {
 
     await generateAndWaitForLesson(page, 'Science');
 
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/learner');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/learner');
     await screenshot(page, 'content-05-knowledge-graph');
 
     // The learner home should have structural elements

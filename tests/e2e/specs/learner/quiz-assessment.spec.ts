@@ -17,18 +17,18 @@ import {
   screenshot,
   generateAndWaitForLesson,
   apiCall,
-  spaNavigate,
 } from '../../helpers/learner-setup';
 
 /**
- * Switch to learner mode so LearnerRoute paths render properly.
- * Sets preferredMode in localStorage and reloads to re-initialize ModeContext.
+ * Navigate to a learner route with learner mode enabled.
+ * Sets preferredMode in localStorage, then does a full page.goto()
+ * so that ModeContext initializes with LEARNER mode from the start.
  */
-async function switchToLearnerMode(page: Page): Promise<void> {
+async function navigateAsLearner(page: Page, path: string): Promise<void> {
   await page.evaluate(() => {
     localStorage.setItem('preferredMode', 'LEARNER');
   });
-  await page.reload();
+  await page.goto(path);
   await page.waitForLoadState('networkidle');
   await page.waitForFunction(() => {
     return !document.body.textContent?.includes('Initializing authentication');
@@ -48,9 +48,8 @@ test.describe('Learner: Quiz Assessment', () => {
     const lessonId = await generateAndWaitForLesson(page);
     expect(lessonId).toBeTruthy();
 
-    // Switch to learner mode and navigate to lesson page
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
+    // Navigate to lesson page as learner
+    await navigateAsLearner(page, '/lesson');
     await page.getByText('Loading your personalized lesson...')
       .waitFor({ state: 'hidden', timeout: 120000 })
       .catch(() => {});
@@ -73,8 +72,7 @@ test.describe('Learner: Quiz Assessment', () => {
       await page.waitForLoadState('networkidle');
     } else {
       // Navigate directly to quiz page
-      await switchToLearnerMode(page);
-      await spaNavigate(page, `/quiz/${lessonId}`);
+      await navigateAsLearner(page, `/quiz/${lessonId}`);
       await page.waitForLoadState('networkidle');
     }
 
@@ -265,9 +263,8 @@ test.describe('Learner: Quiz Assessment', () => {
       learnerId,
     });
 
-    // Switch to learner mode and navigate to learner home
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/learner');
+    // Navigate to learner home
+    await navigateAsLearner(page, '/learner');
     await page.waitForLoadState('networkidle');
     await screenshot(page, 'quiz-07-back-to-home');
 

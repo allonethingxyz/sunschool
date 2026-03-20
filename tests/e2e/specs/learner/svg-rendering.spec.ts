@@ -13,18 +13,18 @@ import {
   generateAndWaitForLesson,
   apiCall,
   waitForLessonLoaded,
-  spaNavigate,
 } from '../../helpers/learner-setup';
 
 /**
- * Switch to learner mode so LearnerRoute paths render properly.
- * Sets preferredMode in localStorage and reloads to re-initialize ModeContext.
+ * Navigate to a learner route with learner mode enabled.
+ * Sets preferredMode in localStorage, then does a full page.goto()
+ * so that ModeContext initializes with LEARNER mode from the start.
  */
-async function switchToLearnerMode(page: Page): Promise<void> {
+async function navigateAsLearner(page: Page, path: string): Promise<void> {
   await page.evaluate(() => {
     localStorage.setItem('preferredMode', 'LEARNER');
   });
-  await page.reload();
+  await page.goto(path);
   await page.waitForLoadState('networkidle');
   await page.waitForFunction(() => {
     return !document.body.textContent?.includes('Initializing authentication');
@@ -119,9 +119,8 @@ test.describe('Learner: SVG Rendering', () => {
       )
       .toBeGreaterThanOrEqual(1);
 
-    // Switch to learner mode and navigate to the lesson page
-    await switchToLearnerMode(page);
-    await spaNavigate(page, '/lesson');
+    // Navigate to the lesson page as learner
+    await navigateAsLearner(page, '/lesson');
     await page.waitForLoadState('networkidle');
     await waitForLessonLoaded(page);
 

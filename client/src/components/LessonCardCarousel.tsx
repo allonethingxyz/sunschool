@@ -171,9 +171,14 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
   });
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const hasMountedRef = useRef(false);
 
-  // Persist card position
+  // Persist card position — skip first render to avoid overwriting restored value
   useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
     try { localStorage.setItem(storageKey, String(currentIndex)); } catch {}
   }, [currentIndex, storageKey]);
 
@@ -200,9 +205,11 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
 
   const totalCards = cards.length;
 
-  // Clamp restored index to valid range
+  // Clamp restored index to valid range (only when totalCards shrinks)
   useEffect(() => {
-    if (currentIndex >= totalCards) setCurrentIndex(0);
+    if (totalCards > 0 && currentIndex >= totalCards) {
+      setCurrentIndex(totalCards - 1);
+    }
   }, [totalCards]);
 
   const goNext = useCallback(() => {

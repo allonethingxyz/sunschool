@@ -9,13 +9,24 @@
  *
  * Achievements are awarded automatically after quiz submission.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import {
   setupLearnerSession,
   screenshot,
   completeOneLesson,
   apiCall,
 } from '../../helpers/learner-setup';
+
+async function navigateAsLearner(page: Page, path: string): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('preferredMode', 'LEARNER');
+  });
+  await page.goto(path);
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+}
 
 test.describe('Learner: Achievements', () => {
   test.describe.configure({ retries: 2 });
@@ -26,8 +37,7 @@ test.describe('Learner: Achievements', () => {
   test('can view progress page with learning stats', async ({ page }) => {
     await setupLearnerSession(page, 'achieve');
 
-    await page.goto('/progress');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/progress');
     await screenshot(page, 'achieve-01-progress-page');
 
     // Progress page should have structural content
@@ -46,8 +56,7 @@ test.describe('Learner: Achievements', () => {
   test('progress page shows zero state for new learner', async ({ page }) => {
     await setupLearnerSession(page, 'achieve_zero');
 
-    await page.goto('/progress');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/progress');
     await screenshot(page, 'achieve-02-zero-state');
 
     // New learner should see empty/zero state
@@ -80,8 +89,7 @@ test.describe('Learner: Achievements', () => {
     const achievements = achievementsResult.data || [];
 
     // Navigate to progress page to view achievements
-    await page.goto('/progress');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/progress');
     await screenshot(page, 'achieve-03-after-lesson');
 
     if (completed) {
@@ -102,8 +110,7 @@ test.describe('Learner: Achievements', () => {
     await completeOneLesson(page);
 
     // Navigate to progress page
-    await page.goto('/progress');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/progress');
     await screenshot(page, 'achieve-04-lesson-history');
 
     // Check lesson history via API
@@ -133,8 +140,7 @@ test.describe('Learner: Achievements', () => {
   test('progress page shows subject mastery breakdown', async ({ page }) => {
     await setupLearnerSession(page, 'achieve_mastery');
 
-    await page.goto('/progress');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/progress');
     await screenshot(page, 'achieve-05-mastery');
 
     // Check for subject mastery section using semantic locators

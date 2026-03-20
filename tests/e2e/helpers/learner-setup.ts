@@ -213,6 +213,9 @@ export async function setupLearnerSession(
   // Ensure learner profile exists
   await apiCall(page, 'GET', `/api/learner-profile/${learnerId}`);
 
+  // Set learner mode so LearnerRoute doesn't redirect to /dashboard
+  await page.evaluate(() => localStorage.setItem('preferredMode', 'LEARNER'));
+
   // Reload so auth init reads the token and validates it against /api/user.
   // The fixed use-auth.tsx reads the token BEFORE clearing cached state.
   await page.reload();

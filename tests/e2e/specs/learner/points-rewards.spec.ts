@@ -7,7 +7,7 @@
  * Points come from quiz completion. Rewards are parent-created goals
  * that learners save points toward and request redemption.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { selfHealingLocator } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
@@ -16,6 +16,17 @@ import {
   createRewardGoal,
   apiCall,
 } from '../../helpers/learner-setup';
+
+async function navigateAsLearner(page: Page, path: string): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('preferredMode', 'LEARNER');
+  });
+  await page.goto(path);
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+}
 
 test.describe('Learner: Points & Rewards', () => {
   test.describe.configure({ retries: 2 });
@@ -26,8 +37,7 @@ test.describe('Learner: Points & Rewards', () => {
   test('can view point balance on learner home', async ({ page }) => {
     await setupLearnerSession(page, 'reward');
 
-    await page.goto('/learner');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/learner');
     await screenshot(page, 'points-01-learner-home');
 
     // The learner home should render with structural content
@@ -38,8 +48,7 @@ test.describe('Learner: Points & Rewards', () => {
   test('can check point balance via API and see it reflected', async ({ page }) => {
     await setupLearnerSession(page, 'reward_balance');
 
-    await page.goto('/learner');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/learner');
 
     // Check points balance via API
     const learnerId = await page.evaluate(() =>
@@ -66,8 +75,7 @@ test.describe('Learner: Points & Rewards', () => {
     const goalId = await createRewardGoal(page, 'Extra Screen Time', 10);
 
     // Navigate to goals page
-    await page.goto('/goals');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/goals');
     await screenshot(page, 'points-03-goals-page');
 
     // The goals page should render
@@ -91,8 +99,7 @@ test.describe('Learner: Points & Rewards', () => {
     // Create a reward goal
     const goalId = await createRewardGoal(page, 'Movie Night', 5);
 
-    await page.goto('/goals');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/goals');
     await screenshot(page, 'points-04-goal-progress');
 
     if (goalId) {
@@ -174,8 +181,7 @@ test.describe('Learner: Points & Rewards', () => {
     }
 
     // Navigate to learner home and verify UI reflects points
-    await page.goto('/learner');
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, '/learner');
     await screenshot(page, 'points-05-after-quiz');
 
     // Verify page rendered

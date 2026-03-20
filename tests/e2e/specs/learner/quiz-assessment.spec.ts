@@ -94,8 +94,7 @@ test.describe('Learner: Quiz Assessment', () => {
     expect(lessonId).toBeTruthy();
 
     // Go directly to quiz
-    await page.goto(`/quiz/${lessonId}`);
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, `/quiz/${lessonId}`);
 
     // Click "Start Quiz" on pre-quiz screen if present
     const { locator: startBtn } = await selfHealingLocator(page, 'quiz-start-button', {
@@ -158,8 +157,7 @@ test.describe('Learner: Quiz Assessment', () => {
     const lessonId = await generateAndWaitForLesson(page);
     expect(lessonId).toBeTruthy();
 
-    await page.goto(`/quiz/${lessonId}`);
-    await page.waitForLoadState('networkidle');
+    await navigateAsLearner(page, `/quiz/${lessonId}`);
 
     // Start quiz
     const startBtn = page.getByText('Start Quiz');

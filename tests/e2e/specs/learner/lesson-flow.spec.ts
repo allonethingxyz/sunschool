@@ -9,30 +9,15 @@
  *
  * AI content is variable — assertions are structural, not textual.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
   screenshot,
   generateAndWaitForLesson,
   waitForLessonLoaded,
+  navigateAsLearner,
 } from '../../helpers/learner-setup';
-
-/**
- * Navigate to a learner route with learner mode enabled.
- * Sets preferredMode in localStorage, then does a full page.goto()
- * so that ModeContext initializes with LEARNER mode from the start.
- */
-async function navigateAsLearner(page: Page, path: string): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.setItem('preferredMode', 'LEARNER');
-  });
-  await page.goto(path);
-  await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
-}
 
 const TEST_NAME = 'lesson-flow';
 

@@ -12,3 +12,15 @@ node_modules
 # Admin credentials
 admin-credentials.txt
 /.stoneforge
+
+# E2E test artifacts (screenshots, reports, traces)
+tests/e2e/screenshots/
+tests/e2e/report/
+test-results/
+
+# Local tooling / scratch files
+ecosystem-dashboard.html
+scripts/dashboard.sh
+scripts/ecosystem-dashboard.ts
+SUNSCHOOL-TIMEPOINT.md
+aot-marketplace/

@@ -7,7 +7,7 @@
  * Points come from quiz completion. Rewards are parent-created goals
  * that learners save points toward and request redemption.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { selfHealingLocator } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
@@ -15,18 +15,8 @@ import {
   generateAndWaitForLesson,
   createRewardGoal,
   apiCall,
+  navigateAsLearner,
 } from '../../helpers/learner-setup';
-
-async function navigateAsLearner(page: Page, path: string): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.setItem('preferredMode', 'LEARNER');
-  });
-  await page.goto(path);
-  await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
-}
 
 test.describe('Learner: Points & Rewards', () => {
   test.describe.configure({ retries: 2 });

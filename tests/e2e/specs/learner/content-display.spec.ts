@@ -10,7 +10,7 @@
  *
  * All assertions are structural — AI-generated content varies per request.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { selfHealingLocator } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
@@ -18,23 +18,8 @@ import {
   generateAndWaitForLesson,
   apiCall,
   waitForLessonLoaded,
+  navigateAsLearner,
 } from '../../helpers/learner-setup';
-
-/**
- * Navigate to a learner route with learner mode enabled.
- * Sets preferredMode in localStorage, then does a full page.goto()
- * so that ModeContext initializes with LEARNER mode from the start.
- */
-async function navigateAsLearner(page: Page, path: string): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.setItem('preferredMode', 'LEARNER');
-  });
-  await page.goto(path);
-  await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
-}
 
 test.describe('Learner: Content Display', () => {
   test.describe.configure({ retries: 2 });

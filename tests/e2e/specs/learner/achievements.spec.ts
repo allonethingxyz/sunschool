@@ -15,18 +15,8 @@ import {
   screenshot,
   completeOneLesson,
   apiCall,
+  navigateAsLearner,
 } from '../../helpers/learner-setup';
-
-async function navigateAsLearner(page: Page, path: string): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.setItem('preferredMode', 'LEARNER');
-  });
-  await page.goto(path);
-  await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
-}
 
 /** react-native-web renders Text as <div>, not <h1>-<h6>, so getByRole('heading') won't find them */
 async function expectPageHasContent(page: Page): Promise<void> {

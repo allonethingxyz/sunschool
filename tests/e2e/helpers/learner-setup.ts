@@ -394,6 +394,82 @@ export async function completeOneLesson(
 }
 
 /**
+ * Navigate to a learner route with learner mode enabled.
+ * Sets preferredMode in localStorage, then does a full page.goto()
+ * so that ModeContext initializes with LEARNER mode from the start.
+ */
+export async function navigateAsLearner(page: Page, path: string): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('preferredMode', 'LEARNER');
+  });
+  await page.goto(path);
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+}
+
+/**
+ * Navigate to a parent route with parent mode enabled.
+ * Sets preferredMode in localStorage, then does a full page.goto()
+ * so that ModeContext initializes with PARENT mode from the start.
+ */
+export async function navigateAsParent(page: Page, path: string): Promise<void> {
+  await page.evaluate(() => {
+    localStorage.setItem('preferredMode', 'PARENT');
+  });
+  await page.goto(path);
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+}
+
+/**
+ * Full setup for parent persona tests: register, create child, set auth,
+ * navigate to parent dashboard. Same as setupLearnerSession but stays
+ * in PARENT mode.
+ */
+export async function setupParentSession(
+  page: Page,
+  prefix: string = 'parent'
+): Promise<SetupResult> {
+  const user = generateTestUser(prefix);
+  const childName = `Child_${Date.now()}`;
+
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+
+  const token = await registerParentViaAPI(page, user);
+
+  await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+
+  const learnerId = await createChildViaAPI(page, childName);
+
+  await page.evaluate(
+    (id) => localStorage.setItem('selectedLearnerId', String(id)),
+    learnerId
+  );
+
+  await page.evaluate(() => localStorage.setItem('preferredMode', 'PARENT'));
+
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
+
+  await navigateAsParent(page, '/dashboard');
+
+  return { token, learnerId, childName };
+}
+
+/**
  * Wait for lesson loading screen to finish.
  * Polls for the loading indicator to disappear using proper Playwright waits.
  */

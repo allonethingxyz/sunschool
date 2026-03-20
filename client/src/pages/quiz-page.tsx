@@ -272,8 +272,11 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
             </ScrollView>
             <TouchableOpacity style={[styles.skipDelegation, { borderColor: theme.colors.divider }]}
               onPress={() => setShowDelegation(false)}>
-              <Text style={[{ color: theme.colors.textSecondary, fontWeight: '600' }]}>Keep in Balance</Text>
+              <Text style={[{ color: theme.colors.textSecondary, fontWeight: '600' }]}>Skip for Now</Text>
             </TouchableOpacity>
+            <Text style={{ fontSize: 11, color: theme.colors.textSecondary, textAlign: 'center', marginTop: 6 }}>
+              Points stay in your balance until you save them
+            </Text>
           </View>
         </View>
       </Modal>
@@ -726,8 +729,8 @@ const styles = StyleSheet.create({
   pointsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 8 },
   pointsEmoji: { fontSize: 18 },
   pointsLabel: { fontSize: 14, fontWeight: '600' },
-  goToGoalsBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 8 },
-  goToGoalsBtnText: { fontWeight: '700', fontSize: 14 },
+  goToGoalsBtn: { borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, alignItems: 'center', marginTop: 8 },
+  goToGoalsBtnText: { fontWeight: '700', fontSize: 14, textAlign: 'center' },
   // Delegation overlay
   delegationOverlay: {
     flex: 1,

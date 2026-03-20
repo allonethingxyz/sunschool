@@ -160,9 +160,22 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
   onStartQuiz,
 }) => {
   const theme = useTheme();
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // Restore card position from localStorage (survives refresh)
+  const storageKey = `carousel_pos_${enhancedSpec.title}`;
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      const idx = saved ? parseInt(saved, 10) : 0;
+      return isNaN(idx) ? 0 : idx;
+    } catch { return 0; }
+  });
   const [slideDirection, setSlideDirection] = useState<'left' | 'right' | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  // Persist card position
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, String(currentIndex)); } catch {}
+  }, [currentIndex, storageKey]);
 
   // Touch/swipe state
   const touchStartX = useRef(0);
@@ -186,6 +199,11 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
   ];
 
   const totalCards = cards.length;
+
+  // Clamp restored index to valid range
+  useEffect(() => {
+    if (currentIndex >= totalCards) setCurrentIndex(0);
+  }, [totalCards]);
 
   const goNext = useCallback(() => {
     setCurrentIndex(prev => {
@@ -415,6 +433,29 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
     );
   };
 
+  const renderDiagramSvg = (diagram: LessonDiagram) => {
+    const svg = diagram.svgData || '';
+    const hasDrawingElements = /<(path|circle|ellipse|polygon|polyline|line|rect)\b/i.test(svg);
+    if (svg.includes('<svg') && hasDrawingElements) {
+      return (
+        <div dangerouslySetInnerHTML={{
+          __html: DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+        }} />
+      );
+    }
+    // Fallback: generate a placeholder SVG for diagrams without real drawing elements
+    const placeholderSvg = generatePlaceholderSVG(
+      diagram.description || diagram.title,
+      theme.colors.primary,
+    );
+    return (
+      <div
+        style={{ width: '100%', maxWidth: 500, overflow: 'hidden' }}
+        dangerouslySetInnerHTML={{ __html: placeholderSvg }}
+      />
+    );
+  };
+
   const renderDiagramsCard = () => (
     <View style={s.cardInner}>
       <Text style={[s.cardLabel, { color: theme.colors.primary }]}>DIAGRAMS</Text>
@@ -430,9 +471,7 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
             {diagram.title}
           </Text>
           <View style={s.diagramContainer}>
-            <div dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(diagram.svgData, { USE_PROFILES: { svg: true, svgFilters: true } })
-            }} />
+            {renderDiagramSvg(diagram)}
           </View>
           <Text style={[s.imageCaption, { color: theme.colors.textSecondary }]}>
             {diagram.description}

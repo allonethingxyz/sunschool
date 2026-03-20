@@ -26,17 +26,6 @@ async function navigateAsLearner(page: Page, path: string): Promise<void> {
   await page.waitForFunction(() => {
     return !document.body.textContent?.includes('Initializing authentication');
   }, { timeout: 15000 }).catch(() => {});
-
-  // Verify learner mode took effect — if still in PARENT mode, retry
-  const isParentMode = await page.getByText('PARENT').isVisible({ timeout: 3000 }).catch(() => false);
-  if (isParentMode) {
-    await page.evaluate(() => localStorage.setItem('preferredMode', 'LEARNER'));
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    await page.waitForFunction(() => {
-      return !document.body.textContent?.includes('Initializing authentication');
-    }, { timeout: 15000 }).catch(() => {});
-  }
 }
 
 /** react-native-web renders Text as <div>, not <h1>-<h6>, so getByRole('heading') won't find them */

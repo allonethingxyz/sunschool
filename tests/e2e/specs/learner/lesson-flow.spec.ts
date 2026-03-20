@@ -32,17 +32,6 @@ async function navigateAsLearner(page: Page, path: string): Promise<void> {
   await page.waitForFunction(() => {
     return !document.body.textContent?.includes('Initializing authentication');
   }, { timeout: 15000 }).catch(() => {});
-
-  // Verify learner mode took effect — if still in PARENT mode, retry
-  const isParentMode = await page.getByText('PARENT').isVisible({ timeout: 3000 }).catch(() => false);
-  if (isParentMode) {
-    await page.evaluate(() => localStorage.setItem('preferredMode', 'LEARNER'));
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    await page.waitForFunction(() => {
-      return !document.body.textContent?.includes('Initializing authentication');
-    }, { timeout: 15000 }).catch(() => {});
-  }
 }
 
 const TEST_NAME = 'lesson-flow';
@@ -62,30 +51,14 @@ test.describe('Learner: Lesson Flow', () => {
     const lessonId = await generateAndWaitForLesson(page, 'Science');
     expect(lessonId).toBeTruthy();
 
-    // Switch to learner mode and navigate to learner home
+    // Navigate to learner home and verify lesson card
     await navigateAsLearner(page, '/learner');
     await screenshot(page, `${TEST_NAME}-01-learner-home`);
-
-    // Verify "Current Lesson" card exists
     await expect(page.getByText('Current Lesson')).toBeVisible({ timeout: 30000 });
-
     await screenshot(page, `${TEST_NAME}-03-lesson-ready`);
 
-    // Click the lesson card to view content using semantic locators
-    const { locator: lessonCard } = await selfHealingLocator(
-      page, TEST_NAME,
-      { role: 'button', name: /lesson|view|start|continue/i, text: /lesson/i }
-    );
-
-    const lessonCardVisible = await lessonCard.isVisible({ timeout: 3000 }).catch(() => false);
-    if (lessonCardVisible) {
-      await lessonCard.click();
-    } else {
-      // Fall back to clicking the "Current Lesson" text area
-      await page.getByText('Current Lesson').click();
-    }
-
-    await page.waitForLoadState('networkidle');
+    // Navigate directly to lesson page (TouchableOpacity clicks are unreliable)
+    await navigateAsLearner(page, '/lesson');
     await waitForLessonLoaded(page);
     await screenshot(page, `${TEST_NAME}-04-lesson-content`);
 

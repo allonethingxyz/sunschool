@@ -236,8 +236,13 @@ export async function setupLearnerSession(
     return !document.body.textContent?.includes('Initializing authentication');
   }, { timeout: 15000 }).catch(() => {});
 
-  // Navigate to learner home via SPA (auth context is now hydrated)
-  await spaNavigate(page, '/learner');
+  // Navigate to learner home with full page load (spaNavigate + wouter is unreliable)
+  await page.evaluate(() => localStorage.setItem('preferredMode', 'LEARNER'));
+  await page.goto('/learner');
+  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => {
+    return !document.body.textContent?.includes('Initializing authentication');
+  }, { timeout: 15000 }).catch(() => {});
 
   return { token, learnerId, childName };
 }

@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   SafeAreaView,
@@ -12,8 +11,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { apiRequest } from '../lib/queryClient';
 import { colors, typography, commonStyles } from '../styles/theme';
-import { ChevronRight, ArrowLeft } from 'react-feather';
-import EnhancedLessonContent from '../components/EnhancedLessonContent';
+import { ArrowLeft } from 'react-feather';
+import LessonCardCarousel from '../components/LessonCardCarousel';
 import { useMode } from '../context/ModeContext';
 
 const ActiveLessonPage = () => {
@@ -125,51 +124,30 @@ const ActiveLessonPage = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Minimal header — just back arrow + title */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButtonSmall} onPress={() => setLocation('/learner')}>
           <ArrowLeft size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{lesson.spec.title}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {lesson.spec.title}
+        </Text>
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.lessonContent}>
-          <Text style={styles.lessonTitle}>{lesson.spec.title}</Text>
-          
-          <EnhancedLessonContent enhancedSpec={lesson.spec} />
-        </View>
-
-        <View style={styles.quizPrompt}>
-          <Text style={styles.quizPromptTitle}>Ready to Test Your Knowledge?</Text>
-          <Text style={styles.quizPromptText}>
-            Now that you've learned about {lesson.spec.title.toLowerCase()}, 
-            let's see what you remember with a quick quiz!
-          </Text>
-        </View>
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.quizButton} onPress={handleStartQuiz}>
-          <Text style={styles.quizButtonText}>Start Quiz</Text>
-          <ChevronRight size={20} color={colors.onPrimary} />
-        </TouchableOpacity>
-      </View>
+      {/* Card carousel — takes full remaining height */}
+      <LessonCardCarousel
+        enhancedSpec={lesson.spec}
+        onStartQuiz={handleStartQuiz}
+      />
     </SafeAreaView>
   );
 };
-
-
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  lessonText: {
-    ...typography.body1,
-    lineHeight: 24,
-    marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
@@ -184,63 +162,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.subtitle1,
     textAlign: 'center',
+    flex: 1,
+    marginHorizontal: 8,
   },
   backButtonSmall: {
     padding: 4,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 16,
-  },
-  lessonContent: {
-    backgroundColor: colors.surfaceColor,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 24,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  lessonTitle: {
-    ...typography.h2,
-    marginBottom: 16,
-  },
-  imageContainer: {
-    marginVertical: 16,
-    alignItems: 'center',
-  },
-  quizPrompt: {
-    backgroundColor: colors.primaryLight,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 24,
-  },
-  quizPromptTitle: {
-    ...typography.subtitle1,
-    color: colors.onPrimary,
-    marginBottom: 8,
-  },
-  quizPromptText: {
-    ...typography.body2,
-    color: colors.onPrimary,
-  },
-  footer: {
-    padding: 16,
-    backgroundColor: colors.surfaceColor,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
-  },
-  quizButton: {
-    ...commonStyles.button,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quizButtonText: {
-    ...commonStyles.buttonText,
-    marginRight: 8,
   },
   loadingContainer: {
     flex: 1,

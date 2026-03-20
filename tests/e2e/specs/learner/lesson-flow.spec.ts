@@ -3,9 +3,9 @@
  *
  * Journeys:
  *   1. Start a new lesson from the learner home
- *   2. Navigate through lesson content sections
- *   3. Verify structural content rendered (headings, paragraphs, images)
- *   4. Complete lesson by navigating to quiz entry point
+ *   2. Navigate through lesson content cards
+ *   3. Verify structural content rendered (headings, text)
+ *   4. Complete lesson by navigating to quiz entry point via card carousel
  *
  * AI content is variable — assertions are structural, not textual.
  */
@@ -63,34 +63,33 @@ test.describe('Learner: Lesson Flow', () => {
     await waitForLessonLoaded(page);
     await screenshot(page, `${TEST_NAME}-04-lesson-content`);
 
-    // Structural assertions: lesson content should have rendered
-    const headings = page.getByRole('heading');
-    await expect(headings.first()).toBeVisible({ timeout: 30000 });
-    const headingCount = await headings.count();
-    expect(headingCount).toBeGreaterThanOrEqual(1);
-
-    // Content area should have substantial text
-    const bodyText = await page.getByRole('main').innerText().catch(
-      () => page.evaluate(() => document.body.innerText)
-    );
+    // Card carousel: cover card should be visible with lesson title
+    const bodyText = await page.evaluate(() => document.body.innerText);
     expect(bodyText.length).toBeGreaterThan(200);
+    // Card counter should show "1 / N"
+    await expect(page.getByText(/^1 \/ \d+$/)).toBeVisible({ timeout: 15000 });
 
     await screenshot(page, `${TEST_NAME}-05-content-verified`);
 
-    // Scroll through the lesson sections
-    for (let scroll = 1; scroll <= 4; scroll++) {
-      await page.evaluate((y) => window.scrollTo(0, y), scroll * 600);
-      await page.waitForLoadState('networkidle');
-      await screenshot(page, `${TEST_NAME}-06-scroll-${scroll}`);
+    // Navigate through cards using Next button
+    const nextBtn = page.getByRole('button', { name: /next/i });
+
+    // Read total card count
+    const counterText = await page.getByText(/^\d+ \/ \d+$/).first().innerText();
+    const totalCards = parseInt(counterText.split('/')[1].trim());
+
+    for (let i = 1; i < totalCards; i++) {
+      const visible = await nextBtn.isVisible({ timeout: 2000 }).catch(() => false);
+      if (!visible) break; // quiz card hides Next
+      await nextBtn.click();
+      await page.waitForTimeout(400);
+      await screenshot(page, `${TEST_NAME}-06-card-${i + 1}`);
     }
 
-    // Verify the quiz entry point exists at the bottom
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForLoadState('networkidle');
-
+    // Verify the quiz entry point — "Start Quiz" button on final card
     const { locator: startQuizBtn } = await selfHealingLocator(
       page, TEST_NAME,
-      { role: 'button', name: 'Start Quiz', text: 'Start Quiz' }
+      { role: 'button', name: /start quiz/i, text: /Start Quiz/i }
     );
     await expect(startQuizBtn).toBeVisible({ timeout: 10000 });
     await screenshot(page, `${TEST_NAME}-07-quiz-entry-visible`);

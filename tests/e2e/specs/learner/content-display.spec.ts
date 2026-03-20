@@ -73,36 +73,41 @@ test.describe('Learner: Content Display', () => {
     await page.waitForLoadState('networkidle');
     await waitForLessonLoaded(page);
 
-    // Scroll through entire page to trigger lazy-loaded images
-    const scrollHeight = await page.evaluate(() => document.body.scrollHeight);
-    for (let y = 0; y < scrollHeight; y += 500) {
-      await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
-      await page.waitForLoadState('networkidle');
-    }
-
     await screenshot(page, 'content-02-illustrations');
 
-    // Count visual elements using getByRole('img') — the semantic way
-    // This matches <img> elements and SVGs with role="img"
-    const imgElements = page.getByRole('img');
-    const semanticImgCount = await imgElements.count();
+    // Card carousel: navigate through cards to find visual content
+    // Check cover card first, then step through section cards
+    let totalSvgCount = 0;
+    let totalImgCount = 0;
 
-    // Also check for inline SVGs (which may not have role="img")
-    const svgCount = await page.locator('svg').count();
+    const counterText = await page.getByText(/^\d+ \/ \d+$/).first().innerText({ timeout: 15000 });
+    const totalCards = parseInt(counterText.split('/')[1].trim());
+    const nextBtn = page.getByRole('button', { name: /next/i });
 
-    // Lessons should include visual content (images, illustrations, or SVGs)
-    // Images are generated in the background and may not be ready yet
-    const hasVisualContent = semanticImgCount > 0 || svgCount > 0;
+    for (let i = 0; i < totalCards; i++) {
+      // Count visual elements on current card
+      const svgCount = await page.locator('svg').count();
+      const imgCount = await page.getByRole('img').count();
+      totalSvgCount += svgCount;
+      totalImgCount += imgCount;
 
-    // If no images yet, verify the lesson at least has substantial text content
-    // (images are background-generated and may arrive later)
+      // Navigate to next card if possible
+      const hasNext = await nextBtn.isVisible({ timeout: 2000 }).catch(() => false);
+      if (hasNext && i < totalCards - 1) {
+        await nextBtn.click();
+        await page.waitForTimeout(400);
+      }
+    }
+
+    // Lessons should include visual content across all cards
+    const hasVisualContent = totalImgCount > 0 || totalSvgCount > 0;
+
     if (!hasVisualContent) {
       const bodyText = await page.evaluate(() => document.body.innerText);
       expect(bodyText.length).toBeGreaterThan(200);
     }
 
-    // Verify at least one visual element exists (image OR SVG icon)
-    expect(semanticImgCount + svgCount).toBeGreaterThanOrEqual(1);
+    expect(totalImgCount + totalSvgCount).toBeGreaterThanOrEqual(1);
   });
 
   test('lesson content is rendered at appropriate grade level', async ({ page }) => {

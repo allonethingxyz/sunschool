@@ -68,32 +68,6 @@ export async function registerParentViaAPI(
   return result.token;
 }
 
-/** Login via API from browser context */
-export async function loginViaAPI(
-  page: Page,
-  user: Pick<TestUser, 'username' | 'password'>
-): Promise<string> {
-  const result = await page.evaluate(async (creds) => {
-    const res = await fetch('/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(creds),
-    });
-    const text = await res.text();
-    try {
-      const data = JSON.parse(text);
-      return { token: data.token, status: res.status };
-    } catch {
-      return { token: null, status: res.status, body: text.substring(0, 200) };
-    }
-  }, { username: user.username, password: user.password });
-
-  if (!result.token) {
-    throw new Error(`Login failed: ${JSON.stringify(result)}`);
-  }
-  return result.token;
-}
-
 /** Make an authenticated API call from browser context */
 export async function apiCall(
   page: Page,
@@ -130,37 +104,6 @@ export async function apiCall(
     },
     { method, url, body }
   );
-}
-
-/** Navigate within the SPA without full page reload (preserves auth state) */
-export async function spaNavigate(page: Page, path: string): Promise<void> {
-  await page.evaluate((url) => {
-    window.history.pushState({}, '', url);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }, path);
-  await page.waitForLoadState('networkidle');
-}
-
-/** Set auth token and navigate to a path */
-export async function setAuthAndNavigate(
-  page: Page,
-  token: string,
-  path: string
-): Promise<void> {
-  const currentUrl = page.url();
-  if (
-    currentUrl.includes('sunschool.xyz') ||
-    currentUrl.includes('localhost')
-  ) {
-    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
-    await spaNavigate(page, path);
-  } else {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
-    await page.goto(path);
-    await page.waitForLoadState('networkidle');
-  }
 }
 
 /** Create a child learner via API and return the learner ID */
@@ -479,47 +422,6 @@ export async function waitForLessonLoaded(page: Page): Promise<void> {
     .waitFor({ state: 'hidden', timeout: 120_000 })
     .catch(() => {});
   await page.waitForLoadState('networkidle');
-}
-
-/**
- * Poll for a condition on the page using Playwright waits (not setTimeout).
- * Reloads the page between polls and waits for networkidle.
- */
-export async function pollForVisibleText(
-  page: Page,
-  textPattern: RegExp | string,
-  options: { timeout?: number; reloadBetweenPolls?: boolean } = {}
-): Promise<boolean> {
-  const { timeout = 300_000, reloadBetweenPolls = true } = options;
-  let found = false;
-
-  await expect
-    .poll(
-      async () => {
-        const locator =
-          typeof textPattern === 'string'
-            ? page.getByText(textPattern)
-            : page.getByText(textPattern);
-        const visible = await locator
-          .first()
-          .isVisible({ timeout: 2_000 })
-          .catch(() => false);
-        if (visible) {
-          found = true;
-          return true;
-        }
-        if (reloadBetweenPolls) {
-          await page.reload();
-          await page.waitForLoadState('networkidle');
-        }
-        return false;
-      },
-      { timeout, intervals: [5_000] }
-    )
-    .toBe(true)
-    .catch(() => {});
-
-  return found;
 }
 
 /**

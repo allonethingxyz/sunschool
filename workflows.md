@@ -69,12 +69,48 @@ Complete list of all user-facing workflows organized by role.
 
 ## E2E Test Coverage
 
-Tests in `tests/e2e/specs/` verify these workflows, organized by persona:
+Tests in `tests/e2e/specs/` verify these workflows (71 tests, 15 spec files):
+
+### Learner Persona (9 specs, 43 tests)
 
 | Test File | Workflows Covered |
 |-----------|------------------|
-| `specs/learner/lesson-flow.spec.ts` | Lesson generation, content navigation, quiz entry |
-| `specs/learner/quiz-assessment.spec.ts` | Quiz pre-screen, answering questions, results |
-| `specs/learner/content-display.spec.ts` | SVG rendering, text sections, visual content validation |
-| `specs/learner/achievements.spec.ts` | Achievement milestones, badges |
-| `specs/learner/points-rewards.spec.ts` | Points earned, rewards system |
+| `specs/learner/lesson-flow.spec.ts` | #6 #8 — Lesson generation, content navigation, quiz entry |
+| `specs/learner/quiz-assessment.spec.ts` | #9 — Quiz pre-screen, answering via API, results |
+| `specs/learner/content-display.spec.ts` | #8 — Text sections, SVG/image display, difficulty levels |
+| `specs/learner/achievements.spec.ts` | #12 — Progress page, zero state, lesson history, mastery |
+| `specs/learner/points-rewards.spec.ts` | #13 — Point balance, goals page, reward progress |
+| `specs/learner/card-carousel.spec.ts` | #8 — Cover card, progress bar, forward/back navigation |
+| `specs/learner/svg-rendering.spec.ts` | #8 — SVG in API response, DOM rendering, sanitization |
+| `specs/learner/input-safety.spec.ts` | #8 — Prompt injection prevention, DAN mode, env exfiltration |
+| `specs/learner/chaotic-kid.spec.ts` | #6 #8 — Spam-click, cancel mid-gen, rapid subject switch, refresh during load, nav away/back, random taps, mash forward/back, indecisive confirm, bookmark recovery, error recovery |
+
+### Parent Persona (6 specs, 24 tests)
+
+| Test File | Workflows Covered |
+|-----------|------------------|
+| `specs/parent/auth.spec.ts` | #2 — Login form visible, invalid creds, registration via API, token clearing |
+| `specs/parent/dashboard.spec.ts` | #14 — Dashboard loads, child stats, reports nav, rewards nav, learner mode switch |
+| `specs/parent/learner-management.spec.ts` | #15 #16 — Learner list, add child via API, child cards, add-learner page |
+| `specs/parent/prompt-audit.spec.ts` | #8 #18 — Lesson API transparency, reports page, progress, dashboard child info |
+| `specs/parent/public-pages.spec.ts` | #1 #3 #4 — Welcome page, auth tabs, privacy, terms |
+| `specs/parent/rewards.spec.ts` | #19 — Rewards page load, create reward goal, tabs/sections |
+
+### Workflow Coverage Map
+
+| Workflow # | Name | E2E Coverage |
+|------------|------|--------------|
+| 1 | Welcome | `public-pages` |
+| 2 | Auth | `auth` |
+| 3 | Privacy | `public-pages` |
+| 4 | Terms | `public-pages` |
+| 6 | Learner Home | `lesson-flow`, `chaotic-kid` |
+| 8 | Active Lesson | `lesson-flow`, `content-display`, `card-carousel`, `svg-rendering`, `input-safety`, `chaotic-kid` |
+| 9 | Quiz | `quiz-assessment` |
+| 12 | Progress | `achievements` |
+| 13 | Goals | `points-rewards` |
+| 14 | Dashboard | `dashboard` |
+| 15-16 | Learners | `learner-management` |
+| 18 | Reports | `prompt-audit` |
+| 19 | Rewards | `rewards` |
+| — | Kid resilience | `chaotic-kid` (10 chaos scenarios) |

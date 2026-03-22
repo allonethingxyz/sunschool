@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import DOMPurify from 'dompurify';
+import DOMPurify from 'isomorphic-dompurify';
 import { colors, typography } from '../styles/theme';
 import { Clock, BookOpen, ChevronRight } from 'react-feather';
 

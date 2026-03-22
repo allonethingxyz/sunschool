@@ -19,7 +19,7 @@ import { colors as parentColors, typography as parentTypography, commonStyles as
 import LessonCard from '../components/LessonCard';
 import KnowledgeGraph from '../components/KnowledgeGraph';
 import SubjectSelector from '../components/SubjectSelector';
-import { Book, Award, BarChart2, User, Compass, Zap, Plus, X, Gift } from 'react-feather';
+import { Book, Award, BarChart2, User, Compass, Zap, Plus, X, Gift, ChevronDown, ChevronUp } from 'react-feather';
 import { useMode } from '../context/ModeContext';
 import FunLoader from '../components/FunLoader';
 
@@ -77,6 +77,26 @@ const GoalsStrip: React.FC<{ learnerId?: number; onPress: () => void; theme: any
   );
 };
 
+// ─── Child-friendly error mapper ─────────────────────────────────────────────
+function friendlyError(error: any): { emoji: string; message: string } {
+  const msg = (error?.message || String(error || '')).toLowerCase();
+  const status = error?.status || error?.response?.status;
+
+  if (status === 402 || msg.includes('billing') || msg.includes('credits') || msg.includes('key limit')) {
+    return { emoji: '🔧', message: "Oops! Our lesson machine needs a tune-up. Ask a grown-up to check the settings." };
+  }
+  if (status === 503 || msg.includes('failed after multiple attempts')) {
+    return { emoji: '🤔', message: "Hmm, that didn't work. Let's try again!" };
+  }
+  if (status === 401 || status === 403 || msg.includes('unauthorized')) {
+    return { emoji: '🔑', message: "Looks like you need to log in again." };
+  }
+  if (msg.includes('invalid content') || msg.includes('missing title') || msg.includes('insufficient')) {
+    return { emoji: '🎲', message: "The lesson didn't come out right. Let's try a different one!" };
+  }
+  return { emoji: '😅', message: "Something unexpected happened. Try again or ask a grown-up for help." };
+}
+
 const LearnerHome = () => {
   const { user } = useAuth();
   const { selectedLearner } = useMode();
@@ -84,6 +104,10 @@ const LearnerHome = () => {
   const [, setLocation] = useLocation();
   const [refreshing, setRefreshing] = useState(false);
   const [subjectSelectorVisible, setSubjectSelectorVisible] = useState(false);
+  const [showNewLessonConfirm, setShowNewLessonConfirm] = useState(false);
+  const [pendingSubjectLabel, setPendingSubjectLabel] = useState<string | null>(null);
+  const [pendingSubject, setPendingSubject] = useState<{ name: string; category: string; difficulty: 'beginner' | 'intermediate' | 'advanced' } | null>(null);
+  const [showErrorDetail, setShowErrorDetail] = useState(false);
 
   // Fetch active lesson
   const {
@@ -132,6 +156,7 @@ const LearnerHome = () => {
     retryDelay: 1000,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/lessons/active', selectedLearner?.id] });
+      setPendingSubjectLabel(null);
     },
     onError: (error) => {
       console.error('Error generating lesson:', error);
@@ -161,6 +186,9 @@ const LearnerHome = () => {
       };
     }
 
+    // Track the subject being generated
+    setPendingSubjectLabel(selectedSubject?.name || 'Math');
+
     generateLessonMutation.mutate({
       learnerId: selectedLearner.id,
       topic: selectedSubject?.name || 'Math', // Fallback to Math if no subjects available
@@ -169,6 +197,26 @@ const LearnerHome = () => {
       category: selectedSubject?.category || 'General',
       difficulty: selectedSubject?.difficulty || 'beginner'
     });
+  };
+
+  const handleNewLessonPress = (subject?: { name: string; category: string; difficulty: 'beginner' | 'intermediate' | 'advanced' }) => {
+    if (activeLesson) {
+      setPendingSubject(subject || null);
+      setShowNewLessonConfirm(true);
+    } else {
+      handleGenerateLesson(subject);
+    }
+  };
+
+  const handleConfirmNewLesson = () => {
+    setShowNewLessonConfirm(false);
+    handleGenerateLesson(pendingSubject || undefined);
+    setPendingSubject(null);
+  };
+
+  const handleCancelGeneration = () => {
+    generateLessonMutation.reset();
+    setPendingSubjectLabel(null);
   };
 
   const handleOpenSubjectSelector = () => {
@@ -181,7 +229,7 @@ const LearnerHome = () => {
 
   const handleSelectSubject = (subject: { name: string; category: string; difficulty: 'beginner' | 'intermediate' | 'advanced' }) => {
     setSubjectSelectorVisible(false);
-    handleGenerateLesson(subject);
+    handleNewLessonPress(subject);
   };
 
   const handleViewLesson = () => {
@@ -191,7 +239,8 @@ const LearnerHome = () => {
   };
 
   const isLoading = isLessonLoading || isProfileLoading || generateLessonMutation.isPending;
-  const hasError = lessonError || profileError;
+  const hasError = lessonError || profileError || generateLessonMutation.isError;
+  const generationError = generateLessonMutation.error;
 
   return (
     <View style={[commonStyles.container, { backgroundColor: theme.colors.background }]}>
@@ -202,11 +251,11 @@ const LearnerHome = () => {
         animationType="fade"
         onRequestClose={handleCloseSubjectSelector}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+        <View style={[styles.modalContainer, { zIndex: 9999 }]}>
+          <View style={[styles.modalContent, { zIndex: 10000, position: 'relative' as const }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Choose a Subject</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.closeButton}
                 onPress={handleCloseSubjectSelector}
               >
@@ -240,33 +289,108 @@ const LearnerHome = () => {
 
         </View>
 
-        {isLoading ? (
+        {/* New Lesson Confirmation Card */}
+        {showNewLessonConfirm && (
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmEmoji}>📚</Text>
+            <Text style={styles.confirmText}>
+              You have a lesson in progress! Want to start a new one instead?
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmKeepButton}
+                onPress={() => setShowNewLessonConfirm(false)}
+              >
+                <Text style={styles.confirmKeepButtonText}>Keep Current Lesson</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmStartButton}
+                onPress={handleConfirmNewLesson}
+              >
+                <Text style={styles.confirmStartButtonText}>Start Fresh!</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {generateLessonMutation.isPending ? (
           <FunLoader
-            progressMessages={
-              generateLessonMutation.isPending
-                ? ['Finding the best lesson for you...', 'Almost ready...', 'Here it comes!']
-                : undefined
-            }
-            message={generateLessonMutation.isPending ? undefined : 'Getting your stuff ready...'}
+            progressMessages={['Finding the best lesson for you...', 'Almost ready...', 'Here it comes!']}
+            subjectLabel={pendingSubjectLabel || undefined}
+            onCancel={handleCancelGeneration}
+          />
+        ) : isLessonLoading || isProfileLoading ? (
+          <FunLoader
+            message="Getting your stuff ready..."
           />
         ) : hasError ? (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>
-              Something went wrong. Please try again.
-            </Text>
-            {lessonError && (
-              <Text style={styles.errorDetail}>
-                Lesson error: {lessonError.message || String(lessonError)}
-              </Text>
+            {generationError ? (
+              <>
+                <Text style={styles.errorEmoji}>{friendlyError(generationError).emoji}</Text>
+                <Text style={styles.friendlyErrorText}>
+                  {friendlyError(generationError).message}
+                </Text>
+                <TouchableOpacity style={styles.retryButton} onPress={() => handleGenerateLesson()}>
+                  <Text style={styles.retryButtonText}>Try Again</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.errorDetailToggle}
+                  onPress={() => setShowErrorDetail(!showErrorDetail)}
+                >
+                  <Text style={styles.errorDetailToggleText}>Tell a grown-up</Text>
+                  {showErrorDetail ? (
+                    <ChevronUp size={14} color={colors.textSecondary} />
+                  ) : (
+                    <ChevronDown size={14} color={colors.textSecondary} />
+                  )}
+                </TouchableOpacity>
+                {showErrorDetail && (
+                  <View style={styles.errorDetailBox}>
+                    <Text style={styles.errorDetail}>
+                      {generationError.message || String(generationError)}
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={styles.errorEmoji}>😅</Text>
+                <Text style={styles.friendlyErrorText}>
+                  Something unexpected happened. Try again or ask a grown-up for help.
+                </Text>
+                {lessonError && (
+                  <TouchableOpacity
+                    style={styles.errorDetailToggle}
+                    onPress={() => setShowErrorDetail(!showErrorDetail)}
+                  >
+                    <Text style={styles.errorDetailToggleText}>Tell a grown-up</Text>
+                    {showErrorDetail ? (
+                      <ChevronUp size={14} color={colors.textSecondary} />
+                    ) : (
+                      <ChevronDown size={14} color={colors.textSecondary} />
+                    )}
+                  </TouchableOpacity>
+                )}
+                {showErrorDetail && (
+                  <View style={styles.errorDetailBox}>
+                    {lessonError && (
+                      <Text style={styles.errorDetail}>
+                        Lesson: {lessonError.message || String(lessonError)}
+                      </Text>
+                    )}
+                    {profileError && (
+                      <Text style={styles.errorDetail}>
+                        Profile: {profileError.message || String(profileError)}
+                      </Text>
+                    )}
+                  </View>
+                )}
+                <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
+                  <Text style={styles.retryButtonText}>Try Again</Text>
+                </TouchableOpacity>
+              </>
             )}
-            {profileError && (
-              <Text style={styles.errorDetail}>
-                Profile error: {profileError.message || String(profileError)}
-              </Text>
-            )}
-            <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
           </View>
         ) : (
           <>
@@ -295,7 +419,7 @@ const LearnerHome = () => {
 
                     <TouchableOpacity
                       style={styles.generateButton}
-                      onPress={() => handleGenerateLesson()}
+                      onPress={() => handleNewLessonPress()}
                     >
                       <Text style={styles.generateButtonText}>
                         New Lesson
@@ -351,7 +475,7 @@ const LearnerHome = () => {
             <GoalsStrip learnerId={selectedLearner?.id} onPress={() => setLocation('/goals')} theme={theme} />
 
             {/* Learning Journey Card */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.journeyCard}
               onPress={() => setLocation('/progress')}
             >
@@ -380,6 +504,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+    zIndex: 9999,
   },
   modalContent: {
     backgroundColor: colors.background,
@@ -387,6 +512,8 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '100%',
     maxHeight: '90%',
+    zIndex: 10000,
+    position: 'relative',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -430,6 +557,92 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.primary,
     marginRight: 8,
+  },
+  // Confirmation Card Styles
+  confirmCard: {
+    backgroundColor: colors.surfaceColor,
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: colors.primaryLight,
+  },
+  confirmEmoji: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
+  confirmText: {
+    ...typography.body1,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  confirmKeepButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    marginHorizontal: 6,
+    marginBottom: 8,
+  },
+  confirmKeepButtonText: {
+    ...typography.button,
+    color: colors.primary,
+  },
+  confirmStartButton: {
+    ...commonStyles.button,
+    paddingHorizontal: 20,
+    marginHorizontal: 6,
+    marginBottom: 8,
+  },
+  confirmStartButtonText: {
+    ...commonStyles.buttonText,
+  },
+  // Child-friendly error styles
+  errorEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  friendlyErrorText: {
+    ...typography.body1,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 24,
+    paddingHorizontal: 16,
+  },
+  errorDetailToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 6,
+  },
+  errorDetailToggleText: {
+    ...typography.body2,
+    color: colors.textSecondary,
+    marginRight: 4,
+    textDecorationLine: 'underline',
+  },
+  errorDetailBox: {
+    backgroundColor: colors.surfaceColor,
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    maxWidth: '100%',
   },
   // Learner Switcher Styles
   learnerSwitcherContainer: {

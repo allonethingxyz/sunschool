@@ -1,4 +1,4 @@
-import express, { Express, Request, Response, NextFunction, RequestHandler } from "express";
+import express, { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
@@ -40,8 +40,8 @@ import('./services/subject-recommendation');
 import { generateLessonWithRetry, generateLessonImages } from './services/enhanced-lesson-service';
 import { findOrCreateTemplate } from './services/lesson-template-service';
 import { storeQuizAnswers, extractConceptTags } from './services/quiz-tracking-service';
-import { bulkUpdateMasteryFromAnswers, getConceptsNeedingReinforcement } from './services/mastery-service';
-import { storeQuestionHashes, getRecentQuestions } from './services/question-deduplication';
+import { bulkUpdateMasteryFromAnswers } from './services/mastery-service';
+import { storeQuestionHashes } from './services/question-deduplication';
 import { validatePromptInput } from './services/prompt-safety';
 
 function hasRole(roles: string[]) {

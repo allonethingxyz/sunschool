@@ -8,7 +8,7 @@ import { synchronizeToExternalDatabase } from "./sync-utils";
 import { InsertDbSyncConfig } from "../shared/schema";
 import { USE_AI } from "./config/flags";
 import { db, pool, withRetry } from "./db";
-import { sql, count, eq, and } from "drizzle-orm";
+import { sql, count, eq, and, like, ne } from "drizzle-orm";
 import crypto from "crypto";
 import rateLimit from 'express-rate-limit';
 
@@ -2048,8 +2048,22 @@ export function registerRoutes(app: Express): Server {
     return res.json({ cleaned, message: `Retired ${cleaned} stale lesson(s)` });
   }));
 
+  // Admin: purge E2E test users (email matching %@test.com, non-ADMIN)
+  app.delete("/api/admin/cleanup-test-users", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const testUsers = await db.select().from(users).where(
+      and(
+        like(users.email, '%@test.com'),
+        ne(users.role, 'ADMIN')
+      )
+    );
+    for (const u of testUsers) {
+      await db.delete(users).where(eq(users.id, u.id));
+    }
+    return res.json({ deleted: testUsers.length, users: testUsers.map(u => ({ id: u.id, username: u.username, email: u.email })) });
+  }));
+
   // Error handling middleware
-  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     console.error(err);
     res.status(500).json({ error: "An internal server error occurred" });
   });

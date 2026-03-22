@@ -1,7 +1,8 @@
 import { askOpenRouter } from '../openrouter';
 import { generateImage, generateDiagram, MAX_IMAGES_PER_LESSON } from './image-generation-router';
 import { EnhancedLessonSpec, LessonSection, LessonImage, LessonDiagram } from '../../shared/schema';
-import { saveBase64Image } from './image-storage';
+// Images are stored inline as base64/SVG in the lesson spec JSONB.
+// No filesystem storage needed — Railway's ephemeral FS wipes on deploy.
 import { generateEducationalSVG } from './svg-llm-service';
 import { LESSON_PROMPTS, IMAGE_PROMPTS, getReadingLevelInstructions, getMathematicalNotationRules } from '../prompts';
 import { validateLessonSpec } from './lesson-validator';
@@ -342,32 +343,15 @@ export async function generateEnhancedLesson(
             };
           }
 
-          // Base64 result — try to save to filesystem
+          // Base64 result — stored inline in lesson spec
           if (result.base64Data) {
-            try {
-              const imagePath = await saveBase64Image(
-                result.base64Data,
-                `lesson_${topic.replace(/\s+/g, '_')}_${imagePrompt.id}`
-              );
-
-              return {
-                id: imagePrompt.id,
-                description: imagePrompt.description,
-                alt: imagePrompt.description,
-                base64Data: result.base64Data,
-                promptUsed: result.promptUsed,
-                path: imagePath,
-              };
-            } catch (saveError) {
-              console.error('Error saving image to filesystem:', saveError);
-              return {
-                id: imagePrompt.id,
-                description: imagePrompt.description,
-                alt: imagePrompt.description,
-                base64Data: result.base64Data,
-                promptUsed: result.promptUsed,
-              };
-            }
+            return {
+              id: imagePrompt.id,
+              description: imagePrompt.description,
+              alt: imagePrompt.description,
+              base64Data: result.base64Data,
+              promptUsed: result.promptUsed,
+            };
           }
         }
 
@@ -617,29 +601,13 @@ export async function generateLessonImages(
       }
 
       if (result.base64Data) {
-        try {
-          const imagePath = await saveBase64Image(
-            result.base64Data,
-            `lesson_${topic.replace(/\s+/g, '_')}_${imagePrompt.id}`
-          );
-          return {
-            id: imagePrompt.id,
-            description: imagePrompt.description,
-            alt: imagePrompt.description,
-            base64Data: result.base64Data,
-            promptUsed: result.promptUsed,
-            path: imagePath,
-          };
-        } catch (saveError) {
-          console.error('Error saving image to filesystem:', saveError);
-          return {
-            id: imagePrompt.id,
-            description: imagePrompt.description,
-            alt: imagePrompt.description,
-            base64Data: result.base64Data,
-            promptUsed: result.promptUsed,
-          };
-        }
+        return {
+          id: imagePrompt.id,
+          description: imagePrompt.description,
+          alt: imagePrompt.description,
+          base64Data: result.base64Data,
+          promptUsed: result.promptUsed,
+        };
       }
     }
 

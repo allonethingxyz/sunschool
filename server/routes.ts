@@ -82,7 +82,11 @@ export function registerRoutes(app: Express): Server {
       const authHeader = req.headers.authorization;
       if (authHeader?.startsWith('Bearer ')) {
         const jwt = await import('jsonwebtoken');
-        const decoded: any = jwt.default.verify(authHeader.slice(7), process.env.JWT_SECRET || 'sunschool-secret');
+        const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'dev-jwt-secret-do-not-use-in-prod');
+        if (!jwtSecret) {
+          throw new Error('JWT_SECRET environment variable must be set in production');
+        }
+        const decoded: any = jwt.default.verify(authHeader.slice(7), jwtSecret);
         userId = decoded.id ? parseInt(decoded.id, 10) : null;
       }
     } catch { /* no auth — that's fine */ }

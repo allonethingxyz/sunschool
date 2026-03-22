@@ -20,7 +20,7 @@ server/              Express.js backend
   config/            Environment vars (env.ts) and feature flags (flags.ts)
   bittensor.ts       Bittensor Subnet 1 client
 shared/              TypeScript schemas and types (schema.ts)
-drizzle/migrations/  Database migration SQL files (0000-0008)
+drizzle/migrations/  Database migration SQL files (0000-0010)
 scripts/             Admin onboarding, password reset, migrations
 tests/e2e/           Playwright end-to-end tests
 ```
@@ -197,21 +197,21 @@ BITTENSOR_WALLET_HOTKEY=...
 - Neon serverless PostgreSQL with WebSocket connections
 - Connection pooling (max 10), keep-alive pings every 2 min
 - Migrations auto-run on startup; failures don't block server start
-- Migration folder: `drizzle/migrations/` (0000-0008)
+- Migration folder: `drizzle/migrations/` (0000-0010)
 - First registered user auto-promoted to ADMIN
 
 ## Security Notes
 
-From SAST scan (Bandit + Semgrep, Feb 2026):
+From SAST scan (Bandit + Semgrep, Feb 2026 — updated Mar 2026):
 
 | Priority | Finding | Status |
 |----------|---------|--------|
-| MEDIUM | CORS origin substring match (`server/auth.ts`) | Tighten to exact domain match |
-| MEDIUM | TLS `rejectUnauthorized: false` (`server/db.ts`) | Enable in production with CA cert |
-| MEDIUM | Path traversal in `image-storage.ts` | Add resolved path validation |
-| LOW | SVG innerHTML rendering | Server-side DOMPurify mitigates; consider client-side pass |
+| MEDIUM | CORS origin substring match (`server/auth.ts`) | Open — tighten to exact domain match |
+| MEDIUM | TLS `rejectUnauthorized: false` (`server/db.ts`) | Open — enable in production with CA cert |
+| MEDIUM | Path traversal in `image-storage.ts` | Open — add resolved path validation |
+| LOW | SVG innerHTML rendering | Mitigated — client-side DOMPurify pass added (`MediaLessonCard.tsx`) |
 
-SVG content is sanitized via a lightweight regex-based sanitizer in `server/services/svg-llm-service.ts` before storage (replaced isomorphic-dompurify to avoid CJS/ESM issues on Railway/Node 22). Sanitizer strips forbidden tags (script, style, iframe, etc.), event handlers (on*), and javascript:/data: URIs. LLM prompts explicitly prohibit scripts, styles, and external references.
+SVG content is sanitized server-side via a regex-based sanitizer in `server/services/svg-llm-service.ts` before storage, and client-side via DOMPurify in `client/src/components/MediaLessonCard.tsx` before DOM insertion. The server sanitizer strips forbidden tags (script, style, iframe, etc.), event handlers (on*), and javascript:/data: URIs. LLM prompts explicitly prohibit scripts, styles, and external references.
 
 ## Testing
 
@@ -219,27 +219,27 @@ SVG content is sanitized via a lightweight regex-based sanitizer in `server/serv
 - `npx playwright test` — E2E tests (auto-starts local server)
 - `PLAYWRIGHT_BASE_URL=https://sunschool.xyz npx playwright test` — E2E against production
 
-### E2E Test Suite (71 tests across 15 spec files)
+### E2E Test Suite (82 tests across 15 spec files)
 
 Tests live in `tests/e2e/specs/` organized by persona:
 
 | Persona | Spec File | Tests | Coverage |
 |---------|-----------|-------|----------|
-| **Learner** | `lesson-flow.spec.ts` | 4 | Lesson generation, content navigation, quiz entry |
-| | `quiz-assessment.spec.ts` | 5 | Quiz pre-screen, answering via API, results |
-| | `content-display.spec.ts` | 4 | Text sections, SVG/image display, difficulty levels |
+| **Learner** | `lesson-flow.spec.ts` | 2 | Lesson generation, content navigation |
+| | `quiz-assessment.spec.ts` | 4 | Quiz pre-screen, answering via API, results |
+| | `content-display.spec.ts` | 5 | Text sections, SVG/image display, difficulty levels |
 | | `achievements.spec.ts` | 5 | Progress page, zero state, lesson history, mastery |
-| | `points-rewards.spec.ts` | 4 | Point balance, goals page, reward progress |
-| | `card-carousel.spec.ts` | 4 | Cover card render, progress bar, navigation |
-| | `svg-rendering.spec.ts` | 4 | SVG in API response, DOM rendering, sanitization |
-| | `input-safety.spec.ts` | 3 | Prompt injection, DAN mode, env var exfiltration |
+| | `points-rewards.spec.ts` | 5 | Point balance, goals page, reward progress |
+| | `card-carousel.spec.ts` | 5 | Cover card render, progress bar, navigation |
+| | `svg-rendering.spec.ts` | 6 | SVG in API response, DOM rendering, sanitization |
+| | `input-safety.spec.ts` | 8 | Prompt injection, DAN mode, env var exfiltration |
 | | `chaotic-kid.spec.ts` | 10 | Spam-click, cancel mid-gen, rapid subject switch, refresh during load, random taps, bookmark recovery, error recovery |
 | **Parent** | `auth.spec.ts` | 4 | Login form, invalid creds, registration, token clearing |
 | | `dashboard.spec.ts` | 5 | Dashboard loads, stats, reports nav, rewards nav, mode switch |
-| | `learner-management.spec.ts` | 4 | Learner list, add child, child cards, add-learner page |
-| | `prompt-audit.spec.ts` | 4 | Lesson API transparency, reports, progress, dashboard |
-| | `public-pages.spec.ts` | 4 | Welcome, auth tabs, privacy, terms |
-| | `rewards.spec.ts` | 3 | Rewards page, create goal, tabs/sections |
+| | `learner-management.spec.ts` | 5 | Learner list, add child, child cards, add-learner page |
+| | `prompt-audit.spec.ts` | 5 | Lesson API transparency, reports, progress, dashboard |
+| | `public-pages.spec.ts` | 7 | Welcome, auth tabs, privacy, terms |
+| | `rewards.spec.ts` | 6 | Rewards page, create goal, tabs/sections |
 
 ### Test Helpers
 

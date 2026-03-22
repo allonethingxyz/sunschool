@@ -13,6 +13,23 @@ node_modules
 admin-credentials.txt
 /.stoneforge
 
+# Security scan results
+semgrep_results.json
+
+# Backup files
+*.backup
+
+# Build output
+dist/
+client/dist/
+
+# Source maps
+*.map
+
+# Environment overrides
+.env.local
+.env.production
+
 # E2E test artifacts (screenshots, reports, traces)
 tests/e2e/screenshots/
 tests/e2e/report/

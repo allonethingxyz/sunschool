@@ -1,5 +1,8 @@
 # SUNSCHOOL UX Overhaul Plan
 
+> **Note:** This plan predates the March 2026 UX overhaul and E2E test buildout.
+> See ENGINEERING.md for current test coverage and workflows.md for workflow mapping.
+
 > **NOTE**: This plan was written before the UX overhaul (commit `569340b`). Some items have since been completed — see status markers below. Line number references throughout this document refer to the pre-overhaul codebase and may no longer be accurate. The lesson generation pipeline was rebuilt (single spec column, validation, model fallback chains) — see [ENGINEERING.md](ENGINEERING.md) for current architecture.
 
 This document lays out a comprehensive plan to fix SUNSCHOOL's UX problems, organized into three parallel tracks. Each track can be worked independently, though Track 1 should be prioritized since it fixes broken functionality.

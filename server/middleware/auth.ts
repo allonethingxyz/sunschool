@@ -56,7 +56,10 @@ export interface AuthRequest extends Request {
 }
 
 const scryptAsync = promisify(scrypt);
-const JWT_SECRET = process.env.JWT_SECRET || 'sunschool-secure-jwt-secret-for-development-5a5b2f8e6c7d';
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'dev-jwt-secret-do-not-use-in-prod');
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable must be set in production');
+}
 const JWT_EXPIRES_IN = '7d'; // 7 days
 
 // Password hashing and verification

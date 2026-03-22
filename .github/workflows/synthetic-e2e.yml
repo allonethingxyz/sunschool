@@ -1,10 +1,15 @@
 name: Synthetic User E2E
 
 on:
-  push:
-    branches: [main]
+  # Only run on PRs and manual dispatch — NOT on every push
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.stoneforge/**'
   workflow_dispatch:
     inputs:
       target_url:
@@ -82,9 +87,6 @@ jobs:
           JWT_SECRET: test-jwt-secret
           NODE_ENV: test
           CI: true
-          ENABLE_SVG_LLM: '0'
-          ENABLE_OPENROUTER_IMAGES: '0'
-          MAX_IMAGES_PER_LESSON: '0'
 
       - name: Generate synthetic report
         if: always()

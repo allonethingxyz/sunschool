@@ -13,8 +13,31 @@ node_modules
 admin-credentials.txt
 /.stoneforge
 
-# Playwright test artifacts
-test-results/
+# Security scan results
+semgrep_results.json
+
+# Backup files
+*.backup
+
+# Build output
+dist/
+client/dist/
+
+# Source maps
+*.map
+
+# Environment overrides
+.env.local
+.env.production
+
+# E2E test artifacts (screenshots, reports, traces)
 tests/e2e/screenshots/
 tests/e2e/report/
-tests/e2e/quarantine.json
+test-results/
+
+# Local tooling / scratch files
+ecosystem-dashboard.html
+scripts/dashboard.sh
+scripts/ecosystem-dashboard.ts
+SUNSCHOOL-TIMEPOINT.md
+aot-marketplace/

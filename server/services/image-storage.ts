@@ -31,7 +31,13 @@ export async function saveBase64Image(base64Data: string, fileName: string): Pro
     
     // Full path to save the image
     const filePath = path.join(IMAGES_DIR, fullFileName);
-    
+
+    // Validate path to prevent directory traversal
+    const resolvedPath = path.resolve(IMAGES_DIR, fullFileName);
+    if (!resolvedPath.startsWith(path.resolve(IMAGES_DIR))) {
+      throw new Error('Invalid file path');
+    }
+
     // Convert base64 to buffer and save
     const buffer = Buffer.from(base64Data, 'base64');
     fs.writeFileSync(filePath, buffer);

@@ -10,6 +10,15 @@ import { USE_AI } from "./config/flags";
 import { db, pool, withRetry } from "./db";
 import { sql, count, eq, and } from "drizzle-orm";
 import crypto from "crypto";
+import rateLimit from 'express-rate-limit';
+
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many submissions. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 import { users, lessons } from "../shared/schema";
 // content-generator used by image-generation-router, not directly by routes
 import { pointsService } from "./services/points-service";
@@ -33,7 +42,7 @@ import { findOrCreateTemplate } from './services/lesson-template-service';
 import { storeQuizAnswers, extractConceptTags } from './services/quiz-tracking-service';
 import { bulkUpdateMasteryFromAnswers, getConceptsNeedingReinforcement } from './services/mastery-service';
 import { storeQuestionHashes, getRecentQuestions } from './services/question-deduplication';
-import { validatePromptInput, delimitUserInput } from './services/prompt-safety';
+import { validatePromptInput } from './services/prompt-safety';
 
 function hasRole(roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -64,7 +73,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Feedback / support submission (no auth required)
-  app.post("/api/feedback", asyncHandler(async (req: Request, res: Response) => {
+  app.post("/api/feedback", feedbackLimiter, asyncHandler(async (req: Request, res: Response) => {
     const { message, email, page } = req.body;
     if (!message || typeof message !== 'string' || message.trim().length < 2) {
       return res.status(400).json({ error: "Message is required (min 2 characters)" });
@@ -82,7 +91,11 @@ export function registerRoutes(app: Express): Server {
       const authHeader = req.headers.authorization;
       if (authHeader?.startsWith('Bearer ')) {
         const jwt = await import('jsonwebtoken');
-        const decoded: any = jwt.default.verify(authHeader.slice(7), process.env.JWT_SECRET || 'sunschool-secret');
+        const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? undefined : 'dev-jwt-secret-do-not-use-in-prod');
+        if (!jwtSecret) {
+          throw new Error('JWT_SECRET environment variable must be set in production');
+        }
+        const decoded: any = jwt.default.verify(authHeader.slice(7), jwtSecret);
         userId = decoded.id ? parseInt(decoded.id, 10) : null;
       }
     } catch { /* no auth — that's fine */ }
@@ -624,6 +637,22 @@ export function registerRoutes(app: Express): Server {
       return res.status(400).json({ error: "No valid update data provided" });
     }
 
+    // Validate subjects arrays — these flow into LLM prompts during lesson pre-generation
+    const validateSubjectArray = async (arr: any[], fieldName: string) => {
+      if (!Array.isArray(arr)) return;
+      for (const item of arr) {
+        const val = typeof item === 'string' ? item : item?.name || item?.subject;
+        if (val) {
+          const check = await validatePromptInput(val);
+          if (!check.safe) {
+            return res.status(400).json({ error: `Invalid ${fieldName}: ${check.reason}` });
+          }
+        }
+      }
+    };
+    if (subjects) { const r = await validateSubjectArray(subjects, 'subject'); if (r) return r; }
+    if (recommendedSubjects) { const r = await validateSubjectArray(recommendedSubjects, 'recommended subject'); if (r) return r; }
+
     // Check authorization for parents
     if (req.user?.role === "PARENT") {
       try {
@@ -1061,41 +1090,27 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Background image generation with timeout and failure recovery
+      // Background image generation
       const lessonId = newLesson.id;
       const savedSpec = spec;
-      const IMAGE_TIMEOUT_MS = 120_000;
       backgroundTask(`images-${lessonId}`, async () => {
-        try {
-          const imagePromise = generateLessonImages(
-            savedSpec, topic, gradeLevel, finalSubject
-          );
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Image generation timed out after 120s')), IMAGE_TIMEOUT_MS)
-          );
-          const { images: generatedImages, diagrams } = await Promise.race([imagePromise, timeoutPromise]);
-          if (generatedImages?.length) {
-            const imgPaths = generatedImages
-              .filter((img: any) => img.path)
-              .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
-            // Merge generated images into the original spec images by ID,
-            // preserving metadata for images that weren't generated (over the cap)
-            const generatedById = new Map(generatedImages.map((img: any) => [img.id, img]));
-            const mergedImages = (savedSpec.images || []).map((origImg: any) => {
-              const generated = generatedById.get(origImg.id);
-              return generated ? { ...origImg, ...generated } : origImg;
-            });
-            const mergedSpec = { ...savedSpec, images: mergedImages, diagrams: diagrams || [] };
-            await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
-            console.log(`[BG] Images generated for lesson ${lessonId} (${generatedImages.length} generated, ${mergedImages.length} total)`);
-          }
-        } catch (imgErr) {
-          console.error(`[BG] Image generation failed for lesson ${lessonId}:`, imgErr);
-          // Flag the lesson so the client stops polling
-          const failedSpec = { ...savedSpec, imageGenerationFailed: true };
-          await storage.updateLessonImages(lessonId, failedSpec, []).catch(e =>
-            console.error(`[BG] Failed to flag image failure for lesson ${lessonId}:`, e)
-          );
+        const { images: generatedImages, diagrams } = await generateLessonImages(
+          savedSpec, topic, gradeLevel, finalSubject
+        );
+        if (generatedImages?.length) {
+          const imgPaths = generatedImages
+            .filter((img: any) => img.path)
+            .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
+          // Merge generated images into the original spec images by ID,
+          // preserving metadata for images that weren't generated (over the cap)
+          const generatedById = new Map(generatedImages.map((img: any) => [img.id, img]));
+          const mergedImages = (savedSpec.images || []).map((origImg: any) => {
+            const generated = generatedById.get(origImg.id);
+            return generated ? { ...origImg, ...generated } : origImg;
+          });
+          const mergedSpec = { ...savedSpec, images: mergedImages, diagrams: diagrams || [] };
+          await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
+          console.log(`[BG] Images generated for lesson ${lessonId} (${generatedImages.length} generated, ${mergedImages.length} total)`);
         }
       });
 
@@ -1104,42 +1119,6 @@ export function registerRoutes(app: Express): Server {
       console.error('Error creating custom lesson:', error);
       return res.status(500).json({ error: "Failed to generate lesson content" });
     }
-  }));
-
-  // Retry image generation for a lesson where it previously failed
-  app.post("/api/lessons/:lessonId/retry-images", isAuthenticated, asyncHandler(async (req: AuthRequest, res) => {
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
-    const lesson = await storage.getLessonById(req.params.lessonId);
-    if (!lesson) return res.status(404).json({ error: "Lesson not found" });
-    if (!lesson.spec) return res.status(400).json({ error: "Lesson has no spec" });
-
-    const lessonSpec = lesson.spec as any;
-    const IMAGE_TIMEOUT_MS = 120_000;
-    backgroundTask(`retry-images-${lesson.id}`, async () => {
-      try {
-        const imagePromise = generateLessonImages(
-          lessonSpec, lessonSpec.title || 'Lesson', lessonSpec.targetGradeLevel || 3, lesson.subject || 'general'
-        );
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Image retry timed out after 120s')), IMAGE_TIMEOUT_MS)
-        );
-        const { images, diagrams } = await Promise.race([imagePromise, timeoutPromise]);
-        if (images?.length) {
-          const imgPaths = images
-            .filter((img: any) => img.path)
-            .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
-          const mergedSpec = { ...lessonSpec, images, diagrams: diagrams || [], imageGenerationFailed: false };
-          await storage.updateLessonImages(lesson.id, mergedSpec, imgPaths);
-          console.log(`[BG] Retry images succeeded for lesson ${lesson.id}`);
-        }
-      } catch (imgErr) {
-        console.error(`[BG] Image retry failed for lesson ${lesson.id}:`, imgErr);
-        const failedSpec = { ...lessonSpec, imageGenerationFailed: true };
-        await storage.updateLessonImages(lesson.id, failedSpec, []).catch(() => {});
-      }
-    });
-
-    return res.json({ message: "Image generation retry started" });
   }));
 
   // Get a specific lesson by ID

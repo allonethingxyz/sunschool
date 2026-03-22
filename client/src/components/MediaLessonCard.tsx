@@ -6,13 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-// Use a safe inline sanitizer rather than the full isomorphic-dompurify
-// to avoid 'global is not defined' in the browser bundle.
-function safeSanitizeSvg(svg: string): string {
-  if (typeof window === 'undefined') return '';
-  // Simple allowlist: only allow SVG-safe content
-  return svg.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/on\w+="[^"]*"/g, '');
-}
+import DOMPurify from 'dompurify';
 import { colors, typography } from '../styles/theme';
 import { Clock, BookOpen, ChevronRight } from 'react-feather';
 
@@ -86,7 +80,7 @@ const MediaLessonCard: React.FC<MediaLessonCardProps> = ({
       return (
         <div
           style={{ width: '100%', height: '100%', overflow: 'hidden' }}
-          dangerouslySetInnerHTML={{ __html: safeSanitizeSvg(thumbnail.svgData) }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(thumbnail.svgData) }}
         />
       );
     }

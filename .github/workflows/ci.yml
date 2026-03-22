@@ -3,8 +3,18 @@ name: CI Sanity Gate
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.stoneforge/**'
   pull_request:
     branches: [ main ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint-type-check:
@@ -12,12 +22,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies
@@ -34,12 +44,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies
@@ -64,12 +74,12 @@ jobs:
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies
@@ -85,6 +95,8 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [database-migrations]
+    # Only run E2E on PRs — too expensive for every push
+    if: github.event_name == 'pull_request'
 
     services:
       postgres:
@@ -98,12 +110,12 @@ jobs:
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies
@@ -132,6 +144,3 @@ jobs:
         SESSION_SECRET: test-secret
         JWT_SECRET: test-jwt-secret
         NODE_ENV: test
-        ENABLE_SVG_LLM: '0'
-        ENABLE_OPENROUTER_IMAGES: '0'
-        MAX_IMAGES_PER_LESSON: '0'

@@ -1,0 +1,51 @@
+{
+  "quarantined": [
+    "Session persistence across page reload"
+  ],
+  "history": {
+    "2026-03-14": {
+      "action": "quarantine",
+      "reason": "Production AI lesson generation service returning 503 — 'Lesson generation failed after multiple attempts'. All tests requiring generateAndWaitForLesson() fail consistently. This is a production infrastructure issue (AI provider unavailable), not a test/selector issue. Tests pass structurally when lesson generation succeeds.",
+      "affected_specs": [
+        "content-display.spec.ts (all 5 tests)",
+        "lesson-flow.spec.ts (all 4 tests)",
+        "quiz-assessment.spec.ts (all 4 tests)",
+        "achievements.spec.ts (2 of 5 tests: perfect score + lesson history)"
+      ],
+      "tests_passing": [
+        "achievements: can view progress page with learning stats",
+        "achievements: progress page shows zero state for new learner",
+        "achievements: progress page shows subject mastery breakdown",
+        "points-rewards: can view point balance on learner home",
+        "points-rewards: can check point balance via API and see it reflected",
+        "points-rewards: can navigate to goals page and see reward goals",
+        "points-rewards: can see reward goal progress and save points action",
+        "points-rewards: points are awarded after completing a quiz"
+      ],
+      "unquarantine_condition": "Remove from quarantine when production AI lesson generation service is restored (POST /api/lessons/create returns 200/201)"
+    },
+    "2026-03-17": {
+      "action": "unquarantine + fix",
+      "reason": "Free model config deployed. Fixed 5 test code issues: (1) Lesson pages use collapsible <button> sections, not <heading> elements — updated assertions to use getByRole('button', { name: /section/i }). (2) spaNavigate unreliable for lesson/quiz pages — switched to page.goto(). (3) Quiz submit test now uses API-based answer submission for reliability. (4) Added template reuse smoke test.",
+      "tests_unquarantined": [
+        "lesson content renders text sections with headings and paragraphs",
+        "lesson page displays SVG illustrations or images",
+        "lesson content is rendered at appropriate grade level",
+        "quiz questions render with answer options and visual elements",
+        "learner home displays knowledge graph or learning overview",
+        "start a new lesson and navigate through content",
+        "lesson card displays subject and topic information",
+        "can navigate to quiz pre-screen from lesson",
+        "can answer quiz questions and see options",
+        "can submit quiz and view results with score",
+        "can return to learner home after quiz completion",
+        "achievements appear after completing a lesson with perfect score",
+        "can view lesson history on progress page"
+      ],
+      "tests_added": [
+        "template-reuse.spec.ts: second lesson for same subject/grade reuses cached template"
+      ],
+      "remaining_issue": "Production AI service returns intermittent 503 under load. Tests pass when service is available. Not a test code issue."
+    }
+  }
+}

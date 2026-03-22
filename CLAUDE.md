@@ -1,5 +1,9 @@
 # Sunschool OSS — Claude Code Agent Guide
 
+## Commit Rules
+- Do NOT add "Co-Authored-By" trailers to commits
+- Do NOT add AI attribution (e.g., "Generated with Claude") to code or commit messages
+
 ## Project Overview
 Sunschool is an AI-powered K-12 learning platform. This is the open-source repo containing:
 - `shared/` — Drizzle ORM schema, types, shared utilities

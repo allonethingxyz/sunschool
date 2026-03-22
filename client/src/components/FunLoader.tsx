@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
 
 const FUN_FACTS = [
   "Did you know? Octopuses have 3 hearts!",
@@ -48,14 +48,24 @@ interface FunLoaderProps {
   message?: string;
   /** Show sequential progress messages instead of random facts */
   progressMessages?: string[];
+  /** Label for the subject being loaded (e.g. "Math") */
+  subjectLabel?: string;
+  /** Called when user cancels the loading operation */
+  onCancel?: () => void;
 }
 
-const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages }) => {
+const PROGRESS_BAR_DURATION = 60000; // 60 seconds estimated fill time
+const TIMEOUT_THRESHOLD = 20000; // 20 seconds before showing timeout message
+
+const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages, subjectLabel, onCancel }) => {
   const [factIndex, setFactIndex] = useState(Math.floor(Math.random() * FUN_FACTS.length));
   const [progressIndex, setProgressIndex] = useState(0);
+  const [showTimeout, setShowTimeout] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
+  const progressBarAnim = useRef(new Animated.Value(0)).current;
+  const timeoutFadeAnim = useRef(new Animated.Value(0)).current;
   const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
   const bounceLoop = useRef<Animated.CompositeAnimation | null>(null);
 
@@ -92,6 +102,30 @@ const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages }) => {
     return () => { bounceLoop.current?.stop(); };
   }, []);
 
+  // Gentle progress bar that fills slowly over ~60s
+  useEffect(() => {
+    const anim = Animated.timing(progressBarAnim, {
+      toValue: 1,
+      duration: PROGRESS_BAR_DURATION,
+      useNativeDriver: false,
+    });
+    anim.start();
+    return () => { anim.stop(); };
+  }, []);
+
+  // Encouraging timeout message after 20 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowTimeout(true);
+      Animated.timing(timeoutFadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: false,
+      }).start();
+    }, TIMEOUT_THRESHOLD);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Rotate facts every 3 seconds
   useEffect(() => {
     if (progressMessages) {
@@ -119,6 +153,11 @@ const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages }) => {
     outputRange: ['0deg', '360deg'],
   });
 
+  const progressBarWidth = progressBarAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
   const displayText = progressMessages ? progressMessages[progressIndex] : FUN_FACTS[factIndex];
 
   return (
@@ -132,6 +171,20 @@ const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages }) => {
 
       {/* Optional main message */}
       {message && <Text style={styles.message}>{message}</Text>}
+
+      {/* Subject context label */}
+      {subjectLabel && (
+        <Text style={styles.subjectLabel}>
+          Making a {subjectLabel} lesson...
+        </Text>
+      )}
+
+      {/* Gentle progress bar */}
+      <View style={styles.progressBarTrack}>
+        <Animated.View
+          style={[styles.progressBarFill, { width: progressBarWidth }]}
+        />
+      </View>
 
       {/* Fun fact or progress message */}
       <Animated.View style={{ opacity: fadeAnim }}>
@@ -156,6 +209,26 @@ const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages }) => {
           />
         ))}
       </View>
+
+      {/* Cancel button */}
+      {onCancel && (
+        <TouchableOpacity
+          onPress={onCancel}
+          style={styles.cancelButton}
+          activeOpacity={0.6}
+        >
+          <Text style={styles.cancelText}>Never mind</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Encouraging timeout message */}
+      {showTimeout && (
+        <Animated.View style={[styles.timeoutContainer, { opacity: timeoutFadeAnim }]}>
+          <Text style={styles.timeoutText}>
+            This is taking a bit longer than usual, but we're still working on it!
+          </Text>
+        </Animated.View>
+      )}
     </View>
   );
 };
@@ -200,6 +273,46 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#4A90D9',
     marginHorizontal: 4,
+  },
+  subjectLabel: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#4A90D9',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  progressBarTrack: {
+    width: 200,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E8EDF1',
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#4A90D9',
+  },
+  cancelButton: {
+    marginTop: 28,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+  },
+  cancelText: {
+    fontSize: 15,
+    color: '#949DA2',
+    textAlign: 'center',
+  },
+  timeoutContainer: {
+    marginTop: 20,
+    maxWidth: 280,
+  },
+  timeoutText: {
+    fontSize: 14,
+    color: '#949DA2',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 

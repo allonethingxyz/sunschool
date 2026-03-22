@@ -63,7 +63,7 @@ If you don't know what's in the prompt, you don't really know what's in the less
 | Database | PostgreSQL (Neon serverless) |
 | AI | OpenRouter API (primary), Bittensor Subnet 1 (experimental), Perplexity API |
 | Deployment | Railway (NIXPACKS), auto-deploy on push to `main` |
-| Testing | Jest (unit), Playwright (e2e) |
+| Testing | Jest (unit), Playwright (e2e — 71 tests, 15 specs) |
 
 ### Architecture
 
@@ -73,7 +73,7 @@ server/          Express.js API with JWT auth
 shared/          TypeScript schemas and types
 scripts/         Database and utility scripts
 drizzle/         Migration files
-tests/           Playwright e2e tests
+tests/           Playwright e2e tests (learner, parent, chaos)
 ```
 
 ### Key Features
@@ -128,7 +128,7 @@ PORT=5000
 
 ```bash
 # Development
-npm run deploy
+npm run dev
 
 # Production
 npm run build

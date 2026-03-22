@@ -24,14 +24,6 @@ export interface SelectorDriftWarning {
 // Accumulate drift warnings across a test run
 const driftWarnings: SelectorDriftWarning[] = [];
 
-export function getDriftWarnings(): SelectorDriftWarning[] {
-  return [...driftWarnings];
-}
-
-export function clearDriftWarnings(): void {
-  driftWarnings.length = 0;
-}
-
 /**
  * Levenshtein distance between two strings.
  */

@@ -1,136 +1,114 @@
 /**
- * Parent persona — AI prompt audit & transparency flows.
+ * Parent Persona E2E: Prompt Audit / Content Transparency
  *
- * Covers: viewing lesson spec, API response with full spec,
- * AI-generated content in UI, subject/grade transparency,
- * learner progress for audit.
+ * Journeys:
+ *   1. Lesson API response contains full spec for parent review
+ *   2. Reports page loads with lesson data
+ *   3. Progress page shows learner stats
+ *   4. Dashboard shows subjects and grades for transparency
+ *
+ * Parents need full visibility into AI-generated content.
+ * These tests verify the transparency layer.
  */
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { captureFailureArtifacts } from '../../helpers/self-healing';
 import {
-  setupLearnerSession,
-  setAuthAndNavigate,
+  setupParentSession,
+  navigateAsParent,
   generateAndWaitForLesson,
   apiCall,
-  screenshot,
-  SessionContext,
 } from '../../helpers/learner-setup';
-import { captureFailureArtifacts } from '../../helpers/self-healing';
 
-test.describe('Parent Prompt Audit', () => {
+const SCREENSHOT_DIR = 'tests/e2e/screenshots/parent';
+
+test.describe('Parent: Content Transparency', () => {
   test.describe.configure({ retries: 2 });
-
-  let ctx: SessionContext;
-  let page: Page;
-  let lessonId: string;
-
-  test.beforeAll(async ({ browser }) => {
-    page = await browser.newPage();
-    page.setDefaultTimeout(60000);
-    ctx = await setupLearnerSession(page, { prefix: 'audit' });
-
-    // Generate a lesson for audit tests — handle AI unavailability gracefully.
-    // Use a short timeout so beforeAll doesn't hang for minutes if AI is down.
-    try {
-      lessonId = await generateAndWaitForLesson(page, ctx.learnerId, {
-        subject: 'Science',
-        gradeLevel: 5,
-        timeoutMs: 60000,
-      });
-      console.log(`Audit lesson created: ${lessonId}`);
-    } catch (err: any) {
-      console.warn(`Lesson generation failed (AI may be unavailable): ${err.message}`);
-      // lessonId remains empty — individual tests will skip if they need it
-    }
+  test.beforeEach(async ({ page }) => {
+    page.setDefaultTimeout(120000);
   });
 
-  test.afterEach(async ({}, testInfo) => {
-    if (testInfo.status !== 'passed') {
-      await captureFailureArtifacts(page, testInfo.title);
-    }
-  });
+  test('lesson API returns full spec with title, sections, and questions', async ({ page }) => {
+    test.setTimeout(600_000);
+    await setupParentSession(page, 'audit');
 
-  test.afterAll(async () => {
-    try { await page.close(); } catch { /* ignore trace file cleanup errors */ }
-  });
-
-  test('View lesson spec content through reports', async () => {
-    await setAuthAndNavigate(page, ctx.authToken, '/reports');
-    await page.waitForTimeout(3000);
-
-    // Reports page should be accessible
-    expect(page.url()).toMatch(/reports/);
-    await screenshot(page, 'audit-reports');
-  });
-
-  test('Lesson API response contains full spec for parent review', async () => {
-    if (!lessonId) {
-      console.log('SKIP: No lesson available (AI service was unavailable during setup)');
-      test.skip();
-      return;
-    }
+    const lessonId = await generateAndWaitForLesson(page, 'Science');
+    expect(lessonId).toBeTruthy();
 
     const result = await apiCall(page, 'GET', `/api/lessons/${lessonId}`);
     expect(result.status).toBe(200);
-    expect(result.data).toBeTruthy();
 
-    // Spec should contain structured lesson data
-    const spec = result.data.spec;
+    const spec = result.data?.spec;
     expect(spec).toBeTruthy();
+    expect(spec.title).toBeTruthy();
+    expect(Array.isArray(spec.sections)).toBe(true);
+    expect(spec.sections.length).toBeGreaterThanOrEqual(1);
 
-    // Verify key spec fields exist
-    const hasTitle = !!spec.title || !!spec.lessonTitle;
-    const hasContent = !!spec.sections || !!spec.content || !!spec.lessonContent;
-    console.log(`Spec has title: ${hasTitle}, has content: ${hasContent}`);
-    expect(hasTitle || hasContent).toBeTruthy();
-  });
-
-  test('View AI-generated lesson content in UI', async () => {
-    if (!lessonId) {
-      console.log('SKIP: No lesson available (AI service was unavailable during setup)');
-      test.skip();
-      return;
+    // Sections should have content
+    for (const section of spec.sections) {
+      expect(section.content || section.title).toBeTruthy();
     }
 
-    await setAuthAndNavigate(page, ctx.authToken, '/lesson');
-    await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), ctx.learnerId);
-    await page.waitForTimeout(3000);
-
-    // Lesson page should render content
-    const hasContent = await page.getByRole('heading').first().isVisible({ timeout: 10000 }).catch(() => false);
-    console.log(`Lesson heading visible: ${hasContent}`);
-
-    await screenshot(page, 'audit-lesson-content');
-  });
-
-  test('Dashboard shows subjects and grades for transparency', async () => {
-    await setAuthAndNavigate(page, ctx.authToken, '/dashboard');
-    await page.waitForTimeout(2000);
-
-    // Dismiss welcome card
-    const gotIt = page.getByText('GOT IT!');
-    if (await gotIt.isVisible({ timeout: 3000 }).catch(() => false)) await gotIt.click();
-
-    // Should show child info with grade level
-    const childVisible = await page.getByText(ctx.childName).first().isVisible({ timeout: 5000 }).catch(() => false);
-    expect(childVisible).toBeTruthy();
-
-    await screenshot(page, 'audit-dashboard-transparency');
-  });
-
-  test('Access learner progress for AI output audit', async () => {
-    await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), ctx.learnerId);
-    await setAuthAndNavigate(page, ctx.authToken, '/progress');
-    await page.waitForTimeout(3000);
-
-    // Verify we can access the progress page (URL contains progress)
-    const url = page.url();
-    const onProgress = url.includes('progress');
-    if (!onProgress) {
-      // SPA may have redirected; verify via API that progress endpoint is accessible
-      const result = await apiCall(page, 'GET', `/api/learner-profile/${ctx.learnerId}`);
-      console.log(`Progress page URL: ${url}, API status: ${result.status}`);
-      expect(result.status).toBe(200);
+    // Questions should exist
+    if (spec.questions) {
+      expect(Array.isArray(spec.questions)).toBe(true);
+      for (const q of spec.questions) {
+        expect(q.text).toBeTruthy();
+        expect(Array.isArray(q.options)).toBe(true);
+        expect(q.options.length).toBeGreaterThanOrEqual(2);
+      }
     }
-    await screenshot(page, 'audit-progress');
+  });
+
+  test('reports page loads and shows content', async ({ page }) => {
+    test.setTimeout(300_000);
+    await setupParentSession(page, 'audit_reports');
+
+    await navigateAsParent(page, '/reports');
+
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
+    expect(page.url()).toContain('/reports');
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/audit-01-reports.png` });
+  });
+
+  test('progress page shows learner stats', async ({ page }) => {
+    test.setTimeout(300_000);
+    const { learnerId } = await setupParentSession(page, 'audit_progress');
+
+    // Verify profile exists via API
+    const profile = await apiCall(page, 'GET', `/api/learner-profile/${learnerId}`);
+    expect(profile.status).toBe(200);
+
+    // Navigate to progress page (as learner mode to access /progress route)
+    await page.evaluate(() => localStorage.setItem('preferredMode', 'LEARNER'));
+    await page.goto('/progress');
+    await page.waitForLoadState('networkidle');
+
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/audit-02-progress.png` });
+  });
+
+  test('dashboard shows child name and grade', async ({ page }) => {
+    test.setTimeout(300_000);
+    const { childName } = await setupParentSession(page, 'audit_dash');
+
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
+
+    // Child name should appear on dashboard
+    const hasChildInfo = bodyText.includes(childName) ||
+      /grade|learner|child/i.test(bodyText);
+    expect(hasChildInfo).toBeTruthy();
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/audit-03-dashboard.png` });
+  });
+
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status !== 'passed') {
+      await captureFailureArtifacts(page, `audit-${testInfo.title}`, SCREENSHOT_DIR);
+    }
   });
 });

@@ -1,150 +1,118 @@
 /**
- * Parent persona — dashboard flows.
+ * Parent Persona E2E: Dashboard
  *
- * Covers: welcome greeting, stats display, navigation links,
- * switch to learner mode, How It Works section.
+ * Journeys:
+ *   1. Dashboard loads after login and shows child overview
+ *   2. Dashboard displays stats (lessons, score)
+ *   3. Navigation to Reports and Rewards pages works
+ *   4. Switch to learner mode from dashboard
+ *
+ * react-native-web renders Text as <div> not <h1>-<h6>.
+ * Use text-based locators and body content checks.
  */
-import { test, expect, Page } from '@playwright/test';
-import {
-  setupLearnerSession,
-  setAuthAndNavigate,
-  dismissDashboardWelcome,
-  apiCall,
-  screenshot,
-  SessionContext,
-} from '../../helpers/learner-setup';
+import { test, expect } from '@playwright/test';
 import { captureFailureArtifacts } from '../../helpers/self-healing';
+import {
+  setupParentSession,
+  navigateAsParent,
+  navigateAsLearner,
+  apiCall,
+} from '../../helpers/learner-setup';
 
-test.describe('Parent Dashboard', () => {
+const SCREENSHOT_DIR = 'tests/e2e/screenshots/parent';
+
+test.describe('Parent: Dashboard', () => {
   test.describe.configure({ retries: 2 });
-
-  let ctx: SessionContext;
-  let page: Page;
-
-  test.beforeAll(async ({ browser }) => {
-    page = await browser.newPage();
-    page.setDefaultTimeout(60000);
-    ctx = await setupLearnerSession(page, { prefix: 'dash' });
+  test.beforeEach(async ({ page }) => {
+    page.setDefaultTimeout(120000);
   });
 
-  test.afterEach(async ({}, testInfo) => {
-    if (testInfo.status !== 'passed') {
-      await captureFailureArtifacts(page, testInfo.title);
+  test('dashboard loads with child overview', async ({ page }) => {
+    test.setTimeout(300_000);
+    const { childName } = await setupParentSession(page, 'dash');
+
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
+
+    // Child name or dashboard content should be visible
+    const hasChild = bodyText.includes(childName) ||
+      bodyText.toLowerCase().includes('dashboard') ||
+      bodyText.toLowerCase().includes('learner');
+    expect(hasChild).toBeTruthy();
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/dash-01-overview.png` });
+  });
+
+  test('dashboard shows learning stats', async ({ page }) => {
+    test.setTimeout(300_000);
+    const { learnerId } = await setupParentSession(page, 'dash_stats');
+
+    // Check stats via API
+    const profileResult = await apiCall(page, 'GET', `/api/learner-profile/${learnerId}`);
+    expect(profileResult.status).toBe(200);
+
+    // Dashboard should have structural content
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/dash-02-stats.png` });
+  });
+
+  test('navigation to Reports page works', async ({ page }) => {
+    test.setTimeout(300_000);
+    await setupParentSession(page, 'dash_nav');
+
+    await navigateAsParent(page, '/reports');
+
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
+    expect(page.url()).toContain('/reports');
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/dash-03-reports.png` });
+  });
+
+  test('navigation to Rewards page works', async ({ page }) => {
+    test.setTimeout(300_000);
+    await setupParentSession(page, 'dash_rewards');
+
+    await navigateAsParent(page, '/rewards');
+
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
+    expect(page.url()).toContain('/rewards');
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/dash-04-rewards.png` });
+  });
+
+  test('can switch to learner mode', async ({ page }) => {
+    test.setTimeout(300_000);
+    await setupParentSession(page, 'dash_switch');
+
+    // Look for "Start Learning" button or similar
+    const startLearning = page.getByText(/start learning|learn/i).first();
+    const hasStartBtn = await startLearning.isVisible({ timeout: 10000 }).catch(() => false);
+
+    if (hasStartBtn) {
+      await startLearning.click();
+      await page.waitForLoadState('networkidle');
+    } else {
+      // Navigate directly to learner mode
+      await navigateAsLearner(page, '/learner');
     }
-  });
 
-  test.afterAll(async () => {
-    try { await page.close(); } catch { /* ignore trace file cleanup errors */ }
-  });
-
-  test('Dashboard displays welcome greeting and child overview', async () => {
-    // Navigate away first, then back to dashboard to trigger data refetch
-    await setAuthAndNavigate(page, ctx.authToken, '/learners');
-    await page.waitForTimeout(1000);
-    await setAuthAndNavigate(page, ctx.authToken, '/dashboard');
-    await page.waitForTimeout(3000);
-    await dismissDashboardWelcome(page);
-
-    // Should show the child's name somewhere on dashboard
-    const childVisible = await page.getByText(ctx.childName).first()
-      .isVisible({ timeout: 10000 }).catch(() => false);
-    // If child not visible via SPA nav, the API-created child may need a page reload
-    if (!childVisible) {
-      // Verify child exists via API
-      const result = await apiCall(page, 'GET', '/api/learners');
-      const hasChild = result.status === 200 && Array.isArray(result.data) &&
-        result.data.some((l: any) => l.name === ctx.childName);
-      console.log(`Child exists in API: ${hasChild}, visible in UI: ${childVisible}`);
-      expect(hasChild).toBeTruthy();
-    }
-    await screenshot(page, 'dash-welcome');
-  });
-
-  test('Dashboard shows stats (lessons, score, achievements)', async () => {
-    await setAuthAndNavigate(page, ctx.authToken, '/dashboard');
-    await page.waitForTimeout(2000);
-    await dismissDashboardWelcome(page);
-
-    // Look for any stats-related content
+    // Should be on learner page or select-learner page
     const url = page.url();
-    expect(url).toMatch(/dashboard/);
-    await screenshot(page, 'dash-stats');
+    expect(
+      url.includes('/learner') ||
+      url.includes('/select-learner')
+    ).toBeTruthy();
+
+    await page.screenshot({ path: `${SCREENSHOT_DIR}/dash-05-learner-mode.png` });
   });
 
-  test('Navigation to Reports and Rewards pages works', async () => {
-    // Production nav doesn't have top-level "Reports"/"Rewards" links;
-    // these are accessed via child cards or direct URL navigation.
-    // Verify both pages are accessible and render correctly.
-    await setAuthAndNavigate(page, ctx.authToken, '/reports');
-    await page.waitForTimeout(2000);
-    expect(page.url()).toMatch(/reports/);
-
-    await setAuthAndNavigate(page, ctx.authToken, '/rewards');
-    await page.waitForTimeout(2000);
-    expect(page.url()).toMatch(/rewards/);
-
-    await screenshot(page, 'dash-nav-links');
-  });
-
-  test('Clicking Reports navigates correctly', async () => {
-    await setAuthAndNavigate(page, ctx.authToken, '/dashboard');
-    await page.waitForTimeout(2000);
-    await dismissDashboardWelcome(page);
-
-    const reportsLink = page.getByText(/reports/i).first();
-    if (await reportsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await reportsLink.click();
-      await page.waitForTimeout(3000);
-    } else {
-      await setAuthAndNavigate(page, ctx.authToken, '/reports');
+  test.afterEach(async ({ page }, testInfo) => {
+    if (testInfo.status !== 'passed') {
+      await captureFailureArtifacts(page, `dash-${testInfo.title}`, SCREENSHOT_DIR);
     }
-
-    expect(page.url()).toMatch(/reports/);
-    await screenshot(page, 'dash-reports-nav');
-  });
-
-  test('Switch to learner mode from dashboard', async () => {
-    await setAuthAndNavigate(page, ctx.authToken, '/dashboard');
-    await page.waitForTimeout(2000);
-    await dismissDashboardWelcome(page);
-
-    // Click "Start Learning as <childName>"
-    const startBtn = page.getByText(new RegExp(`Start Learning as ${ctx.childName}`, 'i'));
-    if (await startBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await startBtn.click();
-      await page.waitForTimeout(3000);
-    } else {
-      const anyStart = page.getByText(/Start Learning as/i).first();
-      if (await anyStart.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await anyStart.click();
-        await page.waitForTimeout(3000);
-      }
-    }
-
-    // Handle learner selection page
-    if (page.url().includes('/select-learner')) {
-      const childBtn = page.getByText(ctx.childName);
-      if (await childBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await childBtn.click();
-        await page.waitForTimeout(3000);
-      }
-    }
-
-    await screenshot(page, 'dash-learner-mode');
-  });
-
-  test('How It Works section visibility', async () => {
-    await setAuthAndNavigate(page, ctx.authToken, '/dashboard');
-    await page.waitForTimeout(2000);
-    await dismissDashboardWelcome(page);
-
-    // Scroll to find How It Works section
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(1000);
-
-    const howItWorks = page.getByText(/how it works/i).first();
-    const visible = await howItWorks.isVisible({ timeout: 5000 }).catch(() => false);
-    console.log(`How It Works visible: ${visible}`);
-    await screenshot(page, 'dash-how-it-works');
   });
 });

@@ -1,10 +1,19 @@
 import { Express, Request, Response, NextFunction } from "express";
+import rateLimit from 'express-rate-limit';
 import { storage } from "./storage";
 import { users } from "../shared/schema";
 import { asyncHandler, hashPassword, comparePasswords, generateToken, authenticateJwt, hasRoleMiddleware, AuthRequest } from "./middleware/auth";
 import { db } from "./db";
 import { count } from "drizzle-orm";
 import passport from "passport";
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 /**
  * Sets up authentication routes (JWT auth only for now)
@@ -36,7 +45,7 @@ export async function setupAuth(app: Express) {
   }));
 
   // Enhanced JWT login endpoint with cross-domain support
-  app.post("/api/login", asyncHandler(async (req: Request, res: Response) => {
+  app.post("/api/login", authLimiter, asyncHandler(async (req: Request, res: Response) => {
     try {
       const { username, password } = req.body;
       
@@ -97,7 +106,7 @@ export async function setupAuth(app: Express) {
   }));
 
   // Registration endpoint (mirrors /register from routes.ts for /api/ prefix consistency)
-  app.post("/api/register", asyncHandler(async (req: Request, res: Response) => {
+  app.post("/api/register", authLimiter, asyncHandler(async (req: Request, res: Response) => {
     try {
       const { username, email, name, role, password } = req.body;
 

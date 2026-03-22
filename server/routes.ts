@@ -10,6 +10,15 @@ import { USE_AI } from "./config/flags";
 import { db, pool, withRetry } from "./db";
 import { sql, count, eq, and } from "drizzle-orm";
 import crypto from "crypto";
+import rateLimit from 'express-rate-limit';
+
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many submissions. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 import { users, lessons } from "../shared/schema";
 // content-generator used by image-generation-router, not directly by routes
 import { pointsService } from "./services/points-service";
@@ -64,7 +73,7 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Feedback / support submission (no auth required)
-  app.post("/api/feedback", asyncHandler(async (req: Request, res: Response) => {
+  app.post("/api/feedback", feedbackLimiter, asyncHandler(async (req: Request, res: Response) => {
     const { message, email, page } = req.body;
     if (!message || typeof message !== 'string' || message.trim().length < 2) {
       return res.status(400).json({ error: "Message is required (min 2 characters)" });

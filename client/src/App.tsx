@@ -31,6 +31,7 @@ import { PlausibleAnalytics } from './components/PlausibleAnalytics';
 import { useAuth } from './hooks/use-auth';
 import { ModeProvider } from './context/ModeContext';
 import AppLayout from './components/AppLayout';
+import { useMode } from './context/ModeContext';
 import { usePageTitle } from './hooks/use-page-title';
 
 // Home redirect component to handle auth status
@@ -59,6 +60,15 @@ const HomeRedirect = () => {
 
 const NotFoundPage = () => {
   const [, navigate] = useLocation();
+  const { isLearnerMode } = useMode();
+
+  const title = isLearnerMode ? 'Oops! This page got lost \u{1F5FA}\u{FE0F}' : 'Page Not Found';
+  const subtitle = isLearnerMode
+    ? undefined
+    : 'The page you are looking for does not exist or has been moved.';
+  const buttonLabel = isLearnerMode ? 'Go Home \u{1F3E0}' : 'Go to Dashboard';
+  const destination = isLearnerMode ? '/learner' : '/dashboard';
+
   return (
     <div style={{
       display: 'flex',
@@ -70,25 +80,29 @@ const NotFoundPage = () => {
       textAlign: 'center',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     }}>
-      <h1 style={{ fontSize: 72, fontWeight: 800, margin: '0 0 8px', color: '#121212' }}>404</h1>
-      <h2 style={{ fontSize: 22, fontWeight: 600, margin: '0 0 8px', color: '#121212' }}>Page Not Found</h2>
-      <p style={{ fontSize: 15, color: '#707070', margin: '0 0 24px', maxWidth: 400 }}>
-        The page you are looking for does not exist or has been moved.
-      </p>
+      <div style={{ fontSize: isLearnerMode ? 28 : 22, fontWeight: 600, margin: '0 0 8px', color: '#121212' }}>
+        {title}
+      </div>
+      {subtitle && (
+        <p style={{ fontSize: 15, color: '#707070', margin: '0 0 24px', maxWidth: 400 }}>
+          {subtitle}
+        </p>
+      )}
+      {!subtitle && <div style={{ height: 16 }} />}
       <button
-        onClick={() => navigate('/')}
+        onClick={() => navigate(destination)}
         style={{
-          padding: '10px 24px',
+          padding: '12px 28px',
           backgroundColor: '#121212',
           color: '#FFFFFF',
           border: 'none',
           borderRadius: 6,
           cursor: 'pointer',
-          fontSize: 14,
+          fontSize: isLearnerMode ? 16 : 14,
           fontWeight: 600,
         }}
       >
-        Back to Home
+        {buttonLabel}
       </button>
     </div>
   );

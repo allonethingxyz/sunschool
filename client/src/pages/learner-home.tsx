@@ -422,8 +422,9 @@ const LearnerHome = () => {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.generateButton}
+                      style={[styles.generateButton, generateLessonMutation.isPending && { opacity: 0.5 }]}
                       onPress={() => handleNewLessonPress()}
+                      disabled={generateLessonMutation.isPending}
                     >
                       <Text style={styles.generateButtonText}>
                         New Lesson

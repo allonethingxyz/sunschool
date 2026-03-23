@@ -28,15 +28,24 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>
-            Missing lesson ID. Please return to your active lesson.
+          <Text style={styles.friendlyErrorEmoji}>📝</Text>
+          <Text style={styles.friendlyErrorText}>
+            Oops! We lost track of your quiz.
           </Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => setLocation('/lesson')}
-          >
-            <Text style={styles.backButtonText}>Go Back to Lesson</Text>
-          </TouchableOpacity>
+          <View style={styles.errorButtonRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setLocation('/lesson')}
+            >
+              <Text style={styles.backButtonText}>Go Back to Lesson</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.backButton, styles.secondaryButton]}
+              onPress={() => setLocation('/learner')}
+            >
+              <Text style={styles.backButtonText}>Go Home 🏠</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -47,6 +56,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
   const [showDelegation, setShowDelegation] = useState(false);
@@ -74,6 +84,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     data: lesson,
     error,
     isLoading,
+    refetch,
   } = useQuery({
     queryKey: [`/api/lessons/${lessonId}`],
     queryFn: () => apiRequest('GET', `/api/lessons/${lessonId}`).then(res => res.data),
@@ -107,7 +118,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     onSuccess: (data) => {
       setQuizSubmitted(true);
       setQuizScore(data);
-      if (data.score >= 70) setShowConfetti(true);
+      setShowConfetti(true);
       if (data.newAchievements && data.newAchievements.length > 0) {
         setTimeout(() => setShowAchievements(true), 1500);
       }
@@ -138,6 +149,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     const newAnswers = [...selectedAnswers];
     newAnswers[questionIndex] = answerIndex;
     setSelectedAnswers(newAnswers);
+    if (showValidation) setShowValidation(false);
   };
 
   const displayQuestions: QuizQuestion[] = lesson?.spec?.questions ?? [];
@@ -148,18 +160,21 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     if (lesson && selectedAnswers.length === displayQuestions.length) {
       const hasAllAnswers = selectedAnswers.every(ans => ans !== undefined);
       if (hasAllAnswers) {
+        setShowValidation(false);
         submitAnswersMutation.mutate(selectedAnswers);
       } else {
-        alert('Please answer all questions before submitting.');
+        setShowValidation(true);
       }
     } else {
-      alert('Please answer all questions before submitting.');
+      setShowValidation(true);
     }
   };
 
   const [navigationFailed, setNavigationFailed] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const handleContinue = () => {
     try {
+      setIsNavigating(true);
       setLocation('/learner');
       // If setLocation doesn't throw but the route doesn't change, fallback after a tick
       setTimeout(() => {
@@ -167,6 +182,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
         setNavigationFailed(true);
       }, 500);
     } catch {
+      setIsNavigating(false);
       setNavigationFailed(true);
     }
   };
@@ -175,15 +191,24 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>
-            Error loading quiz. Please try again.
+          <Text style={styles.friendlyErrorEmoji}>🤔</Text>
+          <Text style={styles.friendlyErrorText}>
+            Hmm, the quiz didn't load. Let's try again!
           </Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => setLocation('/learner')}
-          >
-            <Text style={styles.backButtonText}>Go Back</Text>
-          </TouchableOpacity>
+          <View style={styles.errorButtonRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => refetch()}
+            >
+              <Text style={styles.backButtonText}>Try Again</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.backButton, styles.secondaryButton]}
+              onPress={() => setLocation('/learner')}
+            >
+              <Text style={styles.backButtonText}>Go Home 🏠</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -203,15 +228,24 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>
-            Quiz not found. Please return to the lesson.
+          <Text style={styles.friendlyErrorEmoji}>📚</Text>
+          <Text style={styles.friendlyErrorText}>
+            No quiz questions found for this lesson.
           </Text>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => setLocation('/lesson')}
-          >
-            <Text style={styles.backButtonText}>Go Back to Lesson</Text>
-          </TouchableOpacity>
+          <View style={styles.errorButtonRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setLocation('/lesson')}
+            >
+              <Text style={styles.backButtonText}>Back to Lesson</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.backButton, styles.secondaryButton]}
+              onPress={() => setLocation('/learner')}
+            >
+              <Text style={styles.backButtonText}>Go Home 🏠</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -358,7 +392,7 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
                 )}
               </View>
               <Text style={[styles.scoreTitle, { color: theme.colors.textPrimary }]}>
-                {quizScore.score >= 90 ? 'Amazing!' : quizScore.score >= 70 ? 'Great job!' : 'Almost there! Keep going!'}
+                {quizScore.score >= 90 ? 'Amazing! You\'re a star! ⭐' : quizScore.score >= 70 ? 'Great job! 🎉' : quizScore.score >= 50 ? 'Nice work! You\'re learning! 💪' : 'Keep going! Practice makes perfect! 🌱'}
               </Text>
               <Text style={[styles.scoreText, { color: theme.colors.textSecondary }]}>
                 You got {quizScore.correctCount} out of {quizScore.totalQuestions} right
@@ -444,8 +478,12 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
               })}
             </View>
 
-            <TouchableOpacity style={[styles.continueButton, { backgroundColor: theme.colors.success }]} onPress={handleContinue}>
-              <Text style={styles.continueButtonText}>Keep Going!</Text>
+            <TouchableOpacity
+              style={[styles.continueButton, { backgroundColor: theme.colors.success, opacity: isNavigating ? 0.6 : 1 }]}
+              onPress={handleContinue}
+              disabled={isNavigating}
+            >
+              <Text style={styles.continueButtonText}>{isNavigating ? 'Loading...' : 'Keep Going!'}</Text>
             </TouchableOpacity>
 
             {navigationFailed && (
@@ -534,6 +572,15 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
                 </View>
               );
             })}
+
+            {/* Inline validation message */}
+            {showValidation && (
+              <View style={styles.validationBanner}>
+                <Text style={styles.validationText}>
+                  Pick an answer for each question first! 🤔
+                </Text>
+              </View>
+            )}
 
             {/* Submission error banner with retry */}
             {submitAnswersMutation.isError && (
@@ -900,6 +947,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  // Kid-friendly error states
+  friendlyErrorEmoji: {
+    fontSize: 48,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  friendlyErrorText: {
+    ...typography.body1,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  errorButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  secondaryButton: {
+    backgroundColor: colors.textSecondary,
+  },
+  // Inline validation
+  validationBanner: {
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1.5,
+    borderColor: '#FFB300',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  validationText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#E65100',
+    textAlign: 'center',
   },
 });
 

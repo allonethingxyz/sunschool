@@ -31,6 +31,7 @@ const ActiveLessonPage = () => {
   const [, setLocation] = useLocation();
   const { selectedLearner } = useMode();
   const [isLoading, setIsLoading] = useState(true);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   // Use context learnerId, falling back to localStorage if context hasn't hydrated yet
   const learnerId = selectedLearner?.id ?? (() => {
@@ -79,11 +80,11 @@ const ActiveLessonPage = () => {
         setLocation(`/quiz/${lesson.id}`);
       } catch (err) {
         console.error('Error navigating to quiz:', err);
-        alert('There was a problem starting the quiz. Please try again.');
+        setInlineError('There was a problem starting the quiz. Let\u2019s try again! \u{1F914}');
       }
     } else {
       console.error('Cannot start quiz: No active lesson found');
-      alert('No active lesson found. Please return to learner home and try again.');
+      setInlineError('No lesson found. Let\u2019s go home! \u{1F4DA}');
     }
   };
 
@@ -153,6 +154,16 @@ const ActiveLessonPage = () => {
         </Text>
         <View style={{ width: 24 }} />
       </View>
+
+      {/* Inline error banner */}
+      {inlineError && (
+        <View style={styles.inlineErrorBanner}>
+          <Text style={styles.inlineErrorText}>{inlineError}</Text>
+          <TouchableOpacity onPress={() => setInlineError(null)} style={styles.inlineErrorDismiss}>
+            <Text style={styles.inlineErrorDismissText}>Dismiss</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Card carousel — takes full remaining height */}
       <LessonCardCarousel
@@ -239,6 +250,32 @@ const styles = StyleSheet.create({
   backButtonText: {
     ...typography.body2,
     color: colors.textSecondary,
+    textDecorationLine: 'underline',
+  },
+  inlineErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF3CD',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFECB5',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  inlineErrorText: {
+    ...typography.body2,
+    color: '#664D03',
+    flex: 1,
+    marginRight: 12,
+  },
+  inlineErrorDismiss: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  inlineErrorDismissText: {
+    ...typography.body2,
+    color: '#664D03',
+    fontWeight: '600',
     textDecorationLine: 'underline',
   },
 });

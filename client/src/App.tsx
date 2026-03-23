@@ -57,6 +57,43 @@ const HomeRedirect = () => {
   }
 };
 
+const NotFoundPage = () => {
+  const [, navigate] = useLocation();
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '60vh',
+      padding: '40px 20px',
+      textAlign: 'center',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    }}>
+      <h1 style={{ fontSize: 72, fontWeight: 800, margin: '0 0 8px', color: '#121212' }}>404</h1>
+      <h2 style={{ fontSize: 22, fontWeight: 600, margin: '0 0 8px', color: '#121212' }}>Page Not Found</h2>
+      <p style={{ fontSize: 15, color: '#707070', margin: '0 0 24px', maxWidth: 400 }}>
+        The page you are looking for does not exist or has been moved.
+      </p>
+      <button
+        onClick={() => navigate('/')}
+        style={{
+          padding: '10px 24px',
+          backgroundColor: '#121212',
+          color: '#FFFFFF',
+          border: 'none',
+          borderRadius: 6,
+          cursor: 'pointer',
+          fontSize: 14,
+          fontWeight: 600,
+        }}
+      >
+        Back to Home
+      </button>
+    </div>
+  );
+};
+
 export default function App() {
   usePageTitle();
 
@@ -107,10 +144,7 @@ export default function App() {
             
             {/* Catch-all for 404 */}
             <Route>
-              <div className="not-found">
-                <h1>404: Page Not Found</h1>
-                <p>The page you're looking for doesn't exist.</p>
-              </div>
+              <NotFoundPage />
             </Route>
           </Switch>
         </AppLayout>

@@ -6,7 +6,8 @@ import {
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '../lib/queryClient';
 import { useTheme } from '../styles/theme';
-import { Plus, Edit2, Trash2, CheckCircle, XCircle, Gift, Target, Users, ChevronDown } from 'react-feather';
+import { useToast } from '../hooks/use-toast';
+import { Plus, Edit2, Trash2, CheckCircle, XCircle, Gift, Target, Users, ChevronDown, AlertCircle } from 'react-feather';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -50,12 +51,22 @@ const RewardForm: React.FC<RewardFormProps> = ({ initial, onSave, onCancel, isSa
   const [emoji, setEmoji] = useState(initial?.imageEmoji ?? '🎁');
   const [color, setColor] = useState(initial?.color ?? '#4A90D9');
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
+  const [formError, setFormError] = useState('');
   const theme = useTheme();
 
   const handleSave = () => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setFormError('Please enter a title for this reward.');
+      return;
+    }
+    const costNum = Number(tokenCost);
+    if (!costNum || costNum < 1) {
+      setFormError('Points required must be at least 1.');
+      return;
+    }
+    setFormError('');
     onSave({ title: title.trim(), description: description.trim() || null,
-      tokenCost: Number(tokenCost) || 10, category, imageEmoji: emoji, color, isActive });
+      tokenCost: costNum, category, imageEmoji: emoji, color, isActive });
   };
 
   return (
@@ -63,6 +74,12 @@ const RewardForm: React.FC<RewardFormProps> = ({ initial, onSave, onCancel, isSa
       <Text style={[styles.formTitle, { color: theme.colors.textPrimary }]}>
         {initial?.id ? 'Edit Reward' : 'New Reward'}
       </Text>
+
+      {formError ? (
+        <View style={{ backgroundColor: '#FFEBEE', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <Text style={{ color: '#C62828', fontSize: 13 }}>{formError}</Text>
+        </View>
+      ) : null}
 
       {/* Emoji + color selector */}
       <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Icon</Text>
@@ -305,22 +322,23 @@ type Tab = 'rewards' | 'redemptions' | 'settings';
 
 const ParentRewardsPage: React.FC = () => {
   const theme = useTheme();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('rewards');
   const [showForm, setShowForm] = useState(false);
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
 
   // ── Data ──
-  const { data: rewards = [], isLoading: loadingRewards } = useQuery<Reward[]>({
+  const { data: rewards = [], isLoading: loadingRewards, error: rewardsError } = useQuery<Reward[]>({
     queryKey: ['/api/rewards'],
     queryFn: () => apiRequest('GET', '/api/rewards').then(r => r.data),
   });
 
-  const { data: redemptions = [], isLoading: loadingRedemptions } = useQuery<Redemption[]>({
+  const { data: redemptions = [], isLoading: loadingRedemptions, error: redemptionsError } = useQuery<Redemption[]>({
     queryKey: ['/api/redemptions'],
     queryFn: () => apiRequest('GET', '/api/redemptions').then(r => r.data),
   });
 
-  const { data: learners = [] } = useQuery<Learner[]>({
+  const { data: learners = [], isLoading: loadingLearners } = useQuery<Learner[]>({
     queryKey: ['/api/learners'],
     queryFn: () => apiRequest('GET', '/api/learners').then(r => r.data),
   });
@@ -350,17 +368,38 @@ const ParentRewardsPage: React.FC = () => {
   // ── Mutations ──
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest('POST', '/api/rewards', data).then(r => r.data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/rewards'] }); setShowForm(false); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rewards'] });
+      setShowForm(false);
+      toast({ title: 'Success', description: 'Reward created successfully' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message || 'Failed to create reward. Please try again.', variant: 'destructive' });
+    },
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, ...data }: any) => apiRequest('PUT', `/api/rewards/${id}`, data).then(r => r.data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['/api/rewards'] }); setEditingReward(null); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rewards'] });
+      setEditingReward(null);
+      setShowForm(false);
+      toast({ title: 'Success', description: 'Reward updated successfully' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message || 'Failed to update reward. Please try again.', variant: 'destructive' });
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest('DELETE', `/api/rewards/${id}`).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/rewards'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/rewards'] });
+      toast({ title: 'Success', description: 'Reward deleted' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message || 'Failed to delete reward. Please try again.', variant: 'destructive' });
+    },
   });
 
   const approveMutation = useMutation({
@@ -369,13 +408,23 @@ const ParentRewardsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/redemptions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/rewards'] });
+      toast({ title: 'Success', description: 'Redemption approved' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message || 'Failed to approve redemption.', variant: 'destructive' });
     },
   });
 
   const rejectMutation = useMutation({
     mutationFn: ({ id, notes }: { id: string; notes?: string }) =>
       apiRequest('PUT', `/api/redemptions/${id}/reject`, { notes }).then(r => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/redemptions'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/redemptions'] });
+      toast({ title: 'Success', description: 'Redemption rejected' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message || 'Failed to reject redemption.', variant: 'destructive' });
+    },
   });
 
   const pendingCount = redemptions.filter(r => r.status === 'PENDING').length;
@@ -417,6 +466,20 @@ const ParentRewardsPage: React.FC = () => {
             </TouchableOpacity>
 
             {loadingRewards ? <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 24 }} /> :
+              rewardsError ? (
+                <View style={styles.empty}>
+                  <AlertCircle size={40} color={theme.colors.textSecondary} />
+                  <Text style={[styles.emptyText, { color: theme.colors.textSecondary, marginTop: 12 }]}>
+                    Failed to load rewards.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.addBtn, { backgroundColor: theme.colors.primary, marginTop: 12, paddingHorizontal: 20 }]}
+                    onPress={() => queryClient.invalidateQueries({ queryKey: ['/api/rewards'] })}
+                  >
+                    <Text style={styles.addBtnText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) :
               rewards.length === 0 ? (
                 <View style={styles.empty}>
                   <Text style={{ fontSize: 48, marginBottom: 12 }}>🎁</Text>
@@ -441,6 +504,20 @@ const ParentRewardsPage: React.FC = () => {
         {activeTab === 'redemptions' && (
           <>
             {loadingRedemptions ? <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 24 }} /> :
+              redemptionsError ? (
+                <View style={styles.empty}>
+                  <AlertCircle size={40} color={theme.colors.textSecondary} />
+                  <Text style={[styles.emptyText, { color: theme.colors.textSecondary, marginTop: 12 }]}>
+                    Failed to load redemption requests.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.addBtn, { backgroundColor: theme.colors.primary, marginTop: 12, paddingHorizontal: 20 }]}
+                    onPress={() => queryClient.invalidateQueries({ queryKey: ['/api/redemptions'] })}
+                  >
+                    <Text style={styles.addBtnText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) :
               redemptions.length === 0 ? (
                 <View style={styles.empty}>
                   <Text style={{ fontSize: 48, marginBottom: 12 }}>📭</Text>
@@ -466,7 +543,17 @@ const ParentRewardsPage: React.FC = () => {
             <Text style={[styles.sectionDesc, { color: theme.colors.textSecondary }]}>
               When enabled, correct answers earn 2× points. Wrong answers deduct 1 point each.
             </Text>
-            {learners.map(l => <LearnerSettingsCard key={l.id} learner={l} />)}
+            {loadingLearners ? (
+              <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 24 }} />
+            ) : learners.length === 0 ? (
+              <View style={styles.empty}>
+                <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                  No learners found. Add a child from your dashboard first.
+                </Text>
+              </View>
+            ) : (
+              learners.map(l => <LearnerSettingsCard key={l.id} learner={l} />)
+            )}
           </>
         )}
       </ScrollView>

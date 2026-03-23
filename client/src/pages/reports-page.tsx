@@ -9,9 +9,9 @@ import {
 } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
 import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '../lib/queryClient';
+import { apiRequest, queryClient } from '../lib/queryClient';
 import { colors, typography } from '../styles/theme';
-import { BarChart2, BookOpen, Award, FileText, Download } from 'react-feather';
+import { BarChart2, BookOpen, Award, FileText, Download, Users } from 'react-feather';
 
 const ReportsPage: React.FC = () => {
   const { user } = useAuth();
@@ -91,6 +91,25 @@ const ReportsPage: React.FC = () => {
         ) : hasError ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>Error loading data. Please try again.</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => {
+                queryClient.invalidateQueries({ queryKey: ["/api/learners", user?.id, user?.role] });
+                if (selectedLearnerId) {
+                  queryClient.invalidateQueries({ queryKey: [`/api/reports`, selectedLearnerId, selectedReportType] });
+                }
+              }}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : !learners || learners.length === 0 ? (
+          <View style={styles.emptySelection}>
+            <Users size={48} color={colors.textSecondary} />
+            <Text style={styles.emptySelectionTitle}>No Learners Yet</Text>
+            <Text style={styles.emptySelectionText}>
+              Add a child from your dashboard to start viewing reports.
+            </Text>
           </View>
         ) : (
           <ScrollView>
@@ -408,6 +427,17 @@ const styles = StyleSheet.create({
     ...typography.body2,
     color: colors.error,
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    ...typography.button,
+    color: colors.onPrimary,
   },
   controlsContainer: {
     marginBottom: 24,

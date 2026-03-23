@@ -9,11 +9,23 @@ import {
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
-import { apiRequest } from '../lib/queryClient';
+import { apiRequest, queryClient } from '../lib/queryClient';
 import { colors, typography, commonStyles } from '../styles/theme';
-import { ArrowLeft } from 'react-feather';
+import { ArrowLeft, RefreshCw } from 'react-feather';
 import LessonCardCarousel from '../components/LessonCardCarousel';
 import { useMode } from '../context/ModeContext';
+
+function friendlyLessonError(error: any): { emoji: string; message: string } {
+  const msg = (error?.message || String(error || '')).toLowerCase();
+  const status = error?.status || 0;
+  if (status === 402 || msg.includes('billing') || msg.includes('credits')) {
+    return { emoji: '🔧', message: "Our lesson machine needs a tune-up. Ask a grown-up to check the settings." };
+  }
+  if (msg.includes('timeout') || msg.includes('network error') || msg.includes('no response')) {
+    return { emoji: '🌐', message: "We couldn't reach the lesson server. Check your internet and try again!" };
+  }
+  return { emoji: '😕', message: "We had trouble loading your lesson. Let's try again!" };
+}
 
 const ActiveLessonPage = () => {
   const [, setLocation] = useLocation();
@@ -76,12 +88,19 @@ const ActiveLessonPage = () => {
   };
 
   if (error) {
+    const { emoji, message } = friendlyLessonError(error);
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>
-            Error loading lesson. Please try again.
-          </Text>
+          <Text style={styles.errorEmoji}>{emoji}</Text>
+          <Text style={styles.friendlyErrorText}>{message}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => queryClient.invalidateQueries({ queryKey: ['/api/lessons/active', learnerId] })}
+          >
+            <RefreshCw size={16} color={colors.onPrimary} style={{ marginRight: 6 }} />
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => setLocation('/learner')}
@@ -186,17 +205,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
+  errorEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  friendlyErrorText: {
+    ...typography.body1,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 24,
+    paddingHorizontal: 16,
+  },
   errorText: {
     ...typography.body1,
     color: colors.error,
     marginBottom: 16,
     textAlign: 'center',
   },
-  backButton: {
+  retryButton: {
     ...commonStyles.button,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  retryButtonText: {
+    ...commonStyles.buttonText,
+  },
+  backButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
   },
   backButtonText: {
-    ...commonStyles.buttonText,
+    ...typography.body2,
+    color: colors.textSecondary,
+    textDecorationLine: 'underline',
   },
 });
 

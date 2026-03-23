@@ -139,8 +139,8 @@ const AuthPage = () => {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerContainer}>
-          <View style={styles.logoContainer} aria-hidden="true">
-            <svg width="56" height="56" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <View style={styles.logoContainer} aria-hidden={true}>
+            <svg width="56" height="56" viewBox="0 0 32 32" aria-hidden={true} focusable="false">
               <defs>
                 <linearGradient id="authSunG" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor="#F5A623" />
@@ -190,7 +190,7 @@ const AuthPage = () => {
         <View style={styles.formContainer}>
           {isLogin ? (
             // Login Form
-            <View accessibilityRole="form" accessibilityLabel="Login form">
+            <View accessibilityRole="none" accessibilityLabel="Login form">
               <View style={styles.inputGroup}>
                 <Text style={styles.label} nativeID="login-username-label">Username</Text>
                 <TextInput
@@ -226,7 +226,7 @@ const AuthPage = () => {
                   accessibilityLabel="I confirm I am at least 18 years old and accept the terms"
                 >
                   <View style={[styles.checkbox, loginDisclaimerAccepted ? styles.checkboxChecked : {}]}>
-                    {loginDisclaimerAccepted && <Check size={16} color={colors.onPrimary} aria-hidden="true" />}
+                    {loginDisclaimerAccepted && <Check size={16} color={colors.onPrimary} aria-hidden={true} />}
                   </View>
                   <Text style={styles.checkboxText}>
                     I confirm I am at least 18 years old and understand I'm using alpha stage open source software meant for demonstration purposes only, provided under the MIT License. No support, services, or guarantee of this software existing in the future is made by setting up a test account for free.
@@ -234,8 +234,16 @@ const AuthPage = () => {
                 </TouchableOpacity>
               </View>
 
+              {loginMutation.isError && (
+                <View style={styles.errorBanner} accessibilityRole="alert">
+                  <Text style={styles.errorBannerText}>
+                    {loginMutation.error?.message || 'Login failed. Please try again.'}
+                  </Text>
+                </View>
+              )}
+
               <TouchableOpacity
-                style={styles.button}
+                style={[styles.button, loginMutation.isPending ? styles.buttonDisabled : null]}
                 onPress={handleLogin}
                 disabled={loginMutation.isPending}
                 accessibilityRole="button"
@@ -249,7 +257,7 @@ const AuthPage = () => {
             </View>
           ) : (
             // Registration Form
-            <View accessibilityRole="form" accessibilityLabel="Registration form">
+            <View accessibilityRole="none" accessibilityLabel="Registration form">
               <View style={styles.inputGroup}>
                 <Text style={styles.label} nativeID="reg-username-label">Username</Text>
                 <TextInput
@@ -328,7 +336,7 @@ const AuthPage = () => {
                     accessibilityState={{ selected: regRole === 'PARENT' }}
                     accessibilityLabel="Parent"
                   >
-                    <User size={20} color={colors.onPrimary} aria-hidden="true" />
+                    <User size={20} color={colors.onPrimary} aria-hidden={true} />
                     <Text style={[
                       styles.roleText,
                       styles.selectedRoleText
@@ -349,7 +357,7 @@ const AuthPage = () => {
                   accessibilityLabel="I confirm I am at least 18 years old and accept the terms"
                 >
                   <View style={[styles.checkbox, regDisclaimerAccepted ? styles.checkboxChecked : {}]}>
-                    {regDisclaimerAccepted && <Check size={16} color={colors.onPrimary} aria-hidden="true" />}
+                    {regDisclaimerAccepted && <Check size={16} color={colors.onPrimary} aria-hidden={true} />}
                   </View>
                   <Text style={styles.checkboxText}>
                     I confirm I am at least 18 years old and understand I'm using alpha stage open source software meant for demonstration purposes only, provided under the MIT License. No support, services, or guarantee of this software existing in the future is made by setting up a test account for free.
@@ -357,8 +365,16 @@ const AuthPage = () => {
                 </TouchableOpacity>
               </View>
 
+              {registerMutation.isError && (
+                <View style={styles.errorBanner} accessibilityRole="alert">
+                  <Text style={styles.errorBannerText}>
+                    {registerMutation.error?.message || 'Registration failed. Please try again.'}
+                  </Text>
+                </View>
+              )}
+
               <TouchableOpacity
-                style={styles.button}
+                style={[styles.button, registerMutation.isPending ? styles.buttonDisabled : null]}
                 onPress={handleRegister}
                 disabled={registerMutation.isPending}
                 accessibilityRole="button"
@@ -377,8 +393,8 @@ const AuthPage = () => {
           <Text style={styles.featuresTitle} accessibilityRole="header">Why Choose Sunschool?</Text>
 
           <View style={styles.featureItem}>
-            <View style={styles.featureIcon} aria-hidden="true">
-              <Book size={24} color={colors.primary} aria-hidden="true" />
+            <View style={styles.featureIcon} aria-hidden={true}>
+              <Book size={24} color={colors.primary} aria-hidden={true} />
             </View>
             <View style={styles.featureContent}>
               <Text style={styles.featureTitle}>Personalized Learning</Text>
@@ -389,8 +405,8 @@ const AuthPage = () => {
           </View>
 
           <View style={styles.featureItem}>
-            <View style={styles.featureIcon} aria-hidden="true">
-              <User size={24} color={colors.primary} aria-hidden="true" />
+            <View style={styles.featureIcon} aria-hidden={true}>
+              <User size={24} color={colors.primary} aria-hidden={true} />
             </View>
             <View style={styles.featureContent}>
               <Text style={styles.featureTitle}>Parent Involvement</Text>
@@ -401,8 +417,8 @@ const AuthPage = () => {
           </View>
 
           <View style={styles.featureItem}>
-            <View style={styles.featureIcon} aria-hidden="true">
-              <Shield size={24} color={colors.primary} aria-hidden="true" />
+            <View style={styles.featureIcon} aria-hidden={true}>
+              <Shield size={24} color={colors.primary} aria-hidden={true} />
             </View>
             <View style={styles.featureContent}>
               <Text style={styles.featureTitle}>Safe Environment</Text>
@@ -557,8 +573,23 @@ const styles = StyleSheet.create({
     ...commonStyles.button,
     marginTop: 8,
   },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
   buttonText: {
     ...commonStyles.buttonText,
+  },
+  errorBanner: {
+    backgroundColor: '#FDECEA',
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#D32F2F',
+  },
+  errorBannerText: {
+    color: '#D32F2F',
+    ...typography.body2,
   },
   featuresContainer: {
     backgroundColor: colors.surfaceColor,

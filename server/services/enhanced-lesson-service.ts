@@ -579,38 +579,44 @@ export async function generateLessonImages(
     });
   }
 
-  // Cap and generate images
+  // Cap and generate images — isolate failures per image so one bad generation
+  // doesn't prevent the rest from completing
   const cappedPrompts = allImagePrompts.slice(0, MAX_IMAGES_PER_LESSON);
   const imagePromises = cappedPrompts.map(async (imagePrompt) => {
-    const result = await generateImage(
-      imagePrompt.prompt,
-      imagePrompt.description,
-      gradeLevel,
-      { subject: subject || topic }
-    );
+    try {
+      const result = await generateImage(
+        imagePrompt.prompt,
+        imagePrompt.description,
+        gradeLevel,
+        { subject: subject || topic }
+      );
 
-    if (result) {
-      if (result.svgData) {
-        return {
-          id: imagePrompt.id,
-          description: imagePrompt.description,
-          alt: imagePrompt.description,
-          svgData: result.svgData,
-          promptUsed: result.promptUsed,
-        };
-      }
+      if (result) {
+        if (result.svgData) {
+          return {
+            id: imagePrompt.id,
+            description: imagePrompt.description,
+            alt: imagePrompt.description,
+            svgData: result.svgData,
+            promptUsed: result.promptUsed,
+          };
+        }
 
-      if (result.base64Data) {
-        return {
-          id: imagePrompt.id,
-          description: imagePrompt.description,
-          alt: imagePrompt.description,
-          base64Data: result.base64Data,
-          promptUsed: result.promptUsed,
-        };
+        if (result.base64Data) {
+          return {
+            id: imagePrompt.id,
+            description: imagePrompt.description,
+            alt: imagePrompt.description,
+            base64Data: result.base64Data,
+            promptUsed: result.promptUsed,
+          };
+        }
       }
+    } catch (imgErr) {
+      console.error(`[LessonImages] Failed to generate image ${imagePrompt.id}:`, imgErr);
     }
 
+    // Fallback placeholder — lesson will render without this image gracefully
     return {
       id: imagePrompt.id,
       description: imagePrompt.description,

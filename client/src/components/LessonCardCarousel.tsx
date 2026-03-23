@@ -350,9 +350,18 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
   // Card renderers
   // ---------------------------------------------------------------------------
   const renderCoverCard = () => {
-    const featuredImage = enhancedSpec.featuredImage
+    // Try featured image first, then fall back to the first image with actual data
+    let coverImage = enhancedSpec.featuredImage
       ? findImageById(enhancedSpec.featuredImage)
       : null;
+
+    // If no featured image (or featured image has no data yet), try first image with real content
+    if (!coverImage || (!coverImage.svgData && !coverImage.base64Data && !coverImage.path)) {
+      const firstWithData = images.find(img => img.svgData || img.base64Data || img.path);
+      if (firstWithData) {
+        coverImage = firstWithData;
+      }
+    }
 
     return (
       <View style={s.cardInner}>
@@ -368,9 +377,9 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
           </Text>
         )}
 
-        {featuredImage && (
+        {coverImage && (
           <View style={s.coverImageWrap}>
-            {renderImage(featuredImage)}
+            {renderImage(coverImage)}
           </View>
         )}
 

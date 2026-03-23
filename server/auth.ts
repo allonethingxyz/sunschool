@@ -185,6 +185,14 @@ export async function setupAuth(app: Express) {
       return res.status(500).json({ error: 'Failed to retrieve user info' });
     }
   }));
+
+  // Logout endpoint — JWT is stateless so this is a no-op on the server,
+  // but provides a proper endpoint the client can POST to and avoids 404s.
+  app.post("/api/logout", asyncHandler(async (_req: Request, res: Response) => {
+    // With JWT auth the server has no session to destroy.
+    // The client is responsible for clearing the stored token.
+    res.json({ message: "Logged out successfully" });
+  }));
 }
 
 // Temporary authentication middleware, simplified

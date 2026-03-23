@@ -31,6 +31,8 @@ import { PlausibleAnalytics } from './components/PlausibleAnalytics';
 import { useAuth } from './hooks/use-auth';
 import { ModeProvider } from './context/ModeContext';
 import AppLayout from './components/AppLayout';
+import { useMode } from './context/ModeContext';
+import { usePageTitle } from './hooks/use-page-title';
 
 // Home redirect component to handle auth status
 const HomeRedirect = () => {
@@ -56,7 +58,59 @@ const HomeRedirect = () => {
   }
 };
 
+const NotFoundPage = () => {
+  const [, navigate] = useLocation();
+  const { isLearnerMode } = useMode();
+
+  const title = isLearnerMode ? 'Oops! This page got lost \u{1F5FA}\u{FE0F}' : 'Page Not Found';
+  const subtitle = isLearnerMode
+    ? undefined
+    : 'The page you are looking for does not exist or has been moved.';
+  const buttonLabel = isLearnerMode ? 'Go Home \u{1F3E0}' : 'Go to Dashboard';
+  const destination = isLearnerMode ? '/learner' : '/dashboard';
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '60vh',
+      padding: '40px 20px',
+      textAlign: 'center',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    }}>
+      <div style={{ fontSize: isLearnerMode ? 28 : 22, fontWeight: 600, margin: '0 0 8px', color: '#121212' }}>
+        {title}
+      </div>
+      {subtitle && (
+        <p style={{ fontSize: 15, color: '#707070', margin: '0 0 24px', maxWidth: 400 }}>
+          {subtitle}
+        </p>
+      )}
+      {!subtitle && <div style={{ height: 16 }} />}
+      <button
+        onClick={() => navigate(destination)}
+        style={{
+          padding: '12px 28px',
+          backgroundColor: '#121212',
+          color: '#FFFFFF',
+          border: 'none',
+          borderRadius: 6,
+          cursor: 'pointer',
+          fontSize: isLearnerMode ? 16 : 14,
+          fontWeight: 600,
+        }}
+      >
+        {buttonLabel}
+      </button>
+    </div>
+  );
+};
+
 export default function App() {
+  usePageTitle();
+
   return (
     <div className="app-container">
       <PlausibleAnalytics
@@ -104,10 +158,7 @@ export default function App() {
             
             {/* Catch-all for 404 */}
             <Route>
-              <div className="not-found">
-                <h1>404: Page Not Found</h1>
-                <p>The page you're looking for doesn't exist.</p>
-              </div>
+              <NotFoundPage />
             </Route>
           </Switch>
         </AppLayout>

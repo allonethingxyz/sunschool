@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useAuth } from '../hooks/use-auth';
+import { useMode } from '../context/ModeContext';
 import SunschoolHeader from './SunschoolHeader';
 import AppFooter from './AppFooter';
+import KidFooter from './KidFooter';
 import { colors } from '../styles/theme';
 
 interface AppLayoutProps {
@@ -11,6 +13,7 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user, isLoading } = useAuth();
+  const { isLearnerMode } = useMode();
 
   if (!user && !isLoading) {
     return <>{children}</>;
@@ -21,59 +24,26 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }
 
   return (
-    <View style={styles.container} accessibilityRole="none">
-      {/* Skip to main content link for keyboard users */}
-      <a
-        href="#main-content"
-        style={{
-          position: 'absolute',
-          left: '-9999px',
-          top: 'auto',
-          width: '1px',
-          height: '1px',
-          overflow: 'hidden',
-          zIndex: 9999,
-        }}
-        onFocus={(e) => {
-          const el = e.currentTarget;
-          el.style.position = 'fixed';
-          el.style.left = '8px';
-          el.style.top = '8px';
-          el.style.width = 'auto';
-          el.style.height = 'auto';
-          el.style.overflow = 'visible';
-          el.style.background = '#4A90D9';
-          el.style.color = '#fff';
-          el.style.padding = '8px 16px';
-          el.style.borderRadius = '4px';
-          el.style.fontSize = '14px';
-          el.style.fontWeight = '600';
-          el.style.textDecoration = 'none';
-        }}
-        onBlur={(e) => {
-          const el = e.currentTarget;
-          el.style.position = 'absolute';
-          el.style.left = '-9999px';
-          el.style.width = '1px';
-          el.style.height = '1px';
-          el.style.overflow = 'hidden';
-        }}
-      >
-        Skip to main content
-      </a>
-      <View accessibilityRole="banner" style={{ zIndex: 100 }}>
+    <View style={styles.container}>
+      <View style={{ zIndex: 100 }}>
         <SunschoolHeader />
       </View>
       <View
         nativeID="main-content"
-        accessibilityRole="main"
-        style={styles.content}
+        style={[
+          styles.content,
+          isLearnerMode && styles.learnerContent,
+        ]}
       >
         {children}
       </View>
-      <View accessibilityRole="contentinfo">
-        <AppFooter />
-      </View>
+      {isLearnerMode ? (
+        <KidFooter />
+      ) : (
+        <View>
+          <AppFooter />
+        </View>
+      )}
     </View>
   );
 };
@@ -81,10 +51,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: 'column',
-    height: '100vh',
-    maxWidth: '100vw' as any,
-    overflow: 'hidden' as any,
+    flexDirection: 'column' as const,
     backgroundColor: colors.background,
   },
   content: {
@@ -93,8 +60,9 @@ const styles = StyleSheet.create({
     maxWidth: 1200,
     marginHorizontal: 'auto',
     padding: 20,
-    overflowX: 'hidden' as any,
-    overflowY: 'auto' as any,
+  },
+  learnerContent: {
+    paddingBottom: 90,
   },
 });
 

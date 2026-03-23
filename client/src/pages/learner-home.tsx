@@ -80,9 +80,10 @@ const GoalsStrip: React.FC<{ learnerId?: number; onPress: () => void; theme: any
 // ─── Child-friendly error mapper ─────────────────────────────────────────────
 function friendlyError(error: any): { emoji: string; message: string } {
   const msg = (error?.message || String(error || '')).toLowerCase();
-  const status = error?.status || error?.response?.status;
+  const status = error?.status || error?.response?.status
+    || (msg.match(/\((\d{3})\)\s*$/) ? parseInt(msg.match(/\((\d{3})\)\s*$/)?.[1] || '0', 10) : 0);
 
-  if (status === 402 || msg.includes('billing') || msg.includes('credits') || msg.includes('key limit')) {
+  if (status === 402 || msg.includes('billing') || msg.includes('credits') || msg.includes('key limit') || msg.includes('spending limit')) {
     return { emoji: '🔧', message: "Oops! Our lesson machine needs a tune-up. Ask a grown-up to check the settings." };
   }
   if (status === 503 || msg.includes('failed after multiple attempts')) {
@@ -93,6 +94,9 @@ function friendlyError(error: any): { emoji: string; message: string } {
   }
   if (msg.includes('invalid content') || msg.includes('missing title') || msg.includes('insufficient')) {
     return { emoji: '🎲', message: "The lesson didn't come out right. Let's try a different one!" };
+  }
+  if (msg.includes('timeout') || msg.includes('network error') || msg.includes('no response')) {
+    return { emoji: '🌐', message: "Hmm, we couldn't reach the lesson server. Check your internet and try again!" };
   }
   return { emoji: '😅', message: "Something unexpected happened. Try again or ask a grown-up for help." };
 }
@@ -418,8 +422,9 @@ const LearnerHome = () => {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.generateButton}
+                      style={[styles.generateButton, generateLessonMutation.isPending && { opacity: 0.5 }]}
                       onPress={() => handleNewLessonPress()}
+                      disabled={generateLessonMutation.isPending}
                     >
                       <Text style={styles.generateButtonText}>
                         New Lesson

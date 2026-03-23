@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 
 const windowWidth = Dimensions.get('window').width;
-import { Home, BarChart2, User, ArrowLeft, BookOpen, MessageCircle } from 'react-feather';
+import { Home, User, BookOpen, MessageCircle } from 'react-feather';
 import { colors, typography } from '../styles/theme';
 import { useLocation } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
 import { useMode } from '../context/ModeContext';
-import { LearnerSelector } from './LearnerSelector';
 import SocialLinks from './SocialLinks';
 import SupportModal from './SupportModal';
 
@@ -15,23 +14,66 @@ interface SunschoolHeaderProps {
   subtitle?: string;
 }
 
+const KidHeader: React.FC<{ learnerName: string; navigate: (path: string) => void }> = ({ learnerName, navigate }) => {
+  const firstName = learnerName?.split(' ')[0] || 'Learner';
+
+  return (
+    <View style={styles.header} accessibilityLabel="Learner navigation">
+      <View style={styles.headerContent}>
+        <TouchableOpacity
+          style={styles.kidLogoContainer}
+          onPress={() => navigate('/learner')}
+          accessibilityRole="link"
+          accessibilityLabel={`${firstName}'s home`}
+        >
+          <View style={styles.kidSunIcon} aria-hidden={true}>
+            <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden={true} focusable="false">
+              <defs>
+                <linearGradient id="kidSunG" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#F5A623"/>
+                  <stop offset="100%" stopColor="#F97316"/>
+                </linearGradient>
+              </defs>
+              <circle cx="16" cy="16" r="8" fill="url(#kidSunG)">
+                <animate attributeName="r" values="8;9;8" dur="2s" repeatCount="indefinite" />
+              </circle>
+              <circle cx="16" cy="16" r="6" fill="none" stroke="#fff" strokeWidth="0.5" opacity="0.3"/>
+              <circle cx="16" cy="16" r="2" fill="#fff" opacity="0.6"/>
+              <g stroke="#F5A623" strokeWidth="2" strokeLinecap="round" opacity="0.7">
+                <line x1="16" y1="5" x2="16" y2="2"/>
+                <line x1="16" y1="27" x2="16" y2="30"/>
+                <line x1="5" y1="16" x2="2" y2="16"/>
+                <line x1="27" y1="16" x2="30" y2="16"/>
+                <line x1="8.2" y1="8.2" x2="6" y2="6"/>
+                <line x1="23.8" y1="8.2" x2="26" y2="6"/>
+                <line x1="8.2" y1="23.8" x2="6" y2="26"/>
+                <line x1="23.8" y1="23.8" x2="26" y2="26"/>
+              </g>
+            </svg>
+          </View>
+          <Text style={styles.kidNameText}>{firstName}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
   const [location, navigate] = useLocation();
   const { user } = useAuth();
-  const { isLearnerMode, toggleMode } = useMode();
+  const { isLearnerMode, selectedLearner } = useMode();
   const [showSupport, setShowSupport] = useState(false);
 
+  // Learner mode: clean, minimal kid header
+  if (isLearnerMode) {
+    const learnerName = selectedLearner?.name || user?.name || 'Learner';
+    return <KidHeader learnerName={learnerName} navigate={navigate} />;
+  }
+
   const isActive = (path: string) => location === path;
-  const isParentOrAdmin = user?.role === 'PARENT' || user?.role === 'ADMIN';
 
   const getNavItems = () => {
     if (!user || !user.role) return [];
-    if (isLearnerMode) {
-      return [
-        { label: 'Home', path: '/learner', icon: Home },
-        { label: 'Progress', path: '/progress', icon: BarChart2 },
-      ];
-    }
     const navItems = [
       { label: 'Dashboard', path: '/dashboard', icon: Home },
     ];
@@ -42,18 +84,18 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
   };
 
   return (
-    <View style={styles.header} accessibilityRole="navigation" accessibilityLabel="Main navigation">
+    <View style={styles.header} accessibilityRole="none" accessibilityLabel="Main navigation">
       <View style={styles.headerContent}>
         {/* Left: Logo + nav links */}
         <View style={styles.leftSection}>
           <TouchableOpacity
             style={styles.logoContainer}
-            onPress={() => navigate(user?.role === 'LEARNER' ? '/learner' : '/dashboard')}
+            onPress={() => navigate('/dashboard')}
             accessibilityRole="link"
             accessibilityLabel="SUNSCHOOL home"
           >
-            <View style={styles.logoIcon} aria-hidden="true">
-              <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+            <View style={styles.logoIcon} aria-hidden={true}>
+              <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden={true} focusable="false">
                 <defs>
                   <linearGradient id="hSunG" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#F5A623"/>
@@ -92,7 +134,7 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
                   <item.icon
                     size={16}
                     color={isActive(item.path) ? colors.secondary : colors.onPrimary}
-                    aria-hidden="true"
+                    aria-hidden={true}
                   />
                   {windowWidth >= 480 && (
                     <Text style={[styles.navText, isActive(item.path) && styles.activeNavText]}>
@@ -130,33 +172,15 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
           </View>
         </View>
 
-        {/* Right: Mode badge, learner selector, back button */}
+        {/* Right: Mode badge */}
         {user && (
           <View style={styles.rightSection}>
-            {isLearnerMode && isParentOrAdmin && (
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={toggleMode}
-                accessibilityRole="button"
-                accessibilityLabel="Switch to parent view"
-              >
-                <ArrowLeft size={14} color={colors.onPrimary} aria-hidden="true" />
-                <Text style={styles.backButtonText}>Parent View</Text>
-              </TouchableOpacity>
-            )}
-
-            {isLearnerMode && isParentOrAdmin && (
-              <LearnerSelector subtle={false} />
-            )}
-
             <View
-              style={[styles.modeBadge, isLearnerMode ? styles.learnerBadge : styles.parentBadge]}
+              style={[styles.modeBadge, styles.parentBadge]}
               accessibilityRole="text"
-              accessibilityLabel={`Current mode: ${isLearnerMode ? 'Learner' : 'Parent'}`}
+              accessibilityLabel="Current mode: Parent"
             >
-              <Text style={styles.modeBadgeText}>
-                {isLearnerMode ? 'LEARNER' : 'PARENT'}
-              </Text>
+              <Text style={styles.modeBadgeText}>PARENT</Text>
             </View>
           </View>
         )}
@@ -241,27 +265,10 @@ const styles = StyleSheet.create({
     overflow: 'visible',
     flexShrink: 0,
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    gap: 4,
-  },
-  backButtonText: {
-    fontSize: 12,
-    color: colors.onPrimary,
-    fontWeight: '600',
-  },
   modeBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 4,
-  },
-  learnerBadge: {
-    backgroundColor: '#4CAF50',
   },
   parentBadge: {
     backgroundColor: '#2196F3',
@@ -285,6 +292,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 6,
     gap: 5,
+  },
+  kidLogoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  kidSunIcon: {
+    width: 32,
+    height: 32,
+  },
+  kidNameText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.onPrimary,
+    letterSpacing: 0.3,
   },
 });
 

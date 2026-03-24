@@ -1,4 +1,5 @@
-import { EnhancedLessonSpec } from '../../shared/schema';
+import { EnhancedLessonSpec, lessonValidationLog } from '../../shared/schema';
+import { db } from '../db';
 
 const PLACEHOLDER_PATTERNS = [
   /^This is a lesson about /i,
@@ -8,10 +9,80 @@ const PLACEHOLDER_PATTERNS = [
 ];
 
 /**
+ * Log a validation result (pass or fail) to the lesson_validation_log table.
+ * Runs in the background — never throws.
+ */
+function logValidationResult(opts: {
+  subject?: string;
+  topic?: string;
+  gradeLevel?: number;
+  model?: string;
+  passed: boolean;
+  rejectionReason?: string;
+  specSnapshot?: unknown;
+}) {
+  // Fire-and-forget — do not await in the hot path
+  db.insert(lessonValidationLog)
+    .values({
+      subject: opts.subject ?? null,
+      topic: opts.topic ?? null,
+      gradeLevel: opts.gradeLevel ?? null,
+      model: opts.model ?? null,
+      passed: opts.passed,
+      rejectionReason: opts.rejectionReason ?? null,
+      specSnapshot: opts.specSnapshot ?? null,
+    })
+    .execute()
+    .catch((err: unknown) => {
+      console.error('[ValidationLog] Failed to write validation log:', err);
+    });
+}
+
+/**
  * Validates that an EnhancedLessonSpec contains real content, not stubs.
  * Throws an Error describing what's wrong if validation fails.
+ *
+ * Optionally pass context (subject, topic, gradeLevel, model) so that the
+ * result is persisted in the lesson_validation_log table for analytics.
  */
-export function validateLessonSpec(spec: EnhancedLessonSpec): void {
+export function validateLessonSpec(
+  spec: EnhancedLessonSpec,
+  context?: {
+    subject?: string;
+    topic?: string;
+    gradeLevel?: number;
+    model?: string;
+  },
+): void {
+  try {
+    validateLessonSpecInner(spec);
+
+    // Passed — log success
+    if (context) {
+      logValidationResult({
+        ...context,
+        passed: true,
+      });
+    }
+  } catch (err) {
+    // Failed — log failure with the rejection reason and spec snapshot
+    const reason = err instanceof Error ? err.message : String(err);
+    if (context) {
+      logValidationResult({
+        ...context,
+        passed: false,
+        rejectionReason: reason,
+        specSnapshot: spec,
+      });
+    }
+    throw err;
+  }
+}
+
+/**
+ * Core validation logic (no logging side-effects).
+ */
+function validateLessonSpecInner(spec: EnhancedLessonSpec): void {
   if (!spec) {
     throw new Error('Spec is null or undefined');
   }

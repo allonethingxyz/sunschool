@@ -1,6 +1,14 @@
 import axios from 'axios';
+import { CircuitBreaker } from './services/circuit-breaker';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
+/** Shared circuit breaker for all OpenRouter API calls. */
+export const openRouterBreaker = new CircuitBreaker({
+  name: 'openrouter',
+  failureThreshold: 3,
+  resetTimeMs: 60_000,
+});
 
 /** Strip markdown code fences that some models add around JSON responses. */
 function parseJsonResponse(raw: string): any {
@@ -50,11 +58,18 @@ interface OpenRouterResponse {
 }
 
 /**
- * Makes a request to the OpenRouter API
+ * Makes a request to the OpenRouter API.
+ * Guarded by a circuit breaker — if OpenRouter has had repeated 5xx / timeout
+ * failures the breaker opens and calls fail fast until the reset window elapses.
  */
 export async function askOpenRouter(options: OpenRouterOptions): Promise<OpenRouterResponse> {
   if (!OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY is not set');
+  }
+
+  // Circuit breaker gate — fail fast when the service is known to be down
+  if (!openRouterBreaker.canRequest()) {
+    throw new Error('OpenRouter circuit breaker is OPEN: OpenRouter is temporarily unavailable. Using cached lessons.');
   }
 
   try {
@@ -74,11 +89,24 @@ export async function askOpenRouter(options: OpenRouterOptions): Promise<OpenRou
       }
     });
 
+    // Successful response — reset the breaker
+    openRouterBreaker.recordSuccess();
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
-      throw new Error(`OpenRouter API error: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+      const status = error.response.status;
+
+      // 5xx errors are server-side (OpenRouter's fault) — count toward circuit breaker
+      if (status >= 500) {
+        openRouterBreaker.recordFailure();
+      }
+      // 4xx errors (401, 402, 403, 429, etc.) are client-side — do NOT trip the breaker
+
+      throw new Error(`OpenRouter API error: ${status} - ${JSON.stringify(error.response.data)}`);
     }
+
+    // Network errors / timeouts (no response at all) — count as failures
+    openRouterBreaker.recordFailure();
     throw error;
   }
 }

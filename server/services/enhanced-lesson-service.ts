@@ -1,11 +1,12 @@
-import { askOpenRouter } from '../openrouter';
+import { askOpenRouter, openRouterBreaker } from '../openrouter';
 import { generateImage, generateDiagram, MAX_IMAGES_PER_LESSON } from './image-generation-router';
 import { EnhancedLessonSpec, LessonSection, LessonImage, LessonDiagram } from '../../shared/schema';
 // Images are stored inline as base64/SVG in the lesson spec JSONB.
 // No filesystem storage needed — Railway's ephemeral FS wipes on deploy.
-import { generateEducationalSVG } from './svg-llm-service';
-import { LESSON_PROMPTS, IMAGE_PROMPTS, getReadingLevelInstructions, getMathematicalNotationRules } from '../prompts';
+import { LESSON_PROMPTS, getReadingLevelInstructions, getMathematicalNotationRules } from '../prompts';
 import { validateLessonSpec } from './lesson-validator';
+import { computeContentHash } from './lesson-template-service';
+import { storage } from '../storage';
 
 // Create a simple ID generator since nanoid is causing ESM issues
 function generateId(length: number = 10): string {
@@ -429,6 +430,9 @@ export async function generateEnhancedLesson(
  * Generate a lesson with retry and validation.
  * This is the ONLY function any route or background job should call.
  * Throws if all attempts fail.
+ *
+ * When the OpenRouter circuit breaker is OPEN, attempts to serve from the
+ * shared lesson template library before letting the error propagate.
  */
 export async function generateLessonWithRetry(
   gradeLevel: number,
@@ -447,6 +451,21 @@ export async function generateLessonWithRetry(
     maxRetries = 3,
   } = options;
 
+  // ── Circuit breaker fast-path: serve from template library when OPEN ──
+  const breakerState = openRouterBreaker.getState();
+  if (breakerState.state === 'OPEN') {
+    console.warn(`[LessonRetry] OpenRouter circuit breaker is OPEN — attempting template library fallback`);
+    const hash = computeContentHash(subject || topic, gradeLevel, topic, difficulty);
+    const cached = await storage.findTemplateByHash(hash);
+    if (cached) {
+      console.log(`[LessonRetry] Serving cached template ${cached.id} (${cached.title}) while circuit is open`);
+      await storage.incrementTemplateServed(cached.id);
+      return cached.spec;
+    }
+    // No template available — let the error propagate with a clear message
+    throw new Error('OpenRouter is temporarily unavailable and no cached lesson exists for this topic.');
+  }
+
   let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -463,8 +482,13 @@ export async function generateLessonWithRetry(
         throw new Error('generateEnhancedLesson returned null');
       }
 
-      // Validate the spec — throws if invalid
-      validateLessonSpec(spec);
+      // Validate the spec — throws if invalid; logs result to lesson_validation_log
+      validateLessonSpec(spec, {
+        subject,
+        topic,
+        gradeLevel,
+        model: 'google/gemini-2.0-flash-001',
+      });
 
       return spec;
     } catch (err) {
@@ -476,6 +500,20 @@ export async function generateLessonWithRetry(
       if (isFatal) {
         console.error(`[LessonRetry] Fatal error on attempt ${attempt}/${maxRetries}: ${errMsg}`);
         throw lastError;
+      }
+
+      // If the breaker just opened mid-retry, try the template fallback
+      if (/circuit breaker is OPEN/.test(errMsg)) {
+        console.warn(`[LessonRetry] Circuit breaker opened during retries — attempting template library fallback`);
+        const hash = computeContentHash(subject || topic, gradeLevel, topic, difficulty);
+        const cached = await storage.findTemplateByHash(hash);
+        if (cached) {
+          console.log(`[LessonRetry] Serving cached template ${cached.id} (${cached.title}) after circuit opened`);
+          await storage.incrementTemplateServed(cached.id);
+          return cached.spec;
+        }
+        // No template — let error propagate
+        throw new Error('OpenRouter is temporarily unavailable and no cached lesson exists for this topic.');
       }
 
       const isLastAttempt = attempt === maxRetries;

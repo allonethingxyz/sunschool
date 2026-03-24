@@ -4,6 +4,7 @@ import { PlaywrightTestConfig } from '@playwright/test';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5000';
 
 const config: PlaywrightTestConfig = {
+  globalTeardown: './tests/e2e/global-teardown.ts',
   testDir: './tests/e2e',
   timeout: 600000, // 10 minutes per test (lesson generation is slow)
   // Only start local server if targeting localhost

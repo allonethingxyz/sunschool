@@ -26,7 +26,7 @@ if (isNeonDb) {
     idleTimeoutMillis: 60000,
     connectionTimeoutMillis: 10000,
     maxUses: 5000,
-    ssl: env.DATABASE_SSL ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : false,
+    ssl: env.DATABASE_SSL ? { rejectUnauthorized: false } : false, // Railway internal network — cert managed by platform
   });
   db = drizzleNeon(pool, { schema });
 } else {
@@ -34,7 +34,7 @@ if (isNeonDb) {
   const { Pool: PgPool } = require('pg');
   const { drizzle: drizzlePg } = require('drizzle-orm/node-postgres');
   const sslConfig = isLocalDb ? false :
-    (env.DATABASE_SSL ? { rejectUnauthorized: process.env.NODE_ENV === 'production' } : false);
+    (env.DATABASE_SSL ? { rejectUnauthorized: false } : false); // Railway internal network
   pool = new PgPool({
     connectionString: env.DATABASE_URL,
     max: 10,

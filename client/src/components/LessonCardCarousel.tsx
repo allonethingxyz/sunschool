@@ -45,6 +45,8 @@ interface EnhancedLessonSpec {
   targetGradeLevel: number;
   subtitle?: string;
   summary: string;
+  subject?: string;
+  category?: string;
   sections: LessonSection[];
   featuredImage?: string;
   images: LessonImage[];
@@ -136,6 +138,125 @@ function generatePlaceholderSVG(description: string, primaryColor: string): stri
     ${lineEls}
     <rect x="185" y="248" width="130" height="20" rx="10" fill="${primaryColor}" opacity="0.15"/>
     <text x="250" y="262" font-family="Arial" font-size="10" text-anchor="middle" fill="${primaryColor}" font-weight="bold">ILLUSTRATION</text>
+  </svg>`;
+}
+
+function getSubjectCoverSVG(subject: string, primaryColor: string): string {
+  const s = subject.toLowerCase();
+
+  // Math / Mathematics / Numbers / Algebra / Geometry / Fractions
+  if (/math|algebra|geometry|fraction|number|arithmetic|calculus/.test(s)) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="100%" height="200">
+      <rect width="300" height="200" fill="#F0F4FF" rx="12"/>
+      <circle cx="70" cy="70" r="30" fill="${primaryColor}" opacity="0.15"/>
+      <text x="70" y="80" font-family="Arial" font-size="28" text-anchor="middle" fill="${primaryColor}" font-weight="bold">1</text>
+      <text x="115" y="80" font-family="Arial" font-size="24" text-anchor="middle" fill="${primaryColor}" opacity="0.7">+</text>
+      <circle cx="160" cy="70" r="30" fill="${primaryColor}" opacity="0.15"/>
+      <text x="160" y="80" font-family="Arial" font-size="28" text-anchor="middle" fill="${primaryColor}" font-weight="bold">2</text>
+      <text x="205" y="80" font-family="Arial" font-size="24" text-anchor="middle" fill="${primaryColor}" opacity="0.7">=</text>
+      <circle cx="245" cy="70" r="30" fill="${primaryColor}" opacity="0.15"/>
+      <text x="245" y="80" font-family="Arial" font-size="28" text-anchor="middle" fill="${primaryColor}" font-weight="bold">3</text>
+      <polygon points="80,130 100,170 60,170" fill="${primaryColor}" opacity="0.2"/>
+      <rect x="130" y="130" width="40" height="40" rx="4" fill="${primaryColor}" opacity="0.15"/>
+      <circle cx="220" cy="150" r="20" fill="${primaryColor}" opacity="0.2"/>
+    </svg>`;
+  }
+
+  // Science / Animals / Plants / Earth Science / Human Body
+  if (/science|animal|plant|earth|biology|chemistry|physics|human body|nature/.test(s)) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="100%" height="200">
+      <rect width="300" height="200" fill="#F0FFF4" rx="12"/>
+      <rect x="130" y="40" width="40" height="80" rx="4" fill="${primaryColor}" opacity="0.2"/>
+      <ellipse cx="150" cy="40" rx="30" ry="20" fill="${primaryColor}" opacity="0.15"/>
+      <circle cx="140" cy="90" r="6" fill="${primaryColor}" opacity="0.4"/>
+      <circle cx="155" cy="75" r="5" fill="${primaryColor}" opacity="0.35"/>
+      <circle cx="145" cy="60" r="4" fill="${primaryColor}" opacity="0.3"/>
+      <circle cx="160" cy="50" r="3" fill="${primaryColor}" opacity="0.25"/>
+      <path d="M60 160 Q70 120 80 140 Q90 110 100 160" fill="${primaryColor}" opacity="0.2" stroke="${primaryColor}" stroke-width="2" opacity="0.3"/>
+      <ellipse cx="80" cy="160" rx="25" ry="6" fill="${primaryColor}" opacity="0.1"/>
+      <circle cx="240" cy="100" r="30" fill="none" stroke="${primaryColor}" stroke-width="3" opacity="0.3"/>
+      <line x1="262" y1="122" x2="280" y2="140" stroke="${primaryColor}" stroke-width="3" stroke-linecap="round" opacity="0.3"/>
+      <circle cx="240" cy="100" r="10" fill="${primaryColor}" opacity="0.15"/>
+    </svg>`;
+  }
+
+  // Language Arts / Reading / Writing / Literature
+  if (/language|reading|writing|literature|english|grammar|vocabulary|spelling/.test(s)) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="100%" height="200">
+      <rect width="300" height="200" fill="#FFF8F0" rx="12"/>
+      <path d="M90 140 L90 50 Q150 30 150 70 L150 150" fill="${primaryColor}" opacity="0.12" stroke="${primaryColor}" stroke-width="2" opacity="0.3"/>
+      <path d="M210 140 L210 50 Q150 30 150 70 L150 150" fill="${primaryColor}" opacity="0.12" stroke="${primaryColor}" stroke-width="2" opacity="0.3"/>
+      <line x1="105" y1="75" x2="140" y2="75" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+      <line x1="105" y1="90" x2="135" y2="90" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+      <line x1="105" y1="105" x2="140" y2="105" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+      <line x1="105" y1="120" x2="130" y2="120" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+      <line x1="160" y1="75" x2="195" y2="75" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+      <line x1="160" y1="90" x2="190" y2="90" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+      <line x1="160" y1="105" x2="195" y2="105" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+      <line x1="160" y1="120" x2="185" y2="120" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+    </svg>`;
+  }
+
+  // Social Studies / History / Geography
+  if (/social|history|geography|civics|culture|government|map/.test(s)) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="100%" height="200">
+      <rect width="300" height="200" fill="#F0F8FF" rx="12"/>
+      <circle cx="150" cy="100" r="60" fill="${primaryColor}" opacity="0.1" stroke="${primaryColor}" stroke-width="2" opacity="0.3"/>
+      <ellipse cx="150" cy="100" rx="60" ry="25" fill="none" stroke="${primaryColor}" stroke-width="1.5" opacity="0.2"/>
+      <ellipse cx="150" cy="100" rx="25" ry="60" fill="none" stroke="${primaryColor}" stroke-width="1.5" opacity="0.2"/>
+      <line x1="90" y1="100" x2="210" y2="100" stroke="${primaryColor}" stroke-width="1" opacity="0.15"/>
+      <line x1="150" y1="40" x2="150" y2="160" stroke="${primaryColor}" stroke-width="1" opacity="0.15"/>
+      <circle cx="130" cy="85" r="8" fill="${primaryColor}" opacity="0.2"/>
+      <circle cx="170" cy="105" r="10" fill="${primaryColor}" opacity="0.2"/>
+      <circle cx="145" cy="115" r="6" fill="${primaryColor}" opacity="0.15"/>
+    </svg>`;
+  }
+
+  // Arts / Music / Creative
+  if (/art|music|creative|paint|draw|craft|design/.test(s)) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="100%" height="200">
+      <rect width="300" height="200" fill="#FFF5F5" rx="12"/>
+      <ellipse cx="150" cy="110" rx="70" ry="55" fill="${primaryColor}" opacity="0.08"/>
+      <ellipse cx="150" cy="110" rx="60" ry="45" fill="${primaryColor}" opacity="0.06" stroke="${primaryColor}" stroke-width="2" opacity="0.2"/>
+      <circle cx="115" cy="90" r="10" fill="#FF6B6B" opacity="0.7"/>
+      <circle cx="140" cy="80" r="10" fill="#4ECDC4" opacity="0.7"/>
+      <circle cx="170" cy="82" r="10" fill="#FFE66D" opacity="0.7"/>
+      <circle cx="190" cy="95" r="10" fill="#A78BFA" opacity="0.7"/>
+      <circle cx="130" cy="120" r="10" fill="#F472B6" opacity="0.7"/>
+      <circle cx="160" cy="125" r="10" fill="#34D399" opacity="0.7"/>
+      <ellipse cx="150" cy="145" rx="12" ry="8" fill="${primaryColor}" opacity="0.15"/>
+      <line x1="195" y1="90" x2="230" y2="50" stroke="${primaryColor}" stroke-width="3" stroke-linecap="round" opacity="0.3"/>
+    </svg>`;
+  }
+
+  // Technology / Coding
+  if (/tech|coding|computer|programming|digital|robot/.test(s)) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="100%" height="200">
+      <rect width="300" height="200" fill="#F0F4FF" rx="12"/>
+      <rect x="75" y="50" width="150" height="100" rx="8" fill="${primaryColor}" opacity="0.08" stroke="${primaryColor}" stroke-width="2" opacity="0.25"/>
+      <text x="150" y="112" font-family="monospace" font-size="32" text-anchor="middle" fill="${primaryColor}" opacity="0.6" font-weight="bold">&lt; /&gt;</text>
+      <rect x="90" y="70" width="50" height="4" rx="2" fill="${primaryColor}" opacity="0.15"/>
+      <rect x="90" y="82" width="70" height="4" rx="2" fill="${primaryColor}" opacity="0.12"/>
+      <circle cx="210" cy="65" r="4" fill="${primaryColor}" opacity="0.3"/>
+      <circle cx="200" cy="65" r="4" fill="${primaryColor}" opacity="0.2"/>
+      <circle cx="190" cy="65" r="4" fill="${primaryColor}" opacity="0.15"/>
+    </svg>`;
+  }
+
+  // Default — lightbulb
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="100%" height="200">
+    <rect width="300" height="200" fill="#FFFBF0" rx="12"/>
+    <circle cx="150" cy="85" r="40" fill="${primaryColor}" opacity="0.12"/>
+    <circle cx="150" cy="85" r="30" fill="${primaryColor}" opacity="0.08"/>
+    <path d="M130 85 Q130 55 150 50 Q170 55 170 85 Q170 100 165 105 L135 105 Q130 100 130 85" fill="${primaryColor}" opacity="0.2" stroke="${primaryColor}" stroke-width="2" opacity="0.35"/>
+    <rect x="138" y="110" width="24" height="6" rx="3" fill="${primaryColor}" opacity="0.25"/>
+    <rect x="140" y="120" width="20" height="6" rx="3" fill="${primaryColor}" opacity="0.2"/>
+    <rect x="142" y="130" width="16" height="6" rx="3" fill="${primaryColor}" opacity="0.15"/>
+    <line x1="150" y1="30" x2="150" y2="20" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+    <line x1="185" y1="50" x2="193" y2="42" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+    <line x1="115" y1="50" x2="107" y2="42" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+    <line x1="195" y1="85" x2="205" y2="85" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+    <line x1="105" y1="85" x2="95" y2="85" stroke="${primaryColor}" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
   </svg>`;
 }
 
@@ -377,9 +498,24 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
           </Text>
         )}
 
-        {coverImage && (
+        {coverImage ? (
           <View style={s.coverImageWrap}>
             {renderImage(coverImage)}
+          </View>
+        ) : (
+          <View style={s.coverImageWrap}>
+            <div
+              style={{ width: '100%', maxWidth: 500, overflow: 'hidden', borderRadius: 12 }}
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(
+                  getSubjectCoverSVG(
+                    enhancedSpec.subject || enhancedSpec.category || '',
+                    theme.colors.primary,
+                  ),
+                  { USE_PROFILES: { svg: true, svgFilters: true } },
+                ),
+              }}
+            />
           </View>
         )}
 

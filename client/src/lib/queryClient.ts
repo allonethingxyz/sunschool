@@ -96,7 +96,8 @@ axiosInstance.interceptors.response.use(
         // Dispatch event so ModeContext can reset
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('auth-session-expired'));
-          window.location.href = '/auth';
+          const isLearnerMode = localStorage.getItem('preferredMode') === 'LEARNER';
+          window.location.href = isLearnerMode ? '/auth?expired=1' : '/auth';
         }
       }
     }

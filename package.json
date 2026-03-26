@@ -6,6 +6,7 @@
     "test": "jest --testPathPattern='tests/unit' --passWithNoTests",
     "build": "cd client && npx vite build",
     "test:e2e": "npx playwright test",
+    "test:e2e:prod": "PLAYWRIGHT_BASE_URL=https://sunschool.xyz npx playwright test",
     "migrate": "ts-node --transpile-only scripts/migrate.ts",
     "deploy": "TS_NODE_TRANSPILE_ONLY=true TS_NODE_PROJECT=tsconfig.deploy.json ts-node server/index.ts"
   },

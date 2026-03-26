@@ -36,10 +36,11 @@ const SubjectSelector: React.FC<SubjectSelectorProps> = ({ onSelectSubject }) =>
   const [categorySubjects, setCategorySubjects] = useState<Record<string, Subject[]>>({});
   
   // Fetch learner profile
-  const { data: learnerProfile, isLoading: profileLoading } = useQuery({
+  const { data: learnerProfile, isLoading: profileLoading, error: profileError } = useQuery({
     queryKey: ['/api/learner-profile', user?.id],
     queryFn: () => apiRequest('GET', `/api/learner-profile/${user?.id}`).then(res => res.data),
-    enabled: !!user
+    enabled: !!user,
+    retry: 1,
   });
   
   useEffect(() => {
@@ -113,7 +114,12 @@ const SubjectSelector: React.FC<SubjectSelectorProps> = ({ onSelectSubject }) =>
       </View>
     );
   }
-  
+
+  // Profile fetch failed — still show subjects (they're locally defined), just skip recommendations
+  if (profileError) {
+    console.warn('SubjectSelector: failed to load learner profile, showing default subjects');
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Choose a subject to learn</Text>

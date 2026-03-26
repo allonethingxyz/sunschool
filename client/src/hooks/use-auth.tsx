@@ -18,13 +18,24 @@ import {
 } from "../lib/queryClient";
 import { useToast } from "./use-toast";
 
+type LoginResponse = {
+  user: SelectUser;
+  token: string;
+};
+
 type AuthContextType = {
   user: SelectUser | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
+  loginMutation: UseMutationResult<LoginResponse, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<SelectUser, Error, RegisterData>;
+  registerMutation: UseMutationResult<RegisterResponse, Error, RegisterData>;
+};
+
+type RegisterResponse = {
+  user: SelectUser;
+  token: string;
+  wasPromotedToAdmin?: boolean;
 };
 
 type LoginData = {
@@ -168,13 +179,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Dispatch custom event so other contexts (e.g. ModeContext) can reset state
       window.dispatchEvent(new CustomEvent('auth-session-expired'));
+
+      // Redirect to auth page with expired flag so learners see the kid-friendly screen
+      if (typeof window !== 'undefined') {
+        const isLearnerMode = localStorage.getItem('preferredMode') === 'LEARNER';
+        if (isLearnerMode) {
+          window.location.href = '/auth?expired=1';
+        }
+      }
     }
   }, [user]);
 
-  interface LoginResponse {
-    user: SelectUser;
-    token: string;
-  }
+  // LoginResponse type is declared at module level
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData): Promise<LoginResponse> => {
@@ -250,11 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  interface RegisterResponse {
-    user: SelectUser;
-    token: string;
-    wasPromotedToAdmin?: boolean;
-  }
+  // RegisterResponse type is declared at module level
 
   const registerMutation = useMutation({
     mutationFn: async (userData: RegisterData): Promise<RegisterResponse> => {

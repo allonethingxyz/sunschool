@@ -1,11 +1,15 @@
 import { Express, Request, Response, NextFunction } from "express";
 import rateLimit from 'express-rate-limit';
+import crypto from "crypto";
 import { storage } from "./storage";
 import { users } from "../shared/schema";
 import { asyncHandler, hashPassword, comparePasswords, generateToken, authenticateJwt, hasRoleMiddleware, AuthRequest } from "./middleware/auth";
 import { db } from "./db";
-import { count } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import passport from "passport";
+
+// In-memory store for password reset tokens (avoids schema migration)
+const resetTokens = new Map<string, { userId: number; expires: Date }>();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -184,6 +188,83 @@ export async function setupAuth(app: Express) {
       console.error('Error retrieving user info:', error);
       return res.status(500).json({ error: 'Failed to retrieve user info' });
     }
+  }));
+
+  // Forgot password endpoint
+  app.post("/api/forgot-password", authLimiter, asyncHandler(async (req: Request, res: Response) => {
+    const { email } = req.body;
+
+    // Always return the same response to avoid leaking whether the email exists
+    const safeResponse = { message: "If an account exists with that email, a reset link has been sent." };
+
+    if (!email) {
+      return res.json(safeResponse);
+    }
+
+    try {
+      // Look up user by email
+      const result = await db
+        .select({ id: users.id, email: users.email })
+        .from(users)
+        .where(eq(users.email, email));
+
+      const user = result.length > 0 ? result[0] : null;
+
+      if (user) {
+        const token = crypto.randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+        resetTokens.set(token, { userId: user.id, expires });
+
+        const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+        console.log(`[Password Reset] ${baseUrl}/auth?reset=${token}`);
+      }
+    } catch (error) {
+      console.error('Forgot password error:', error);
+    }
+
+    return res.json(safeResponse);
+  }));
+
+  // Reset password endpoint
+  app.post("/api/reset-password", authLimiter, asyncHandler(async (req: Request, res: Response) => {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: "Token and new password are required." });
+    }
+
+    const entry = resetTokens.get(token);
+    if (!entry) {
+      return res.status(400).json({ error: "Invalid or expired reset token." });
+    }
+
+    if (new Date() > entry.expires) {
+      resetTokens.delete(token);
+      return res.status(400).json({ error: "Invalid or expired reset token." });
+    }
+
+    try {
+      const hashedPassword = await hashPassword(newPassword);
+      await db
+        .update(users)
+        .set({ password: hashedPassword })
+        .where(eq(users.id, entry.userId));
+
+      resetTokens.delete(token);
+
+      return res.json({ message: "Password updated successfully." });
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return res.status(500).json({ error: "Failed to reset password. Please try again." });
+    }
+  }));
+
+  // Logout endpoint — JWT is stateless so this is a no-op on the server,
+  // but provides a proper endpoint the client can POST to and avoids 404s.
+  app.post("/api/logout", asyncHandler(async (_req: Request, res: Response) => {
+    // With JWT auth the server has no session to destroy.
+    // The client is responsible for clearing the stored token.
+    res.json({ message: "Logged out successfully" });
   }));
 }
 

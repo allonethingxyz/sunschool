@@ -1,10 +1,12 @@
-import { askOpenRouter } from '../openrouter';
+import { askOpenRouter, openRouterBreaker } from '../openrouter';
 import { generateImage, generateDiagram, MAX_IMAGES_PER_LESSON } from './image-generation-router';
 import { EnhancedLessonSpec, LessonSection, LessonImage, LessonDiagram } from '../../shared/schema';
-import { saveBase64Image } from './image-storage';
-import { generateEducationalSVG } from './svg-llm-service';
-import { LESSON_PROMPTS, IMAGE_PROMPTS, getReadingLevelInstructions, getMathematicalNotationRules } from '../prompts';
+// Images are stored inline as base64/SVG in the lesson spec JSONB.
+// No filesystem storage needed — Railway's ephemeral FS wipes on deploy.
+import { LESSON_PROMPTS, getReadingLevelInstructions, getMathematicalNotationRules } from '../prompts';
 import { validateLessonSpec } from './lesson-validator';
+import { computeContentHash } from './lesson-template-service';
+import { storage } from '../storage';
 
 // Create a simple ID generator since nanoid is causing ESM issues
 function generateId(length: number = 10): string {
@@ -342,32 +344,15 @@ export async function generateEnhancedLesson(
             };
           }
 
-          // Base64 result — try to save to filesystem
+          // Base64 result — stored inline in lesson spec
           if (result.base64Data) {
-            try {
-              const imagePath = await saveBase64Image(
-                result.base64Data,
-                `lesson_${topic.replace(/\s+/g, '_')}_${imagePrompt.id}`
-              );
-
-              return {
-                id: imagePrompt.id,
-                description: imagePrompt.description,
-                alt: imagePrompt.description,
-                base64Data: result.base64Data,
-                promptUsed: result.promptUsed,
-                path: imagePath,
-              };
-            } catch (saveError) {
-              console.error('Error saving image to filesystem:', saveError);
-              return {
-                id: imagePrompt.id,
-                description: imagePrompt.description,
-                alt: imagePrompt.description,
-                base64Data: result.base64Data,
-                promptUsed: result.promptUsed,
-              };
-            }
+            return {
+              id: imagePrompt.id,
+              description: imagePrompt.description,
+              alt: imagePrompt.description,
+              base64Data: result.base64Data,
+              promptUsed: result.promptUsed,
+            };
           }
         }
 
@@ -445,6 +430,9 @@ export async function generateEnhancedLesson(
  * Generate a lesson with retry and validation.
  * This is the ONLY function any route or background job should call.
  * Throws if all attempts fail.
+ *
+ * When the OpenRouter circuit breaker is OPEN, attempts to serve from the
+ * shared lesson template library before letting the error propagate.
  */
 export async function generateLessonWithRetry(
   gradeLevel: number,
@@ -463,8 +451,22 @@ export async function generateLessonWithRetry(
     maxRetries = 3,
   } = options;
 
+  // ── Circuit breaker fast-path: serve from template library when OPEN ──
+  const breakerState = openRouterBreaker.getState();
+  if (breakerState.state === 'OPEN') {
+    console.warn(`[LessonRetry] OpenRouter circuit breaker is OPEN — attempting template library fallback`);
+    const hash = computeContentHash(subject || topic, gradeLevel, topic, difficulty);
+    const cached = await storage.findTemplateByHash(hash);
+    if (cached) {
+      console.log(`[LessonRetry] Serving cached template ${cached.id} (${cached.title}) while circuit is open`);
+      await storage.incrementTemplateServed(cached.id);
+      return cached.spec;
+    }
+    // No template available — let the error propagate with a clear message
+    throw new Error('OpenRouter is temporarily unavailable and no cached lesson exists for this topic.');
+  }
+
   let lastError: Error | undefined;
-  const BASE_DELAY_MS = 2000;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -480,8 +482,13 @@ export async function generateLessonWithRetry(
         throw new Error('generateEnhancedLesson returned null');
       }
 
-      // Validate the spec — throws if invalid
-      validateLessonSpec(spec);
+      // Validate the spec — throws if invalid; logs result to lesson_validation_log
+      validateLessonSpec(spec, {
+        subject,
+        topic,
+        gradeLevel,
+        model: 'google/gemini-2.0-flash-001',
+      });
 
       return spec;
     } catch (err) {
@@ -495,9 +502,23 @@ export async function generateLessonWithRetry(
         throw lastError;
       }
 
+      // If the breaker just opened mid-retry, try the template fallback
+      if (/circuit breaker is OPEN/.test(errMsg)) {
+        console.warn(`[LessonRetry] Circuit breaker opened during retries — attempting template library fallback`);
+        const hash = computeContentHash(subject || topic, gradeLevel, topic, difficulty);
+        const cached = await storage.findTemplateByHash(hash);
+        if (cached) {
+          console.log(`[LessonRetry] Serving cached template ${cached.id} (${cached.title}) after circuit opened`);
+          await storage.incrementTemplateServed(cached.id);
+          return cached.spec;
+        }
+        // No template — let error propagate
+        throw new Error('OpenRouter is temporarily unavailable and no cached lesson exists for this topic.');
+      }
+
       const isLastAttempt = attempt === maxRetries;
       if (!isLastAttempt) {
-        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        const delay = 3000 * Math.pow(2, attempt - 1);
         console.warn(`[LessonRetry] Attempt ${attempt}/${maxRetries} failed (retrying in ${delay}ms): ${errMsg}`);
         await new Promise(r => setTimeout(r, delay));
       } else {
@@ -596,43 +617,30 @@ export async function generateLessonImages(
     });
   }
 
-  // Cap and generate images
+  // Cap and generate images — isolate failures per image so one bad generation
+  // doesn't prevent the rest from completing
   const cappedPrompts = allImagePrompts.slice(0, MAX_IMAGES_PER_LESSON);
   const imagePromises = cappedPrompts.map(async (imagePrompt) => {
-    const result = await generateImage(
-      imagePrompt.prompt,
-      imagePrompt.description,
-      gradeLevel,
-      { subject: subject || topic }
-    );
+    try {
+      const result = await generateImage(
+        imagePrompt.prompt,
+        imagePrompt.description,
+        gradeLevel,
+        { subject: subject || topic }
+      );
 
-    if (result) {
-      if (result.svgData) {
-        return {
-          id: imagePrompt.id,
-          description: imagePrompt.description,
-          alt: imagePrompt.description,
-          svgData: result.svgData,
-          promptUsed: result.promptUsed,
-        };
-      }
-
-      if (result.base64Data) {
-        try {
-          const imagePath = await saveBase64Image(
-            result.base64Data,
-            `lesson_${topic.replace(/\s+/g, '_')}_${imagePrompt.id}`
-          );
+      if (result) {
+        if (result.svgData) {
           return {
             id: imagePrompt.id,
             description: imagePrompt.description,
             alt: imagePrompt.description,
-            base64Data: result.base64Data,
+            svgData: result.svgData,
             promptUsed: result.promptUsed,
-            path: imagePath,
           };
-        } catch (saveError) {
-          console.error('Error saving image to filesystem:', saveError);
+        }
+
+        if (result.base64Data) {
           return {
             id: imagePrompt.id,
             description: imagePrompt.description,
@@ -642,8 +650,11 @@ export async function generateLessonImages(
           };
         }
       }
+    } catch (imgErr) {
+      console.error(`[LessonImages] Failed to generate image ${imagePrompt.id}:`, imgErr);
     }
 
+    // Fallback placeholder — lesson will render without this image gracefully
     return {
       id: imagePrompt.id,
       description: imagePrompt.description,

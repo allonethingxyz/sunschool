@@ -35,13 +35,33 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedLearner, setSelectedLearner] = useState<LearnerUser | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
 
+  // Safe localStorage helpers — can throw in private browsing or when storage is full
+  const safeGetItem = (key: string): string | null => {
+    try {
+      if (typeof window !== 'undefined') {
+        return window.localStorage.getItem(key);
+      }
+    } catch (e) {
+      console.error(`Failed to read localStorage key "${key}":`, e);
+    }
+    return null;
+  };
+
+  const safeSetItem = (key: string, value: string): void => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, value);
+      }
+    } catch (e) {
+      console.error(`Failed to write localStorage key "${key}":`, e);
+    }
+  };
+
   // Default to the user's actual role, or to stored preference
   const initialMode = (): UserMode => {
-    if (typeof window !== 'undefined') {
-      const storedPreference = window.localStorage.getItem('preferredMode');
-      if (storedPreference === 'LEARNER' || storedPreference === 'GROWN_UP') {
-        return storedPreference as UserMode;
-      }
+    const storedPreference = safeGetItem('preferredMode');
+    if (storedPreference === 'LEARNER' || storedPreference === 'GROWN_UP') {
+      return storedPreference as UserMode;
     }
     if (user?.role === 'LEARNER') {
       return 'LEARNER';
@@ -67,6 +87,21 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const hasDirtyForms = useCallback((): boolean => {
     return dirtyFormsRef.current.size > 0;
+  }, []);
+
+  // Reset mode and selected learner when auth session expires
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setMode('GROWN_UP');
+      setSelectedLearner(null);
+      setIsSwitching(false);
+      dirtyFormsRef.current.clear();
+    };
+
+    window.addEventListener('auth-session-expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('auth-session-expired', handleSessionExpired);
+    };
   }, []);
 
   // Navigation side effect: fires after React commits state updates
@@ -99,7 +134,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!user) return Promise.resolve([]);
 
       try {
-        let response;
+        let response: any;
 
         if (user.role === 'ADMIN') {
           response = await apiRequest('GET', `/api/learners?parentId=${user.id}`);
@@ -134,8 +169,8 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Restore selected learner from localStorage when learners load
   useEffect(() => {
-    if (typeof window !== 'undefined' && availableLearners?.length > 0) {
-      const storedLearnerId = window.localStorage.getItem('selectedLearnerId');
+    if (availableLearners?.length > 0) {
+      const storedLearnerId = safeGetItem('selectedLearnerId');
 
       if (storedLearnerId) {
         const learnerId = parseInt(storedLearnerId, 10);
@@ -148,7 +183,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const firstLearner = availableLearners[0];
           if (firstLearner && typeof firstLearner.id !== 'undefined') {
             setSelectedLearner(firstLearner);
-            window.localStorage.setItem('selectedLearnerId', String(firstLearner.id));
+            safeSetItem('selectedLearnerId', String(firstLearner.id));
           } else {
             console.error('Invalid learner object found:', firstLearner);
           }
@@ -158,7 +193,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const firstLearner = availableLearners[0];
         if (firstLearner && typeof firstLearner.id !== 'undefined') {
           setSelectedLearner(firstLearner);
-          window.localStorage.setItem('selectedLearnerId', String(firstLearner.id));
+          safeSetItem('selectedLearnerId', String(firstLearner.id));
         } else {
           console.error('Invalid learner object found:', firstLearner);
         }
@@ -187,9 +222,9 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSelectedLearner(learner);
 
     // Sync to localStorage as side effect
-    if (typeof window !== 'undefined' && learner.id !== undefined) {
-      window.localStorage.setItem('selectedLearnerId', String(learner.id));
-      window.localStorage.setItem('preferredMode', 'LEARNER');
+    if (learner.id !== undefined) {
+      safeSetItem('selectedLearnerId', String(learner.id));
+      safeSetItem('preferredMode', 'LEARNER');
     }
 
     // Switch to LEARNER mode and schedule navigation via state
@@ -199,16 +234,14 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // localStorage sync: persist mode changes as a side effect
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('preferredMode', mode);
-    }
+    safeSetItem('preferredMode', mode);
   }, [mode]);
 
   // Update mode when user changes
   useEffect(() => {
-    if (user && typeof window !== 'undefined') {
+    if (user) {
       // Don't change the mode if the user has a preference already set
-      const storedPreference = window.localStorage.getItem('preferredMode');
+      const storedPreference = safeGetItem('preferredMode');
       if (!storedPreference) {
         // Default to the actual role
         if (user.role === 'LEARNER') {

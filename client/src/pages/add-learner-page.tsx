@@ -36,8 +36,12 @@ const AddLearnerPage = () => {
 
   const handleSubmit = async () => {
     // Validation
-    if (!newLearner.name) {
+    if (!newLearner.name.trim()) {
       setError('Please enter a name');
+      return;
+    }
+    if (newLearner.name.trim().length < 2) {
+      setError('Name must be at least 2 characters');
       return;
     }
 

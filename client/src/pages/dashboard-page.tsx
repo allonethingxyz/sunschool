@@ -25,23 +25,25 @@ const ChildCard: React.FC<{
   onView: () => void;
 }> = ({ learner, onView }) => {
   // Fetch report data for this child
-  const { data: report, isLoading: reportLoading } = useQuery<ChildReport>({
+  const { data: report, isLoading: reportLoading, error: reportError } = useQuery<ChildReport>({
     queryKey: [`/api/reports`, learner.id, 'progress'],
     queryFn: () =>
       apiRequest('GET', `/api/reports?learnerId=${learner.id}&type=progress`).then(
         (res: any) => res.data ?? res,
       ),
     enabled: !!learner.id,
+    retry: 1,
   });
 
   // Fetch learner profile for grade level
-  const { data: profile, isLoading: profileLoading } = useQuery({
+  const { data: profile, isLoading: profileLoading, error: profileError } = useQuery({
     queryKey: [`/api/learner-profile/${learner.id}`],
     queryFn: () =>
       apiRequest('GET', `/api/learner-profile/${learner.id}`).then(
         (res: any) => res.data ?? res,
       ),
     enabled: !!learner.id,
+    retry: 1,
   });
 
   // Fetch lessons to compute average score when the report doesn't provide one
@@ -52,7 +54,10 @@ const ChildCard: React.FC<{
         (res: any) => res.data ?? res,
       ),
     enabled: !!learner.id,
+    retry: 1,
   });
+
+  const hasChildError = !!(reportError || profileError);
 
   const lessonsCompleted = report?.analytics?.lessonsCompleted ?? 0;
   const achievementsCount = report?.analytics?.achievementsCount ?? 0;
@@ -94,6 +99,12 @@ const ChildCard: React.FC<{
       {/* Stats row */}
       {isLoading ? (
         <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 12 }} />
+      ) : hasChildError ? (
+        <View style={{ paddingVertical: 12, paddingHorizontal: 8 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center' }}>
+            Could not load stats for {learner.name}
+          </Text>
+        </View>
       ) : (
         <View style={styles.childStatsRow}>
           <View style={styles.childStat}>

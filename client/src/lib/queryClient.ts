@@ -3,30 +3,39 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 
 // Create a custom persister since the package exports have changed
+// All AsyncStorage calls are wrapped in try/catch — can throw in private browsing
 export const queryPersister = {
   persistClient: async (client: any) => {
-    await AsyncStorage.setItem(
-      'LEARNER_APP_CACHE',
-      JSON.stringify({
-        timestamp: Date.now(),
-        buster: 'v1',
-        clientState: client
-      })
-    );
+    try {
+      await AsyncStorage.setItem(
+        'LEARNER_APP_CACHE',
+        JSON.stringify({
+          timestamp: Date.now(),
+          buster: 'v1',
+          clientState: client
+        })
+      );
+    } catch (e) {
+      console.error('Failed to persist query client cache:', e);
+    }
   },
   restoreClient: async () => {
-    const cacheString = await AsyncStorage.getItem('LEARNER_APP_CACHE');
-    if (!cacheString) return;
-    
     try {
+      const cacheString = await AsyncStorage.getItem('LEARNER_APP_CACHE');
+      if (!cacheString) return undefined;
       const cache = JSON.parse(cacheString);
       return cache.clientState;
-    } catch {}
-    
-    return undefined;
+    } catch (e) {
+      console.error('Failed to restore query client cache:', e);
+      return undefined;
+    }
   },
   removeClient: async () => {
-    await AsyncStorage.removeItem('LEARNER_APP_CACHE');
+    try {
+      await AsyncStorage.removeItem('LEARNER_APP_CACHE');
+    } catch (e) {
+      console.error('Failed to remove query client cache:', e);
+    }
   }
 };
 
@@ -49,6 +58,7 @@ const API_URL = getApiBaseUrl();
 
 export const axiosInstance = axios.create({
   baseURL: API_URL,
+  timeout: 30000, // 30 second default timeout to prevent hanging requests
   headers: {
     "Content-Type": "application/json",
   },
@@ -86,7 +96,8 @@ axiosInstance.interceptors.response.use(
         // Dispatch event so ModeContext can reset
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('auth-session-expired'));
-          window.location.href = '/auth';
+          const isLearnerMode = localStorage.getItem('preferredMode') === 'LEARNER';
+          window.location.href = isLearnerMode ? '/auth?expired=1' : '/auth';
         }
       }
     }
@@ -125,9 +136,13 @@ export const setAuthToken = async (token: string | null) => {
     // Clear the token from axios
     delete axiosInstance.defaults.headers.common["Authorization"];
 
-    // Remove token and metadata from storage
-    await AsyncStorage.removeItem('AUTH_TOKEN');
-    await AsyncStorage.removeItem('AUTH_TOKEN_DATA');
+    // Remove token and metadata from storage — can throw in private browsing
+    try {
+      await AsyncStorage.removeItem('AUTH_TOKEN');
+      await AsyncStorage.removeItem('AUTH_TOKEN_DATA');
+    } catch (error) {
+      console.error('Error clearing auth token from storage:', error);
+    }
   }
 };
 
@@ -177,11 +192,23 @@ export const getQueryFn = (options: QueryFnOptions = { on401: "throw" }) => {
     const endpoint = queryKey[0] as string;
 
     try {
-      const response = await axiosInstance.get(endpoint);
+      const response = await axiosInstance.get(endpoint, {
+        timeout: 30000, // 30 second timeout to match apiRequest
+      });
       return response.data;
     } catch (error: any) {
       if (error.response?.status === 401 && options.on401 === "returnNull") {
         return null;
+      }
+      if (error.code === 'ECONNABORTED') {
+        throw new Error("Request timed out. Please check your connection and try again.");
+      }
+      // Offline / network-level failures (no response object)
+      if (!error.response && typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error("You appear to be offline. Please check your internet connection.");
+      }
+      if (!error.response) {
+        throw new Error("Unable to reach the server. Please try again shortly.");
       }
       throw new Error(error.response?.data?.error || "An error occurred");
     }
@@ -203,6 +230,10 @@ export const apiRequest = async (
     };
 
     // Start the request with timeout and validation
+    // Lesson creation can take 60-90s due to AI generation; use a longer timeout
+    const isLessonCreate = url.includes('/lessons/create') && method === 'POST';
+    const requestTimeout = isLessonCreate ? 120000 : 30000;
+
     const response = await axiosInstance({
       method,
       url,
@@ -211,7 +242,7 @@ export const apiRequest = async (
       // Force response as JSON to prevent potential response type issues
       responseType: 'json',
       // Add timeout to prevent hanging requests
-      timeout: 30000, // 30 second timeout
+      timeout: requestTimeout,
       // Only accept 2xx status codes for auth endpoints to ensure token presence
       validateStatus: (status) => {
         if (isAuthRequest) {
@@ -224,7 +255,9 @@ export const apiRequest = async (
 
     // Check for 4xx errors that weren't automatically rejected
     if (response.status >= 400 && response.status < 500) {
-      throw new Error(response.data?.error || `Server returned error ${response.status}`);
+      const err: any = new Error(response.data?.error || `Server returned error ${response.status}`);
+      err.status = response.status;
+      throw err;
     }
 
     return response;
@@ -232,7 +265,9 @@ export const apiRequest = async (
     // Specific error handling based on error types
     if (error.response) {
       const errorText = error.response.data?.error || error.response.statusText || "Request failed";
-      throw new Error(`${errorText} (${error.response.status})`);
+      const err: any = new Error(`${errorText} (${error.response.status})`);
+      err.status = error.response.status;
+      throw err;
     } else if (error.request) {
       throw new Error("Network error: No response received from server");
     } else {

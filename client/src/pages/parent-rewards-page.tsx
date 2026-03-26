@@ -6,7 +6,7 @@ import {
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '../lib/queryClient';
 import { useTheme } from '../styles/theme';
-import { Plus, Edit2, Trash2, CheckCircle, XCircle, Gift, Target, Users, ChevronDown } from 'react-feather';
+import { Plus, Edit2, Trash2, CheckCircle, XCircle, Gift, Target, Users, ChevronDown, AlertCircle } from 'react-feather';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -50,12 +50,22 @@ const RewardForm: React.FC<RewardFormProps> = ({ initial, onSave, onCancel, isSa
   const [emoji, setEmoji] = useState(initial?.imageEmoji ?? '🎁');
   const [color, setColor] = useState(initial?.color ?? '#4A90D9');
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
+  const [formError, setFormError] = useState('');
   const theme = useTheme();
 
   const handleSave = () => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setFormError('Please enter a title for this reward.');
+      return;
+    }
+    const costNum = Number(tokenCost);
+    if (!costNum || costNum < 1) {
+      setFormError('Points required must be at least 1.');
+      return;
+    }
+    setFormError('');
     onSave({ title: title.trim(), description: description.trim() || null,
-      tokenCost: Number(tokenCost) || 10, category, imageEmoji: emoji, color, isActive });
+      tokenCost: costNum, category, imageEmoji: emoji, color, isActive });
   };
 
   return (
@@ -63,6 +73,12 @@ const RewardForm: React.FC<RewardFormProps> = ({ initial, onSave, onCancel, isSa
       <Text style={[styles.formTitle, { color: theme.colors.textPrimary }]}>
         {initial?.id ? 'Edit Reward' : 'New Reward'}
       </Text>
+
+      {formError ? (
+        <View style={{ backgroundColor: '#FFEBEE', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+          <Text style={{ color: '#C62828', fontSize: 13 }}>{formError}</Text>
+        </View>
+      ) : null}
 
       {/* Emoji + color selector */}
       <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Icon</Text>

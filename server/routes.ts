@@ -8,7 +8,7 @@ import { synchronizeToExternalDatabase } from "./sync-utils";
 import { InsertDbSyncConfig } from "../shared/schema";
 import { USE_AI } from "./config/flags";
 import { db, pool, withRetry } from "./db";
-import { sql, count, eq, and } from "drizzle-orm";
+import { sql, count, eq, and, like, ne } from "drizzle-orm";
 import crypto from "crypto";
 import rateLimit from 'express-rate-limit';
 
@@ -43,6 +43,9 @@ import { storeQuizAnswers, extractConceptTags } from './services/quiz-tracking-s
 import { bulkUpdateMasteryFromAnswers } from './services/mastery-service';
 import { storeQuestionHashes } from './services/question-deduplication';
 import { validatePromptInput } from './services/prompt-safety';
+import { detectOrphanedImages, detectPartialQuizSubmissions, reconcilePointsBalances } from './services/maintenance-service';
+import { getLessonAnalytics, flagLowQualityTemplates } from './services/lesson-analytics-service';
+import { getAllCircuitBreakerStates } from './services/circuit-breaker';
 
 function hasRole(roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -2048,8 +2051,75 @@ export function registerRoutes(app: Express): Server {
     return res.json({ cleaned, message: `Retired ${cleaned} stale lesson(s)` });
   }));
 
+  // Admin: purge E2E test users (email matching %@test.com, non-ADMIN)
+  app.delete("/api/admin/cleanup-test-users", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const testUsers = await db.select().from(users).where(
+      and(
+        like(users.email, '%@test.com'),
+        ne(users.role, 'ADMIN')
+      )
+    );
+    for (const u of testUsers) {
+      await db.delete(users).where(eq(users.id, u.id));
+    }
+    return res.json({ deleted: testUsers.length, users: testUsers.map(u => ({ id: u.id, username: u.username, email: u.email })) });
+  }));
+
+  // ── Circuit breaker status (admin-only) ──────────────────────────────────
+  app.get("/api/admin/circuit-breakers", hasRole(["ADMIN"]), (_req: Request, res: Response) => {
+    res.json(getAllCircuitBreakerStates());
+  });
+
+  // ── Lesson analytics endpoints (admin-only) ────────────────────────────────
+
+  app.get("/api/admin/lesson-analytics", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const analytics = await getLessonAnalytics();
+    return res.json(analytics);
+  }));
+
+  app.get("/api/admin/low-quality-templates", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const flagged = await flagLowQualityTemplates();
+    return res.json({ count: flagged.length, templates: flagged });
+  }));
+
+  // ── Maintenance endpoints (admin-only) ────────────────────────────────────
+
+  app.get("/api/admin/maintenance/orphaned-images", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const result = await detectOrphanedImages(false);
+    res.json(result);
+  }));
+
+  app.post("/api/admin/maintenance/orphaned-images/fix", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const result = await detectOrphanedImages(true);
+    res.json(result);
+  }));
+
+  app.get("/api/admin/maintenance/partial-quizzes", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const result = await detectPartialQuizSubmissions(false);
+    res.json(result);
+  }));
+
+  app.get("/api/admin/maintenance/points-reconciliation", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const result = await reconcilePointsBalances(false);
+    res.json(result);
+  }));
+
+  app.post("/api/admin/maintenance/points-reconciliation/fix", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const result = await reconcilePointsBalances(true);
+    res.json(result);
+  }));
+
+  app.get("/api/admin/maintenance/all", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const [orphanedImages, partialQuizzes, pointsReconciliation] = await Promise.all([
+      detectOrphanedImages(false),
+      detectPartialQuizSubmissions(false),
+      reconcilePointsBalances(false),
+    ]);
+    res.json({ orphanedImages, partialQuizzes, pointsReconciliation });
+  }));
+
   // Error handling middleware
-  app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     console.error(err);
     res.status(500).json({ error: "An internal server error occurred" });
   });

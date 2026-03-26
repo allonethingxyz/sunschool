@@ -56,11 +56,13 @@ interface FunLoaderProps {
 
 const PROGRESS_BAR_DURATION = 60000; // 60 seconds estimated fill time
 const TIMEOUT_THRESHOLD = 20000; // 20 seconds before showing timeout message
+const HARD_TIMEOUT = 90000; // 90 seconds before showing hard timeout with cancel prompt
 
 const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages, subjectLabel, onCancel }) => {
   const [factIndex, setFactIndex] = useState(Math.floor(Math.random() * FUN_FACTS.length));
   const [progressIndex, setProgressIndex] = useState(0);
   const [showTimeout, setShowTimeout] = useState(false);
+  const [showHardTimeout, setShowHardTimeout] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
@@ -123,6 +125,14 @@ const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages, subjec
         useNativeDriver: false,
       }).start();
     }, TIMEOUT_THRESHOLD);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Hard timeout after 90 seconds — prompt user to cancel and retry
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowHardTimeout(true);
+    }, HARD_TIMEOUT);
     return () => clearTimeout(timer);
   }, []);
 
@@ -222,12 +232,30 @@ const FunLoader: React.FC<FunLoaderProps> = ({ message, progressMessages, subjec
       )}
 
       {/* Encouraging timeout message */}
-      {showTimeout && (
+      {showTimeout && !showHardTimeout && (
         <Animated.View style={[styles.timeoutContainer, { opacity: timeoutFadeAnim }]}>
           <Text style={styles.timeoutText}>
             This is taking a bit longer than usual, but we're still working on it!
           </Text>
         </Animated.View>
+      )}
+
+      {/* Hard timeout — suggest canceling */}
+      {showHardTimeout && (
+        <View style={styles.hardTimeoutContainer}>
+          <Text style={styles.hardTimeoutText}>
+            This is taking much longer than expected. You can cancel and try again.
+          </Text>
+          {onCancel && (
+            <TouchableOpacity
+              onPress={onCancel}
+              style={styles.hardTimeoutButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.hardTimeoutButtonText}>Cancel &amp; Try Again</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
     </View>
   );
@@ -313,6 +341,33 @@ const styles = StyleSheet.create({
     color: '#949DA2',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  hardTimeoutContainer: {
+    marginTop: 24,
+    maxWidth: 300,
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    padding: 16,
+  },
+  hardTimeoutText: {
+    fontSize: 15,
+    color: '#E65100',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 12,
+    fontWeight: '600',
+  },
+  hardTimeoutButton: {
+    backgroundColor: '#E65100',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+  },
+  hardTimeoutButtonText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });
 

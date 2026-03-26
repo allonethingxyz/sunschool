@@ -22,12 +22,15 @@ const AuthPage = () => {
   const { user, loginMutation, registerMutation } = useAuth();
   const { toast } = useToast();
   const [isLogin, setIsLogin] = useState(true);
-  
+
+  // Kid-friendly session expiry screen state
+  const [showLoginForm, setShowLoginForm] = useState(false);
+
   // Login form state
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginDisclaimerAccepted, setLoginDisclaimerAccepted] = useState(false);
-  
+
   // Registration form state
   const [regUsername, setRegUsername] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -36,7 +39,23 @@ const AuthPage = () => {
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [regRole, setRegRole] = useState('PARENT'); // Default role
   const [regDisclaimerAccepted, setRegDisclaimerAccepted] = useState(false);
-  
+
+  // Forgot / reset password state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+
+  // Check for reset token in URL
+  const urlSearchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const resetTokenFromUrl = urlSearchParams?.get('reset') || '';
+
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState('');
+
   // Redirect if already logged in
   const [, setLocation] = useLocation();
   useEffect(() => {
@@ -131,7 +150,89 @@ const AuthPage = () => {
       role: regRole as any,
     });
   };
-  
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail) {
+      toast({ title: 'Error', description: 'Please enter your email address', variant: 'destructive' });
+      return;
+    }
+    setForgotSubmitting(true);
+    try {
+      await fetch('/api/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      setForgotSuccess(true);
+    } catch {
+      toast({ title: 'Error', description: 'Something went wrong. Please try again.', variant: 'destructive' });
+    } finally {
+      setForgotSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetNewPassword || !resetConfirmPassword) {
+      toast({ title: 'Error', description: 'Please fill in all fields', variant: 'destructive' });
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      toast({ title: 'Error', description: 'Passwords do not match', variant: 'destructive' });
+      return;
+    }
+    setResetSubmitting(true);
+    setResetError('');
+    try {
+      const res = await fetch('/api/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetTokenFromUrl, newPassword: resetNewPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResetError(data.error || 'Failed to reset password.');
+      } else {
+        setResetSuccess(true);
+      }
+    } catch {
+      setResetError('Something went wrong. Please try again.');
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
+
+  // Check if this is a learner session expiry
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const isExpiredLearner = !showLoginForm && (
+    localStorage.getItem('preferredMode') === 'LEARNER' ||
+    urlParams?.get('expired') === '1'
+  );
+
+  if (isExpiredLearner) {
+    return (
+      <View style={styles.container}>
+        <View style={expiryStyles.wrapper}>
+          <Text style={expiryStyles.emoji}>🔑</Text>
+          <Text style={expiryStyles.heading}>Time to get a grown-up!</Text>
+          <Text style={expiryStyles.message}>
+            Your session ended. Ask a parent to log back in.
+          </Text>
+          <TouchableOpacity
+            style={expiryStyles.button}
+            onPress={() => {
+              localStorage.removeItem('preferredMode');
+              setShowLoginForm(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="I'm the grown-up"
+          >
+            <Text style={expiryStyles.buttonText}>I'm the grown-up</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -234,8 +335,16 @@ const AuthPage = () => {
                 </TouchableOpacity>
               </View>
 
+              {loginMutation.isError && (
+                <View style={styles.errorBanner} accessibilityRole="alert">
+                  <Text style={styles.errorBannerText}>
+                    {loginMutation.error?.message || 'Login failed. Please try again.'}
+                  </Text>
+                </View>
+              )}
+
               <TouchableOpacity
-                style={styles.button}
+                style={[styles.button, loginMutation.isPending ? styles.buttonDisabled : null]}
                 onPress={handleLogin}
                 disabled={loginMutation.isPending}
                 accessibilityRole="button"
@@ -357,8 +466,16 @@ const AuthPage = () => {
                 </TouchableOpacity>
               </View>
 
+              {registerMutation.isError && (
+                <View style={styles.errorBanner} accessibilityRole="alert">
+                  <Text style={styles.errorBannerText}>
+                    {registerMutation.error?.message || 'Registration failed. Please try again.'}
+                  </Text>
+                </View>
+              )}
+
               <TouchableOpacity
-                style={styles.button}
+                style={[styles.button, registerMutation.isPending ? styles.buttonDisabled : null]}
                 onPress={handleRegister}
                 disabled={registerMutation.isPending}
                 accessibilityRole="button"
@@ -557,8 +674,23 @@ const styles = StyleSheet.create({
     ...commonStyles.button,
     marginTop: 8,
   },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
   buttonText: {
     ...commonStyles.buttonText,
+  },
+  errorBanner: {
+    backgroundColor: '#FDECEA',
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#D32F2F',
+  },
+  errorBannerText: {
+    color: '#D32F2F',
+    ...typography.body2,
   },
   featuresContainer: {
     backgroundColor: colors.surfaceColor,
@@ -594,6 +726,47 @@ const styles = StyleSheet.create({
   },
   featureDescription: {
     ...typography.body2,
+  },
+});
+
+const expiryStyles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  emoji: {
+    fontSize: 80,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  heading: {
+    fontSize: 32,
+    fontWeight: '700' as const,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  message: {
+    fontSize: 20,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 28,
+  },
+  button: {
+    backgroundColor: colors.primary,
+    paddingVertical: 18,
+    paddingHorizontal: 40,
+    borderRadius: 16,
+    minWidth: 260,
+    alignItems: 'center' as const,
+  },
+  buttonText: {
+    color: colors.onPrimary,
+    fontSize: 20,
+    fontWeight: '700' as const,
   },
 });
 

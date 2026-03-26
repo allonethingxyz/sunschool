@@ -689,8 +689,8 @@ const styles = StyleSheet.create({
     borderLeftColor: '#D32F2F',
   },
   errorBannerText: {
-    color: '#D32F2F',
     ...typography.body2,
+    color: '#D32F2F',
   },
   featuresContainer: {
     backgroundColor: colors.surfaceColor,

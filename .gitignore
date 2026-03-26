@@ -1,23 +1,27 @@
-.DS_Store
-node_modules
+# Stoneforge internals
+.stoneforge/stoneforge.db
+.stoneforge/stoneforge.db-shm
+.stoneforge/stoneforge.db-wal
+.stoneforge/.worktrees/
 
-# Claude container secrets
-.env.claude
+# Sibling repos are independent git repos
+sunschool/*
+!sunschool/.env.test.example
+!sunschool/tests/
+sunschool/tests/*
+!sunschool/tests/e2e/
+sunschool-deployed-private/
+sunschool-docs/
+docs/
+
+# Dependencies
+node_modules/
+
+# Environment files
 .env
-
-# Bridge IPC (runtime files)
-.claude/host-request/
-.claude/host-result/
-
-# Admin credentials
-admin-credentials.txt
-/.stoneforge
-
-# Security scan results
-semgrep_results.json
-
-# Backup files
-*.backup
+.env.local
+.env.production
+.env.claude
 
 # Build output
 dist/
@@ -26,9 +30,29 @@ client/dist/
 # Source maps
 *.map
 
-# Environment overrides
-.env.local
-.env.production
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Security scan results
+semgrep_results.json
+
+# Backup files
+*.backup
+
+# Admin credentials
+admin-credentials.txt
+
+# Bridge IPC (runtime files)
+.claude/host-request/
+.claude/host-result/
 
 # E2E test artifacts (screenshots, reports, traces)
 tests/e2e/screenshots/

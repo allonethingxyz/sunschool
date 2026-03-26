@@ -439,6 +439,16 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: colors.onPrimary,
   },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    ...typography.button,
+    color: colors.onPrimary,
+  },
   controlsContainer: {
     marginBottom: 24,
   },

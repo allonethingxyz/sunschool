@@ -1,0 +1,100 @@
+name: Release Tag
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.stoneforge/**'
+
+permissions:
+  contents: write
+
+jobs:
+  tag-release:
+    name: Auto-tag release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: latest
+        run: |
+          # Get the latest semver tag, or default to v0.0.0
+          LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            LATEST="v0.0.0"
+          fi
+          echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest tag: $LATEST"
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          LATEST="${{ steps.latest.outputs.tag }}"
+          # Strip 'v' prefix for arithmetic
+          VERSION="${LATEST#v}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+          # Analyze commits since last tag for conventional commit prefixes
+          if [ "$LATEST" = "v0.0.0" ]; then
+            COMMITS=$(git log --oneline --format="%s")
+          else
+            COMMITS=$(git log "${LATEST}..HEAD" --oneline --format="%s")
+          fi
+
+          # Determine bump type from commit messages
+          if echo "$COMMITS" | grep -qiE '^(feat|feature)(\(.+\))?!:|^BREAKING CHANGE'; then
+            # Breaking change → major bump
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+            BUMP="major"
+          elif echo "$COMMITS" | grep -qiE '^feat(\(.+\))?:'; then
+            # New feature → minor bump
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            BUMP="minor"
+          else
+            # Everything else (fix, chore, docs, etc.) → patch bump
+            PATCH=$((PATCH + 1))
+            BUMP="patch"
+          fi
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "Bump: $BUMP → $NEW_TAG"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          LATEST="${{ steps.latest.outputs.tag }}"
+          if [ "$LATEST" = "v0.0.0" ]; then
+            NOTES=$(git log --oneline --format="- %s" | head -20)
+          else
+            NOTES=$(git log "${LATEST}..HEAD" --oneline --format="- %s")
+          fi
+          # Write to file to avoid escaping issues
+          echo "$NOTES" > /tmp/release-notes.md
+
+      - name: Create tag and release
+        run: |
+          NEW_TAG="${{ steps.bump.outputs.new_tag }}"
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
+
+          gh release create "$NEW_TAG" \
+            --title "$NEW_TAG" \
+            --notes-file /tmp/release-notes.md \
+            --latest
+        env:
+          GH_TOKEN: ${{ github.token }}

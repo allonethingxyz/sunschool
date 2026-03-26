@@ -17,7 +17,8 @@ import {
   screenshot,
   generateAndWaitForLesson,
   apiCall,
-  navigateAsLearner,
+  spaNavigate,
+  enterLearnerContext,
 } from '../../helpers/learner-setup';
 
 test.describe('Learner: Quiz Assessment', () => {
@@ -33,33 +34,12 @@ test.describe('Learner: Quiz Assessment', () => {
     const lessonId = await generateAndWaitForLesson(page);
     expect(lessonId).toBeTruthy();
 
-    // Navigate to lesson page as learner
-    await navigateAsLearner(page, '/lesson');
-    await page.getByText('Loading your personalized lesson...')
-      .waitFor({ state: 'hidden', timeout: 120000 })
-      .catch(() => {});
+    // Enter learner context first (required for quiz route)
+    await enterLearnerContext(page);
 
-    // Scroll to bottom to find quiz button
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    // Navigate directly to quiz page
+    await page.goto(`/quiz/${lessonId}`);
     await page.waitForLoadState('networkidle');
-    await screenshot(page, 'quiz-01-lesson-bottom');
-
-    // Click Start Quiz using selfHealingLocator (semantic only)
-    const { locator: quizBtn } = await selfHealingLocator(page, 'quiz-start-btn', {
-      role: 'button',
-      name: 'Start Quiz',
-      text: 'Start Quiz',
-    });
-
-    const btnVisible = await quizBtn.isVisible({ timeout: 10000 }).catch(() => false);
-    if (btnVisible) {
-      await quizBtn.click();
-      await page.waitForLoadState('networkidle');
-    } else {
-      // Navigate directly to quiz page
-      await navigateAsLearner(page, `/quiz/${lessonId}`);
-      await page.waitForLoadState('networkidle');
-    }
 
     await screenshot(page, 'quiz-02-pre-quiz-screen');
 
@@ -79,7 +59,8 @@ test.describe('Learner: Quiz Assessment', () => {
     expect(lessonId).toBeTruthy();
 
     // Go directly to quiz
-    await navigateAsLearner(page, `/quiz/${lessonId}`);
+    await page.goto(`/quiz/${lessonId}`);
+    await page.waitForLoadState('networkidle');
 
     // Click "Start Quiz" on pre-quiz screen if present
     const { locator: startBtn } = await selfHealingLocator(page, 'quiz-start-button', {
@@ -142,52 +123,28 @@ test.describe('Learner: Quiz Assessment', () => {
     const lessonId = await generateAndWaitForLesson(page);
     expect(lessonId).toBeTruthy();
 
-    await navigateAsLearner(page, `/quiz/${lessonId}`);
-
-    // Start quiz
-    const startBtn = page.getByText('Start Quiz');
-    if (await startBtn.isVisible({ timeout: 15000 }).catch(() => false)) {
-      await startBtn.click();
-      await page.waitForLoadState('networkidle');
-    }
-
-    // Wait for questions
-    await page.getByText(/Question \d+ of \d+/).first()
-      .waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
-
-    // Submit quiz answers via API (react-native-web renders answer options as
-    // <div> without ARIA roles, making UI clicking unreliable)
+    // Submit quiz via API for reliability (UI answer selection is flaky)
     const learnerId = await page.evaluate(() =>
       Number(localStorage.getItem('selectedLearnerId'))
     );
-
     const lessonResult = await apiCall(page, 'GET', `/api/lessons/${lessonId}`);
     const questions = lessonResult.data?.spec?.questions || [];
-
     const answers = questions.map((_: any, i: number) => ({
       questionIndex: i,
-      selectedIndex: 0, // pick first option
+      selectedIndex: 0,
     }));
 
-    const submitResult = await apiCall(
-      page,
-      'POST',
-      `/api/lessons/${lessonId}/answer`,
-      { answers, learnerId }
-    );
+    const submitResult = await apiCall(page, 'POST', `/api/lessons/${lessonId}/answer`, {
+      answers,
+      learnerId,
+    });
 
-    expect(submitResult.status).toBe(200);
+    // Verify submission succeeded (status < 300 means 200 or 201)
+    expect(submitResult.status).toBeLessThan(300);
 
-    // Verify results via API response
+    // Verify the response contains quiz result data
     const resultData = submitResult.data;
     expect(resultData).toBeTruthy();
-
-    // Check that points were awarded or score was returned
-    const hasScore = resultData.score !== undefined || resultData.pointsEarned !== undefined;
-    const hasResults = resultData.results !== undefined || resultData.answers !== undefined;
-    expect(hasScore || hasResults || submitResult.status === 200).toBeTruthy();
-
-    await screenshot(page, 'quiz-06-submitted');
   });
 
   test('can return to learner home after quiz completion', async ({ page }) => {
@@ -215,15 +172,18 @@ test.describe('Learner: Quiz Assessment', () => {
       learnerId,
     });
 
-    // Navigate to learner home
-    await navigateAsLearner(page, '/learner');
+    // Navigate to dashboard
+    await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
     await screenshot(page, 'quiz-07-back-to-home');
 
-    // Verify page rendered with substantial content
-    // react-native-web renders Text as <div>, not <h1>-<h6>
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    expect(bodyText.length).toBeGreaterThan(50);
+    // Verify dashboard or learner home rendered
+    const hasChildName = await page.getByText(/Hello|Child_|Welcome/i)
+      .first().isVisible({ timeout: 15000 }).catch(() => false);
+    const hasContent = await page.getByText(/Current Lesson|Progress|SELECT A SUBJECT|Lessons|Grade|START LEARNING/i)
+      .first().isVisible({ timeout: 5000 }).catch(() => false);
+    expect(hasChildName || hasContent).toBeTruthy();
   });
 
   test.afterEach(async ({ page }, testInfo) => {

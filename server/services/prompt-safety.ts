@@ -6,11 +6,31 @@
  * 2. Pattern detection — known injection phrase matching
  * 3. Prompt hardening — delimiter-wrapped user input in prompts
  *
- * Note: hai-guardrails was removed because its CJS bundle uses
- * import.meta which crashes Node 22 in CJS mode on Railway.
- * The regex-based detection covers the same ground without the
- * ESM compatibility issue.
+ * hai-guardrails is kept as an optional enhancement but is not required.
+ * Its CJS bundle uses import.meta which can crash Node 22 in CJS mode
+ * (e.g. on Railway). The regex-based detection below covers the same
+ * ground without the ESM compatibility issue.
  */
+
+// --- Optional hai-guardrails integration ---
+let haiGuard: ((messages: any[]) => Promise<any[]>) | null = null;
+
+try {
+  // Dynamic import so the module is optional — if it fails to load
+  // (CJS/ESM issues on Node 22, missing dep, etc.) we fall back to
+  // regex-only detection which provides equivalent coverage.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const hai = require('@presidio-dev/hai-guardrails');
+  if (hai && hai.injectionGuard) {
+    haiGuard = hai.injectionGuard(
+      { roles: ['user'] },
+      { mode: 'heuristic', threshold: 0.7, failOnError: false }
+    );
+    console.log('[PromptSafety] hai-guardrails loaded successfully');
+  }
+} catch {
+  console.log('[PromptSafety] hai-guardrails not available — using regex-only detection');
+}
 
 // --- Input Validation ---
 
@@ -90,6 +110,37 @@ export function validateTopicInput(input: string): SafetyResult {
   return { safe: true, sanitized: trimmed };
 }
 
+// --- Optional Guardrails Engine ---
+
+/**
+ * Run hai-guardrails injection detection on a string (if available).
+ * Returns { safe: false } if injection is detected.
+ * Falls back to pass-through if hai-guardrails is not loaded.
+ */
+export async function checkInjection(input: string): Promise<SafetyResult> {
+  if (!haiGuard) {
+    // hai-guardrails not available — regex patterns above are the baseline defense
+    return { safe: true, sanitized: input };
+  }
+
+  try {
+    const messages = [{ role: 'user', content: input }];
+    const results = await haiGuard(messages);
+
+    const failed = results.find((r: any) => !r.passed);
+    if (failed) {
+      console.warn(`[PromptSafety] Injection detected by guardrails: "${input.substring(0, 50)}..." reason: ${failed.reason}`);
+      return { safe: false, reason: failed.reason || 'Injection detected', sanitized: '' };
+    }
+
+    return { safe: true, sanitized: input };
+  } catch (err) {
+    // Fail open — don't block legitimate requests if guardrails crash
+    console.error('[PromptSafety] Guardrails error (failing open):', err);
+    return { safe: true, sanitized: input };
+  }
+}
+
 // --- Prompt Hardening ---
 
 /**
@@ -102,8 +153,21 @@ export function delimitUserInput(input: string): string {
 
 /**
  * Full validation pipeline: regex whitelist + injection pattern detection.
+ * If hai-guardrails is available, it runs as an additional layer.
  * Use this for all user-provided text that flows into LLM prompts.
  */
 export async function validatePromptInput(input: string, fieldName: string = 'input'): Promise<SafetyResult> {
-  return validateTopicInput(input);
+  // Step 1: Basic validation (regex patterns — always active)
+  const basicResult = validateTopicInput(input);
+  if (!basicResult.safe) {
+    return basicResult;
+  }
+
+  // Step 2: Optional guardrails injection detection
+  const guardResult = await checkInjection(basicResult.sanitized);
+  if (!guardResult.safe) {
+    return guardResult;
+  }
+
+  return { safe: true, sanitized: basicResult.sanitized };
 }

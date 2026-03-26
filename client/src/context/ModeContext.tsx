@@ -134,7 +134,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!user) return Promise.resolve([]);
 
       try {
-        let response;
+        let response: any;
 
         if (user.role === 'ADMIN') {
           response = await apiRequest('GET', `/api/learners?parentId=${user.id}`);

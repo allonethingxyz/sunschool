@@ -1,0 +1,103 @@
+name: Sync OSS to Deployed
+
+# Manual trigger only — run when you want to push OSS changes to the deployed repo
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (create branch but skip PR creation)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  sync:
+    name: Create sync PR in deployed repo
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout OSS repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get current version
+        id: version
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          DATE=$(date +%Y%m%d)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "branch=sync/oss-${DATE}-${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Clone deployed repo
+        run: |
+          git clone --depth=1 "${{ secrets.DEPLOYED_REPO_URL }}" deployed
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOYED_REPO_TOKEN }}
+
+      - name: Configure git
+        run: |
+          cd deployed
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create sync branch
+        run: |
+          cd deployed
+          git checkout -b "${{ steps.version.outputs.branch }}"
+
+      - name: Sync files from OSS
+        run: |
+          # Sync all source code, preserving deployed-only config
+          # Exclude: .env files, Railway config, deployment secrets
+          rsync -av --delete \
+            --exclude='.env*' \
+            --exclude='.github/workflows/sync-to-deployed.yml' \
+            --exclude='railway.json' \
+            --exclude='railway.toml' \
+            --exclude='Procfile' \
+            --exclude='.stoneforge/' \
+            --exclude='.git/' \
+            --exclude='node_modules/' \
+            ./ deployed/
+
+      - name: Commit and push
+        run: |
+          cd deployed
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to sync"
+            echo "HAS_CHANGES=false" >> "$GITHUB_ENV"
+          else
+            git commit -m "sync: merge OSS main (${{ steps.version.outputs.sha }})
+
+          Source: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+          Triggered by: ${{ github.actor }}"
+            git push origin "${{ steps.version.outputs.branch }}"
+            echo "HAS_CHANGES=true" >> "$GITHUB_ENV"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOYED_REPO_TOKEN }}
+
+      - name: Create PR in deployed repo
+        if: env.HAS_CHANGES == 'true' && inputs.dry_run != true
+        run: |
+          cd deployed
+          gh pr create \
+            --title "sync: OSS main → deployed (${{ steps.version.outputs.sha }})" \
+            --body "## OSS Sync
+
+          Merging latest changes from the open-source repo.
+
+          **Source commit:** [\`${{ steps.version.outputs.sha }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          **Triggered by:** @${{ github.actor }}
+
+          ### Review checklist
+          - [ ] No secrets or deployment config overwritten
+          - [ ] Railway-specific config preserved
+          - [ ] Environment variables unchanged
+          " \
+            --base main
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOYED_REPO_TOKEN }}

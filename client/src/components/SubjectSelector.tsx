@@ -119,7 +119,8 @@ const SubjectSelector: React.FC<SubjectSelectorProps> = ({ onSelectSubject }) =>
   if (profileError) {
     console.warn('SubjectSelector: failed to load learner profile, showing default subjects');
   }
-  
+
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Choose a subject to learn</Text>

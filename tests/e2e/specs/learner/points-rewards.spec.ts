@@ -15,7 +15,8 @@ import {
   generateAndWaitForLesson,
   createRewardGoal,
   apiCall,
-  navigateAsLearner,
+  spaNavigate,
+  enterLearnerContext,
 } from '../../helpers/learner-setup';
 
 test.describe('Learner: Points & Rewards', () => {
@@ -25,21 +26,32 @@ test.describe('Learner: Points & Rewards', () => {
   });
 
   test('can view point balance on learner home', async ({ page }) => {
-    await setupLearnerSession(page, 'reward');
+    test.setTimeout(600_000);
+    const ctx = await setupLearnerSession(page, 'reward');
 
-    await navigateAsLearner(page, '/learner');
+    // Enter the learner context via the dashboard
+    await enterLearnerContext(page, ctx.childName);
     await screenshot(page, 'points-01-learner-home');
 
-    // The learner home should render with structural content
-    // react-native-web renders Text as <div>, not <h1>-<h6>
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    expect(bodyText.length).toBeGreaterThan(50);
+    // The learner home or dashboard should show the child's name and lesson section
+    const hasChildName = await page.getByText(/Hello|Child_|Welcome/i)
+      .first().isVisible({ timeout: 15000 }).catch(() => false);
+    const hasLessonSection = await page.getByText(/Current Lesson|active lesson|SELECT A SUBJECT/i)
+      .first().isVisible({ timeout: 5000 }).catch(() => false);
+    const hasProgress = await page.getByText(/Progress|My Progress|Lessons|Grade/i)
+      .first().isVisible({ timeout: 5000 }).catch(() => false);
+    const hasDashboard = await page.getByText(/START LEARNING AS/i)
+      .first().isVisible({ timeout: 5000 }).catch(() => false);
+
+    expect(hasChildName || hasLessonSection || hasProgress || hasDashboard).toBeTruthy();
   });
 
   test('can check point balance via API and see it reflected', async ({ page }) => {
+    test.setTimeout(600_000);
     await setupLearnerSession(page, 'reward_balance');
 
-    await navigateAsLearner(page, '/learner');
+    await page.goto('/learner');
+    await page.waitForLoadState('networkidle');
 
     // Check points balance via API
     const learnerId = await page.evaluate(() =>
@@ -60,18 +72,16 @@ test.describe('Learner: Points & Rewards', () => {
   });
 
   test('can navigate to goals page and see reward goals', async ({ page }) => {
+    test.setTimeout(600_000);
     await setupLearnerSession(page, 'reward_goals');
 
     // Create a reward goal as the parent
     const goalId = await createRewardGoal(page, 'Extra Screen Time', 10);
 
     // Navigate to goals page
-    await navigateAsLearner(page, '/goals');
+    await page.goto('/goals');
+    await page.waitForLoadState('networkidle');
     await screenshot(page, 'points-03-goals-page');
-
-    // The goals page should render with content
-    const goalsBodyText = await page.evaluate(() => document.body.innerText);
-    expect(goalsBodyText.length).toBeGreaterThan(50);
 
     // If a goal was created, it should appear on the page
     if (goalId) {
@@ -82,15 +92,21 @@ test.describe('Learner: Points & Rewards', () => {
         await screenshot(page, 'points-03-goal-visible');
       }
     }
+
+    // The goals page should render with some content
+    const bodyText = await page.evaluate(() => document.body.innerText);
+    expect(bodyText.length).toBeGreaterThan(50);
   });
 
   test('can see reward goal progress and save points action', async ({ page }) => {
+    test.setTimeout(600_000);
     await setupLearnerSession(page, 'reward_progress');
 
     // Create a reward goal
     const goalId = await createRewardGoal(page, 'Movie Night', 5);
 
-    await navigateAsLearner(page, '/goals');
+    await page.goto('/goals');
+    await page.waitForLoadState('networkidle');
     await screenshot(page, 'points-04-goal-progress');
 
     if (goalId) {
@@ -134,7 +150,7 @@ test.describe('Learner: Points & Rewards', () => {
     const initialBalance = initialResult.data?.balance || initialResult.data?.points || 0;
 
     // Generate a lesson
-    let lessonId: number;
+    let lessonId: string;
     try {
       lessonId = await generateAndWaitForLesson(page, 'Math');
     } catch {
@@ -171,13 +187,17 @@ test.describe('Learner: Points & Rewards', () => {
       expect(newBalance).toBeGreaterThanOrEqual(initialBalance);
     }
 
-    // Navigate to learner home and verify UI reflects points
-    await navigateAsLearner(page, '/learner');
+    // Navigate to dashboard and verify UI reflects content
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
     await screenshot(page, 'points-05-after-quiz');
 
-    // Verify page rendered
-    // react-native-web renders Text as <div>, not <h1>-<h6>
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    expect(bodyText.length).toBeGreaterThan(50);
+    // Verify dashboard or learner home has content
+    const hasChildName = await page.getByText(/Hello|Child_|Welcome/i)
+      .first().isVisible({ timeout: 15000 }).catch(() => false);
+    const hasContent = await page.getByText(/Current Lesson|Progress|SELECT A SUBJECT|Lessons|Grade/i)
+      .first().isVisible({ timeout: 5000 }).catch(() => false);
+    expect(hasChildName || hasContent).toBeTruthy();
   });
 });

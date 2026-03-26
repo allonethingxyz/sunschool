@@ -1093,42 +1093,28 @@ export function registerRoutes(app: Express): Server {
         }
       }
 
-      // Background image generation — retry once on failure
+      // Background image generation
       const lessonId = newLesson.id;
       const savedSpec = spec;
       backgroundTask(`images-${lessonId}`, async () => {
-        let lastErr: Error | undefined;
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            const { images: generatedImages, diagrams } = await generateLessonImages(
-              savedSpec, topic, gradeLevel, finalSubject
-            );
-            if (generatedImages?.length) {
-              const imgPaths = generatedImages
-                .filter((img: any) => img.path)
-                .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
-              // Merge generated images into the original spec images by ID,
-              // preserving metadata for images that weren't generated (over the cap)
-              const generatedById = new Map(generatedImages.map((img: any) => [img.id, img]));
-              const mergedImages = (savedSpec.images || []).map((origImg: any) => {
-                const generated = generatedById.get(origImg.id);
-                return generated ? { ...origImg, ...generated } : origImg;
-              });
-              const mergedSpec = { ...savedSpec, images: mergedImages, diagrams: diagrams || [] };
-              await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
-              console.log(`[BG] Images generated for lesson ${lessonId} (${generatedImages.length} generated, ${mergedImages.length} total)`);
-            }
-            return; // success — exit retry loop
-          } catch (err) {
-            lastErr = err instanceof Error ? err : new Error(String(err));
-            if (attempt < 2) {
-              console.warn(`[BG] Image generation attempt ${attempt} failed for lesson ${lessonId}, retrying in 5s: ${lastErr.message}`);
-              await new Promise(r => setTimeout(r, 5000));
-            }
-          }
+        const { images: generatedImages, diagrams } = await generateLessonImages(
+          savedSpec, topic, gradeLevel, finalSubject
+        );
+        if (generatedImages?.length) {
+          const imgPaths = generatedImages
+            .filter((img: any) => img.path)
+            .map((img: any) => ({ path: img.path, alt: img.alt || img.description, description: img.description }));
+          // Merge generated images into the original spec images by ID,
+          // preserving metadata for images that weren't generated (over the cap)
+          const generatedById = new Map(generatedImages.map((img: any) => [img.id, img]));
+          const mergedImages = (savedSpec.images || []).map((origImg: any) => {
+            const generated = generatedById.get(origImg.id);
+            return generated ? { ...origImg, ...generated } : origImg;
+          });
+          const mergedSpec = { ...savedSpec, images: mergedImages, diagrams: diagrams || [] };
+          await storage.updateLessonImages(lessonId, mergedSpec, imgPaths);
+          console.log(`[BG] Images generated for lesson ${lessonId} (${generatedImages.length} generated, ${mergedImages.length} total)`);
         }
-        // Both attempts failed — lesson will display without images (graceful degradation)
-        console.error(`[BG] Image generation failed for lesson ${lessonId} after 2 attempts: ${lastErr?.message}`);
       });
 
       return res.json(newLesson);

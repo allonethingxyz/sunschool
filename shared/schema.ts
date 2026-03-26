@@ -392,6 +392,26 @@ export const feedbackSubmissions = pgTable("feedback_submissions", {
 export type FeedbackSubmission = typeof feedbackSubmissions.$inferSelect;
 export type InsertFeedbackSubmission = typeof feedbackSubmissions.$inferInsert;
 
+// Lesson Validation Log table — tracks pass/fail results from lesson spec validation
+export const lessonValidationLog = pgTable("lesson_validation_log", {
+  id: serial("id").primaryKey(),
+  subject: text("subject"),
+  topic: text("topic"),
+  gradeLevel: integer("grade_level"),
+  model: text("model"),
+  passed: boolean("passed").notNull(),
+  rejectionReason: text("rejection_reason"),
+  specSnapshot: json("spec_snapshot"), // store the failed spec for analysis
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_validation_log_created").on(table.createdAt),
+  index("idx_validation_log_passed").on(table.passed),
+  index("idx_validation_log_subject").on(table.subject),
+]);
+
+export type LessonValidationLog = typeof lessonValidationLog.$inferSelect;
+export type InsertLessonValidationLog = typeof lessonValidationLog.$inferInsert;
+
 /** Points ledger source types including new ones */
 export type PointsSourceType =
   | 'QUIZ_CORRECT'

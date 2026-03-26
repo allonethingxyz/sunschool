@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import DOMPurify from 'dompurify';
+import DOMPurify from 'isomorphic-dompurify';
 import { colors, typography } from '../styles/theme';
 import { Clock, BookOpen, ChevronRight } from 'react-feather';
 
@@ -63,7 +63,12 @@ const MediaLessonCard: React.FC<MediaLessonCardProps> = ({
   onPress,
   status,
 }) => {
-  const thumbnail = featuredImage ? images.find(img => img.id === featuredImage) : null;
+  // Try featured image first, then fall back to first image with actual data
+  let thumbnail = featuredImage ? images.find(img => img.id === featuredImage) : null;
+  if (!thumbnail || (!thumbnail.svgData && !thumbnail.base64Data && !thumbnail.path)) {
+    const firstWithData = images.find(img => img.svgData || img.base64Data || img.path);
+    if (firstWithData) thumbnail = firstWithData;
+  }
   const diffColor = difficultyLevel
     ? DIFFICULTY_COLORS[difficultyLevel.toLowerCase()] ?? colors.primary
     : colors.primary;

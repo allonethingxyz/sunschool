@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ─── Phase 1: Run Playwright synthetic user tests ─────────────
+  # --- Phase 1: Run Playwright synthetic user tests ---
   synthetic-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -118,7 +118,7 @@ jobs:
           path: test-results/**/*.zip
           retention-days: 14
 
-  # ─── Phase 2: Post PR summary ────────────────────────────────
+  # --- Phase 2: Post PR summary ---
   pr-summary:
     needs: [synthetic-e2e]
     if: always() && github.event_name == 'pull_request'

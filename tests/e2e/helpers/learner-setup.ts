@@ -337,6 +337,29 @@ export async function completeOneLesson(
 }
 
 /**
+ * Enter learner context from the parent dashboard by clicking
+ * "START LEARNING AS {childName}" or falling back to navigateAsLearner.
+ */
+export async function enterLearnerContext(page: Page, childName?: string): Promise<void> {
+  // Try to click the "START LEARNING AS" button on parent dashboard
+  const buttonText = childName
+    ? new RegExp(`start learning as.*${childName}`, 'i')
+    : /start learning as/i;
+  const startBtn = page.getByText(buttonText).first();
+  const visible = await startBtn.isVisible({ timeout: 5000 }).catch(() => false);
+  if (visible) {
+    await startBtn.click();
+    await page.waitForLoadState('networkidle');
+    await page.waitForFunction(() => {
+      return !document.body.textContent?.includes('Initializing authentication');
+    }, { timeout: 15000 }).catch(() => {});
+    return;
+  }
+  // Fallback: navigate directly to learner home
+  await navigateAsLearner(page, '/learner');
+}
+
+/**
  * Navigate to a learner route with learner mode enabled.
  * Sets preferredMode in localStorage, then does a full page.goto()
  * so that ModeContext initializes with LEARNER mode from the start.

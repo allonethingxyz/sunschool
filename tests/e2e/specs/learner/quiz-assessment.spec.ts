@@ -17,7 +17,6 @@ import {
   screenshot,
   generateAndWaitForLesson,
   apiCall,
-  spaNavigate,
   enterLearnerContext,
 } from '../../helpers/learner-setup';
 

@@ -15,7 +15,6 @@ import {
   screenshot,
   completeOneLesson,
   apiCall,
-  spaNavigate,
   enterLearnerContext,
 } from '../../helpers/learner-setup';
 

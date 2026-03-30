@@ -9,8 +9,7 @@ export const userRoleEnum = pgEnum("user_role", ["ADMIN", "PARENT", "LEARNER"]);
 export const lessonStatusEnum = pgEnum("lesson_status", ["QUEUED", "ACTIVE", "DONE"]);
 export const syncStatusEnum = pgEnum("sync_status", ["IDLE", "IN_PROGRESS", "FAILED", "COMPLETED"]);
 
-// Session storage table.
-// This table is mandatory for Replit Auth
+// Legacy: Replit Auth session storage — not actively used
 export const sessions = pgTable(
   "sessions",
   {

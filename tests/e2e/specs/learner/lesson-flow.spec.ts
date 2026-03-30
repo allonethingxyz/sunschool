@@ -15,10 +15,8 @@ import {
   setupLearnerSession,
   screenshot,
   generateAndWaitForLesson,
-  spaNavigate,
   enterLearnerContext,
   waitForLessonLoaded,
-  setAuthAndNavigate,
 } from '../../helpers/learner-setup';
 
 const TEST_NAME = 'lesson-flow';

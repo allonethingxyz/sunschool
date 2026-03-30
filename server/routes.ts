@@ -3,12 +3,12 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { checkForAchievements } from "./utils";
-import { asyncHandler, authenticateJwt, hasRoleMiddleware, AuthRequest, comparePasswords, generateToken, hashPassword } from "./middleware/auth";
+import { asyncHandler, authenticateJwt, hasRoleMiddleware, AuthRequest } from "./middleware/auth";
 import { synchronizeToExternalDatabase } from "./sync-utils";
 import { InsertDbSyncConfig } from "../shared/schema";
 import { USE_AI } from "./config/flags";
-import { db, pool, withRetry } from "./db";
-import { sql, count, eq, and, like, ne } from "drizzle-orm";
+import { db, pool } from "./db";
+import { sql, eq, and, like, ne } from "drizzle-orm";
 import crypto from "crypto";
 import rateLimit from 'express-rate-limit';
 
@@ -71,11 +71,6 @@ export function registerRoutes(app: Express): Server {
   // Set up authentication routes
   setupAuth(app);
 
-  // Health check endpoint
-  app.get("/api/healthcheck", (req: Request, res: Response) => {
-    res.json({ status: "ok", message: "Server is running" });
-  });
-
   // Feedback / support submission (no auth required)
   app.post("/api/feedback", feedbackLimiter, asyncHandler(async (req: Request, res: Response) => {
     const { message, email, page } = req.body;
@@ -133,164 +128,6 @@ export function registerRoutes(app: Express): Server {
     } finally { client.release(); }
     res.json({ ok: true });
   }));
-
-  // Root-level registration handler
-  app.post("/register", asyncHandler(async (req: Request, res: Response) => {
-    // Ensure proper headers
-    res.setHeader('Content-Type', 'application/json');
-
-    const { username, email, name, role, password, parentId } = req.body;
-
-    if (!username || !email || !name || !role || !password) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    // Verify role is valid
-    if (!["ADMIN", "PARENT", "LEARNER"].includes(role)) {
-      return res.status(400).json({ error: "Invalid role" });
-    }
-
-    try {
-      // Check if username already exists with retry mechanism
-      const existingUser = await withRetry(() => storage.getUserByUsername(username));
-      if (existingUser) {
-        return res.status(400).json({ error: "Username already exists" });
-      }
-
-      // Check if this is the first user being registered with retry mechanism
-      const userCountResult = await withRetry(() => db.select({ count: count() }).from(users));
-      const isFirstUser = userCountResult[0].count === 0;
-
-      // If this is the first user, make them an admin regardless of the requested role
-      const effectiveRole = isFirstUser ? "ADMIN" : role;
-
-      // Hash password and create user with retry mechanism
-      const hashedPassword = await hashPassword(password);
-      const user = await withRetry(() => storage.createUser({
-        username,
-        email,
-        name,
-        role: effectiveRole,
-        password: hashedPassword,
-        parentId: parentId || null
-      }));
-
-      // Generate JWT token
-      const token = generateToken({ id: ensureString(user.id), role: user.role });
-
-      // Remove password from response
-      const { password: _, ...userWithoutPassword } = user;
-
-      // Ensure proper JSON response
-      const response = {
-        token,
-        user: userWithoutPassword
-      };
-
-      res.status(200)
-         .json(response);
-    } catch (error) {
-      console.error('Registration error:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        code: error.code
-      });
-
-      // Provide specific error messages based on error type
-      let errorMessage = "Registration failed";
-      let statusCode = 500;
-
-      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-        errorMessage = "Database connection failed. Please try again later.";
-        statusCode = 503;
-      } else if (error.code === '23505') {
-        errorMessage = "Username or email already exists";
-        statusCode = 400;
-      } else if (error.code === '23503') {
-        errorMessage = "Invalid parent user specified";
-        statusCode = 400;
-      } else if (error.message && error.message.includes('Connection terminated')) {
-        errorMessage = "Database connection lost. Please try again.";
-        statusCode = 503;
-      }
-
-      res.status(statusCode).json({
-        error: errorMessage, 
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined 
-      });
-    }
-  }));
-
-  // Special API route to handle the root-level login/register/user for production deployment
-  app.post("/login", asyncHandler(async (req: Request, res: Response) => {
-    try {
-      const { username, password } = req.body;
-      
-      const origin = req.headers.origin || '';
-      const allowedAuthOrigins = [
-        'https://sunschool.xyz',
-        'https://www.sunschool.xyz',
-        'http://localhost:5000',
-        'http://localhost:3000'
-      ];
-
-      // For explicitly allowed origins, add CORS headers for authentication
-      if (allowedAuthOrigins.includes(origin)) {
-        res.header('Access-Control-Allow-Origin', origin);
-        res.header('Access-Control-Allow-Credentials', 'true');
-        res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-        res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Sunschool-Auth,X-Sunschool-Auth-Token');
-      }
-
-      if (!username || !password) {
-        return res.status(400).json({ error: "Username and password are required" });
-      }
-
-      // Find user by username
-      const user = await storage.getUserByUsername(username);
-
-      if (!user) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-
-      // Verify password
-      const isPasswordValid = user.password ? await comparePasswords(password, user.password) : false;
-
-      if (!isPasswordValid) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-
-      // Generate JWT token
-      const token = generateToken({ id: ensureString(user.id), role: user.role });
-
-      // Return user details and token
-      const { password: _, ...userWithoutPassword } = user;
-
-      // Include domain information in the response for client-side handling
-      return res.json({
-        token,
-        user: userWithoutPassword,
-        domain: allowedAuthOrigins.includes(origin) && origin.includes('sunschool.xyz') ? 'sunschool.xyz' : new URL(origin || 'http://unknown').hostname
-      });
-    } catch (error) {
-      console.error('Authentication endpoint error:', error);
-      const errorMessage = (error instanceof Error) ? error.message : 'Unknown error';
-      
-      return res.status(500).json({ 
-        error: 'An error occurred during authentication. Please try again.',
-        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
-      });
-    }
-  }));
-
-  app.post("/logout", (req: Request, res: Response) => {
-    res.redirect(307, "/api/logout");
-  });
-
-  app.get("/user", (req: Request, res: Response) => {
-    res.redirect(307, "/api/user");
-  });
 
   // Get all parent accounts (Admin only)
   app.get("/api/parents", hasRole(["ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {

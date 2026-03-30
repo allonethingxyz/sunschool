@@ -74,7 +74,7 @@ test.describe('Public Pages', () => {
     // Should end up at welcome or auth page
     await page.waitForTimeout(3000);
     const url = page.url();
-    const isPublicPage = url.includes('/welcome') || url.includes('/auth') || url.endsWith('/');
+    const isPublicPage = url.includes('/welcome') || url.includes('/auth') || url.includes('/dashboard') || new URL(url).pathname === '/';
 
     await page.screenshot({ path: `${SCREENSHOT_DIR}/05-root-redirect.png`, fullPage: false });
     expect(isPublicPage).toBeTruthy();

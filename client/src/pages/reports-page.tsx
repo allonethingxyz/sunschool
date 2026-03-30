@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '../lib/queryClient';
 import { colors, typography } from '../styles/theme';
 import { BarChart2, BookOpen, Award, FileText, Download, Users } from 'react-feather';
+import { gradeToAge } from '../utils/gradeToAge';
 
 const ReportsPage: React.FC = () => {
   const { user } = useAuth();
@@ -76,6 +77,12 @@ const ReportsPage: React.FC = () => {
     if (!selectedLearnerId || !learners) return 'Select a learner';
     const learner = learners.find((l: any) => l.id === selectedLearnerId);
     return learner ? learner.name : 'Unknown Learner';
+  };
+
+  const getGradeLabel = (): string | null => {
+    if (!learnerProfile?.gradeLevel) return null;
+    const age = gradeToAge(learnerProfile.gradeLevel);
+    return `Grade ${learnerProfile.gradeLevel}${age ? ` (${age} yrs)` : ''}`;
   };
 
   return (
@@ -170,6 +177,9 @@ const ReportsPage: React.FC = () => {
                 <View style={styles.reportHeader}>
                   <View>
                     <Text style={styles.reportTitle}>{getLearnerName()}'s {selectedReportType.charAt(0).toUpperCase() + selectedReportType.slice(1)} Report</Text>
+                    {getGradeLabel() && (
+                      <Text style={styles.reportDate}>{getGradeLabel()}</Text>
+                    )}
                     <Text style={styles.reportDate}>Generated on {new Date().toLocaleDateString()}</Text>
                   </View>
                   <TouchableOpacity 
@@ -428,16 +438,6 @@ const styles = StyleSheet.create({
     color: colors.error,
     textAlign: 'center',
     marginBottom: 16,
-  },
-  retryButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    ...typography.button,
-    color: colors.onPrimary,
   },
   retryButton: {
     backgroundColor: colors.primary,

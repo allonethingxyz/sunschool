@@ -16,6 +16,7 @@ import { useAuth } from '../hooks/use-auth';
 import { useToast } from '../hooks/use-toast';
 import { colors, typography, commonStyles } from '../styles/theme';
 import { User, Book, Plus, X, Award, BarChart2, Download } from 'react-feather';
+import { getGradeDisplayTextWithAge } from '../utils/gradeHelpers';
 
 const ParentDashboard = ({ navigation }: any) => {
   const { user, logoutMutation } = useAuth();
@@ -176,16 +177,11 @@ const ParentDashboard = ({ navigation }: any) => {
     });
   };
   
-  const getGradeDisplayText = (gradeLevel: number) => {
-    if (gradeLevel === 0) return 'Kindergarten';
-    return `Grade ${gradeLevel}`;
-  };
-  
   const renderLearnerItem = ({ item }: { item: any }) => {
     // Get learner profile if available
     const profile = learnerProfiles?.[item.id];
     const gradeLevel = profile?.gradeLevel !== undefined ? profile.gradeLevel : null;
-    
+
     return (
       <TouchableOpacity
         style={styles.learnerCard}
@@ -200,7 +196,7 @@ const ParentDashboard = ({ navigation }: any) => {
           {gradeLevel !== null && (
             <View style={styles.gradeBadge}>
               <Text style={styles.gradeBadgeText}>
-                {getGradeDisplayText(gradeLevel)}
+                {getGradeDisplayTextWithAge(gradeLevel)}
               </Text>
             </View>
           )}

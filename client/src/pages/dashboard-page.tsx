@@ -9,6 +9,7 @@ import { BookOpen, Award, BarChart2, Plus, ArrowRight, User } from 'react-feathe
 import { useMode } from '../context/ModeContext';
 import { useToast } from '../hooks/use-toast';
 import GradePicker from '../components/GradePicker';
+import { gradeToAge } from '../utils/gradeToAge';
 
 // Child report data shape returned by the reports endpoint
 interface ChildReport {
@@ -74,7 +75,10 @@ const ChildCard: React.FC<{
     }
   }
 
-  const gradeLabel = profile?.gradeLevel ? `Grade ${profile.gradeLevel}` : null;
+  const ageRange = profile?.gradeLevel != null ? gradeToAge(profile.gradeLevel) : '';
+  const gradeLabel = profile?.gradeLevel != null
+    ? `Grade ${profile.gradeLevel}${ageRange ? ` (${ageRange} yrs)` : ''}`
+    : null;
   const isLoading = reportLoading || profileLoading;
 
   return (

@@ -1,8 +1,5 @@
-# Stoneforge internals
-.stoneforge/stoneforge.db
-.stoneforge/stoneforge.db-shm
-.stoneforge/stoneforge.db-wal
-.stoneforge/.worktrees/
+# Stoneforge workspace
+.stoneforge/
 
 # Sibling repos are independent git repos
 sunschool/*
@@ -50,9 +47,17 @@ semgrep_results.json
 # Admin credentials
 admin-credentials.txt
 
-# Bridge IPC (runtime files)
-.claude/host-request/
-.claude/host-result/
+# AI tooling (local only)
+.claude/
+CLAUDE.md
+
+# Replit config
+.replit
+
+# Scan results / generated artifacts
+bandit_results.json
+uv.lock
+generated-icon.png
 
 # E2E test artifacts (screenshots, reports, traces)
 tests/e2e/screenshots/

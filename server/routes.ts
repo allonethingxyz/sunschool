@@ -494,6 +494,17 @@ export function registerRoutes(app: Express): Server {
     if (subjects) { const r = await validateSubjectArray(subjects, 'subject'); if (r) return r; }
     if (recommendedSubjects) { const r = await validateSubjectArray(recommendedSubjects, 'recommended subject'); if (r) return r; }
 
+    // Validate parent guidelines if provided
+    if (parentPromptGuidelines !== undefined && parentPromptGuidelines !== null && parentPromptGuidelines.trim().length > 0) {
+      if (parentPromptGuidelines.length > 500) {
+        return res.status(400).json({ error: "Parent prompt guidelines must be 500 characters or less" });
+      }
+      const guidelinesCheck = await validatePromptInput(parentPromptGuidelines);
+      if (!guidelinesCheck.safe) {
+        return res.status(400).json({ error: `Invalid parent guidelines: ${guidelinesCheck.reason}` });
+      }
+    }
+
     // Check authorization for parents
     if (req.user?.role === "PARENT") {
       try {
@@ -1974,7 +1985,28 @@ export function registerRoutes(app: Express): Server {
   // ── Prompt Audit Endpoints ──────────────────────────────────────────────
   // GET /api/lessons/:lessonId/prompts — all prompt_log entries for a lesson
   app.get("/api/lessons/:lessonId/prompts", isAuthenticated, asyncHandler(async (req: AuthRequest, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const { lessonId } = req.params;
+
+    // Get the lesson to check ownership
+    const lesson = await storage.getLessonById(lessonId);
+    if (!lesson) {
+      return res.status(404).json({ error: "Lesson not found" });
+    }
+
+    // Check user's permission: admin, the learner themselves, or parent of the learner
+    const isAuthorized =
+      req.user.role === "ADMIN" ||
+      ensureString(req.user.id) === lesson.learnerId.toString() ||
+      (req.user.role === "PARENT" && (await storage.getUsersByParentId(req.user.id)).some(u => u.id === lesson.learnerId));
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     const { rows } = await pool.query(
       `SELECT * FROM prompt_log WHERE lesson_id = $1 ORDER BY created_at DESC`,
       [lessonId]

@@ -194,6 +194,49 @@ const WelcomePage: React.FC = () => {
           </View>
         </View>
 
+        {/* ── The parent owns the prompt (HERO) ── */}
+        <View style={styles.promptHeroSection}>
+          <View style={styles.promptHeroInner}>
+            <View style={styles.promptHeroLeft}>
+              <View style={styles.promptIconWrap} aria-hidden="true">
+                <Code size={40} color={brand.amber} aria-hidden="true" />
+              </View>
+              <Text style={styles.promptHeroTitle} accessibilityRole="header">The parent owns the prompt.</Text>
+              <Text style={styles.promptHeroBody}>
+                AI models are sensitive to steering. Small changes in a prompt {'\u2014'} the instructions that tell the AI what to teach and how {'\u2014'} can shift tone, difficulty, and emphasis in ways that aren{'\u2019'}t obvious from the output alone.
+              </Text>
+              <Text style={styles.promptHeroBody}>
+                If you don{'\u2019'}t know what{'\u2019'}s in the prompt, you don{'\u2019'}t really know what{'\u2019'}s in the lesson. When it{'\u2019'}s your kid, you should be able to read every word the AI was told before it started teaching.
+              </Text>
+              <TouchableOpacity style={styles.promptCta} onPress={() => { if (typeof window !== 'undefined') window.location.href = '/dashboard'; }} accessibilityRole="button" accessibilityLabel="See every prompt">
+                <Eye size={18} color={brand.white} aria-hidden="true" style={{ marginRight: 8 }} />
+                <Text style={styles.promptCtaText}>See every prompt →</Text>
+              </TouchableOpacity>
+            </View>
+
+            {windowWidth >= 768 && (
+              <View style={styles.promptHeroRight}>
+                <View style={styles.promptPreview}>
+                  <Text style={styles.promptPreviewLabel}>System Prompt</Text>
+                  <Text style={styles.promptPreviewCode}>
+                    You are a friendly tutor for a 3rd grade student.{'\n'}
+                    Topic: Multiplication basics{'\n'}
+                    Style: Encourage curiosity, use examples from nature{'\n'}
+                    Custom guideline: Focus on visual patterns
+                  </Text>
+                  <View style={styles.promptArrow}>
+                    <ArrowRight size={24} color={brand.amber} aria-hidden="true" />
+                  </View>
+                  <Text style={styles.promptPreviewLabel}>Lesson Output</Text>
+                  <Text style={styles.promptPreviewOutput}>
+                    "Let's explore multiplication like a nature detective! Imagine you find 3 flower beds, and each has 4 beautiful sunflowers..."
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+
         {/* ── Product Description ── */}
         <View style={styles.sectionWhite}>
           <View style={styles.sectionWrap}>
@@ -257,10 +300,10 @@ const WelcomePage: React.FC = () => {
 
             <View style={styles.cardGrid}>
               {[
-                { icon: <Eye size={28} color={brand.white} aria-hidden="true" />, bg: brand.primary, title: 'See everything, in real time', desc: 'Live progress on strengths, gaps, and growth. Not a report card \u2014 a dashboard.' },
-                { icon: <Shield size={28} color={brand.white} aria-hidden="true" />, bg: brand.green, title: 'Your data stays yours', desc: 'Nothing gets sold. Nothing trains a model. Export or delete anytime.' },
-                { icon: <Users size={28} color={brand.white} aria-hidden="true" />, bg: brand.secondary, title: 'All your kids, one account', desc: 'Each child gets their own adaptive path. Add learners as your family grows.' },
-                { icon: <GitHub size={28} color={brand.white} aria-hidden="true" />, bg: brand.text, title: 'Open source, all the way down', desc: 'Read the code. Audit the prompts. Self-host if you want. Education you can verify, not just trust.' },
+                { icon: <Eye size={28} color={brand.white} aria-hidden="true" />, bg: brand.amber, title: 'Full Prompt Transparency', desc: 'See every AI instruction before and after each lesson. Know exactly what your child is being taught and how.' },
+                { icon: <Code size={28} color={brand.white} aria-hidden="true" />, bg: brand.purple, title: 'Custom Guidelines', desc: 'Tell the AI what to focus on. Set boundaries. Approve lessons before your child sees them.' },
+                { icon: <GitHub size={28} color={brand.white} aria-hidden="true" />, bg: brand.text, title: 'Open Source', desc: 'Read the code. Audit the prompts. Self-host if you want. Education you can verify, not just trust.' },
+                { icon: <Shield size={28} color={brand.white} aria-hidden="true" />, bg: brand.green, title: 'Privacy First', desc: 'Your data stays yours. Nothing gets sold. Nothing trains a model. Export or delete anytime.' },
               ].map((card, i) => (
                 <View key={i} style={styles.featureCard}>
                   <View style={[styles.featureIconCircle, { backgroundColor: card.bg }]}>
@@ -274,33 +317,6 @@ const WelcomePage: React.FC = () => {
           </View>
         </View>
 
-        {/* ── The parent owns the prompt ── */}
-        <View style={styles.promptSection}>
-          <View style={styles.promptInner}>
-            <View style={styles.promptIconWrap} aria-hidden="true">
-              <Code size={40} color={brand.amber} aria-hidden="true" />
-            </View>
-            <Text style={styles.promptTitle} accessibilityRole="header">The parent owns the prompt.</Text>
-            <Text style={styles.promptBody}>
-              AI models are sensitive to steering. Small changes in a prompt {'\u2014'} the instructions that tell the AI what to teach and how {'\u2014'} can shift tone, difficulty, and emphasis in ways that aren{'\u2019'}t obvious from the output alone.
-            </Text>
-            <Text style={styles.promptBody}>
-              If you don{'\u2019'}t know what{'\u2019'}s in the prompt, you don{'\u2019'}t really know what{'\u2019'}s in the lesson. Most ed-tech companies treat their prompts as proprietary. We think that{'\u2019'}s backwards. When it{'\u2019'}s your kid, you should be able to read every word the AI was told before it started teaching.
-            </Text>
-            <View style={styles.promptHighlights}>
-              {[
-                { icon: <Eye size={18} color={brand.primary} aria-hidden="true" />, text: 'Every prompt is visible to the parent, in full, before and after the lesson.' },
-                { icon: <AlertTriangle size={18} color={brand.secondary} aria-hidden="true" />, text: 'AI outputs change with small prompt tweaks. Transparency isn\u2019t optional \u2014 it\u2019s the only way to know what your child is actually being taught.' },
-                { icon: <Code size={18} color={brand.green} aria-hidden="true" />, text: 'The source code is open. The prompts are open. Audit them, fork them, improve them.' },
-              ].map((h, i) => (
-                <View key={i} style={styles.promptHighlightRow}>
-                  <View style={styles.promptHighlightIcon}>{h.icon}</View>
-                  <Text style={styles.promptHighlightText}>{h.text}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </View>
 
         {/* ── How It Works ── */}
         <View style={styles.sectionTinted}>
@@ -334,7 +350,7 @@ const WelcomePage: React.FC = () => {
             <View style={styles.testimonialGrid}>
               {[
                 { quote: 'She takes it outside and does math in the hammock. Voluntarily. I have no explanation.', name: 'Sarah M.', detail: 'Parent of a 3rd grader', color: brand.primary },
-                { quote: 'I read the source code before my kids touched it. Every ed-tech company should have to clear that bar.', name: 'James T.', detail: 'Parent of 2', color: brand.secondary },
+                { quote: 'I checked the actual AI prompts before my daughter started. I can see exactly how the AI is being instructed. That peace of mind changed everything.', name: 'James T.', detail: 'Parent of 2', color: brand.amber },
                 { quote: 'We travel full-time. Sunschool works on a beach in Portugal or a cabin in Montana \u2014 even offline.', name: 'Mia L.', detail: 'Homeschool parent', color: brand.green },
               ].map((t, i) => (
                 <View key={i} style={[styles.testimonialCard, { borderLeftColor: t.color }]}>
@@ -570,16 +586,22 @@ const styles = StyleSheet.create({
     marginHorizontal: 'auto',
   },
 
-  /* Parent owns the prompt */
-  promptSection: {
+  /* Parent owns the prompt - HERO VERSION */
+  promptHeroSection: {
     backgroundColor: brand.text,
     paddingVertical: windowWidth < 768 ? 60 : 80,
     paddingHorizontal: 20,
   },
-  promptInner: {
-    maxWidth: 720,
+  promptHeroInner: {
+    maxWidth: 1200,
     marginHorizontal: 'auto',
+    flexDirection: windowWidth < 768 ? 'column' : 'row',
     alignItems: 'center',
+    gap: 48,
+  },
+  promptHeroLeft: {
+    flex: 1,
+    maxWidth: windowWidth < 768 ? '100%' : 560,
   },
   promptIconWrap: {
     width: 72,
@@ -590,46 +612,80 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 24,
   },
-  promptTitle: {
-    fontSize: windowWidth < 768 ? 26 : 34,
+  promptHeroTitle: {
+    fontSize: windowWidth < 768 ? 28 : 38,
     fontWeight: '800',
     color: brand.white,
-    textAlign: 'center',
     marginBottom: 20,
+    lineHeight: windowWidth < 768 ? 36 : 46,
   },
-  promptBody: {
+  promptHeroBody: {
     fontSize: windowWidth < 768 ? 16 : 18,
     lineHeight: windowWidth < 768 ? 26 : 30,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
+    color: 'rgba(255,255,255,0.85)',
     marginBottom: 16,
   },
-  promptHighlights: {
+  promptCta: {
     marginTop: 24,
-    width: '100%',
-  },
-  promptHighlightRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 18,
-    paddingHorizontal: 8,
+    alignItems: 'center',
+    backgroundColor: brand.amber,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 28,
+    alignSelf: 'flex-start',
   },
-  promptHighlightIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+  promptCtaText: {
+    color: brand.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  promptHeroRight: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
-    flexShrink: 0,
-    marginTop: 2,
   },
-  promptHighlightText: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 24,
-    color: 'rgba(255,255,255,0.85)',
+  promptPreview: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    padding: 24,
+    width: '100%',
+    maxWidth: 480,
+  },
+  promptPreviewLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: brand.amber,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  promptPreviewCode: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: 'rgba(255,255,255,0.7)',
+    fontFamily: Platform.OS === 'web' ? 'monospace' : 'Courier',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 16,
+  },
+  promptArrow: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  promptPreviewOutput: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: 'rgba(255,255,255,0.9)',
+    fontStyle: 'italic',
+    backgroundColor: 'rgba(245, 166, 35, 0.08)',
+    padding: 14,
+    borderRadius: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: brand.amber,
   },
 
   /* Trust Bar */

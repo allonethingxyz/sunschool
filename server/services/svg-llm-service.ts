@@ -173,6 +173,7 @@ export async function generateEducationalSVG(
         model,
         temperature: 0.3,
         max_tokens: 1500,
+        context: { promptType: 'svg_generation' },
       });
 
       const rawSvg = response.choices[0]?.message?.content;
@@ -235,6 +236,7 @@ export async function generateDiagramSVG(
         model,
         temperature: 0.3,
         max_tokens: 1500,
+        context: { promptType: 'svg_generation' },
       });
 
       const rawSvg = response.choices[0]?.message?.content;

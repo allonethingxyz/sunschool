@@ -6,6 +6,7 @@ import { EnhancedLessonSpec, LessonSection, LessonImage, LessonDiagram } from '.
 import { LESSON_PROMPTS, getReadingLevelInstructions, getMathematicalNotationRules } from '../prompts';
 import { validateLessonSpec } from './lesson-validator';
 import { computeContentHash } from './lesson-template-service';
+import { validatePromptInput } from './prompt-safety';
 import { storage } from '../storage';
 
 // Create a simple ID generator since nanoid is causing ESM issues
@@ -105,11 +106,20 @@ function getWordLimits(gradeLevel: number): { total: number; introduction: numbe
 /**
  * Build a grade-appropriate lesson prompt that integrates the grade-specific prompt system
  */
-function buildEnhancedLessonPrompt(gradeLevel: number, topic: string, subject?: string): string {
+function buildEnhancedLessonPrompt(gradeLevel: number, topic: string, subject?: string, parentGuidelines?: string, contentRestrictions?: string): string {
   const limits = getWordLimits(gradeLevel);
   const readingLevel = getReadingLevelInstructions(gradeLevel);
   const mathRules = getMathematicalNotationRules(gradeLevel);
   const gradePrompt = LESSON_PROMPTS.ENHANCED_LESSON(gradeLevel, topic);
+
+  // Build parent guidelines addendum if provided
+  let parentAddendum = '';
+  if (parentGuidelines) {
+    parentAddendum += `\n\nPARENT-SET GUIDELINES (follow these additional instructions):\n${parentGuidelines}`;
+  }
+  if (contentRestrictions) {
+    parentAddendum += `\n\nCONTENT RESTRICTIONS (avoid these topics): ${contentRestrictions}`;
+  }
 
   return `You are creating an educational lesson for a grade ${gradeLevel} student about the following topic.
 Topic: <<<${topic}>>>${subject ? `\nSubject: <<<${subject}>>>` : ''}
@@ -119,7 +129,7 @@ ${gradePrompt}
 
 ${readingLevel}
 
-${mathRules}
+${mathRules}${parentAddendum}
 
 === CRITICAL RULES ===
 
@@ -228,9 +238,40 @@ export async function generateEnhancedLesson(
   topic: string,
   withImages: boolean = true,
   subject?: string,
-  difficulty: 'beginner' | 'intermediate' | 'advanced' = 'beginner'
+  difficulty: 'beginner' | 'intermediate' | 'advanced' = 'beginner',
+  lessonId?: string,
+  learnerId?: number
 ): Promise<EnhancedLessonSpec | null> {
   try {
+    // Fetch parent prompt controls from the learner profile
+    let guidelines: string | undefined;
+    let restrictions: string | undefined;
+    if (learnerId) {
+      try {
+        const profile = await storage.getLearnerProfile(String(learnerId));
+        if (profile) {
+          if (profile.parentPromptGuidelines) {
+            const check = await validatePromptInput(profile.parentPromptGuidelines, 'parentPromptGuidelines');
+            if (check.safe) {
+              guidelines = profile.parentPromptGuidelines;
+            } else {
+              console.warn(`[Lesson] Parent guidelines failed safety check for learner ${learnerId}: ${check.reason}`);
+            }
+          }
+          if (profile.contentRestrictions) {
+            const check = await validatePromptInput(profile.contentRestrictions, 'contentRestrictions');
+            if (check.safe) {
+              restrictions = profile.contentRestrictions;
+            } else {
+              console.warn(`[Lesson] Content restrictions failed safety check for learner ${learnerId}: ${check.reason}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[Lesson] Could not fetch learner profile for parent guidelines:`, err);
+      }
+    }
+
     // 1. Generate the lesson content structure with OpenRouter
     // We ask for JSON explicitly in the prompt and strip any fences from the response
     // rather than relying on response_format (which has inconsistent support across models).
@@ -238,7 +279,7 @@ export async function generateEnhancedLesson(
       messages: [
         {
           role: 'system',
-          content: buildEnhancedLessonPrompt(gradeLevel, topic, subject)
+          content: buildEnhancedLessonPrompt(gradeLevel, topic, subject, guidelines, restrictions)
         },
         {
           role: 'user',
@@ -247,6 +288,11 @@ export async function generateEnhancedLesson(
       ],
       model: 'google/gemini-2.0-flash-001',
       temperature: 0.7,
+      context: {
+        lessonId,
+        learnerId,
+        promptType: 'lesson_generation'
+      },
     });
     
     // Validate we have a response
@@ -560,6 +606,7 @@ export async function generateEnhancedQuestions(
       ],
       model: 'google/gemini-2.0-flash-001',
       temperature: 0.7,
+      context: { promptType: 'quiz_generation' },
     });
 
     const rawQText = response.choices[0].message.content

@@ -71,8 +71,15 @@ const PrivacyPage: React.FC = () => {
 
           <Text style={styles.sectionTitle}>AI and Automated Features</Text>
           <Text style={styles.paragraph}>
-            Our AI creates personalized lessons and identifies learning gaps. Parents can see how recommendations are made and can opt out of AI features if desired.
+            Our AI creates personalized lessons and identifies learning gaps. Parents have full access to every system prompt used to generate their child's lessons. All AI instructions are visible, auditable, and exportable. Parents can set custom prompt guidelines and approve lessons before they're shown.
           </Text>
+          <Text style={styles.boldText}>Prompt Transparency:</Text>
+          <Text style={styles.bulletPoint}>• Every AI system prompt is visible to parents before and after each lesson</Text>
+          <Text style={styles.bulletPoint}>• Parents can view the exact instructions given to the AI for each educational interaction</Text>
+          <Text style={styles.bulletPoint}>• All prompts are auditable and can be exported at any time</Text>
+          <Text style={styles.bulletPoint}>• Parents can set custom guidelines that modify how the AI teaches their child</Text>
+          <Text style={styles.bulletPoint}>• Lesson approval workflow available for parents who want to review content before delivery</Text>
+          <Text style={styles.bulletPoint}>• Parents can opt out of AI features entirely if desired</Text>
 
           <Text style={styles.sectionTitle}>Updates to This Policy</Text>
           <Text style={styles.paragraph}>

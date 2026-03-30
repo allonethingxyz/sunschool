@@ -5,7 +5,7 @@ import { colors, typography, commonStyles } from '../styles/theme';
 import { Link, useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../lib/queryClient';
-import { BookOpen, Award, BarChart2, Plus, ArrowRight, User } from 'react-feather';
+import { BookOpen, Award, BarChart2, Plus, ArrowRight, User, Eye, Settings } from 'react-feather';
 import { useMode } from '../context/ModeContext';
 import { useToast } from '../hooks/use-toast';
 import GradePicker from '../components/GradePicker';
@@ -137,12 +137,20 @@ const ChildCard: React.FC<{
         </View>
       )}
 
-      {/* Start Learning button */}
-      <TouchableOpacity style={styles.childViewButton} onPress={onView}>
-        <User size={14} color={colors.onPrimary} />
-        <Text style={styles.childViewButtonText}>Start Learning as {learner.name}</Text>
-        <ArrowRight size={14} color={colors.onPrimary} />
-      </TouchableOpacity>
+      {/* Action row */}
+      <View style={styles.childActionRow}>
+        <TouchableOpacity style={styles.childViewButton} onPress={onView}>
+          <User size={14} color={colors.onPrimary} />
+          <Text style={styles.childViewButtonText}>Start Learning as {learner.name}</Text>
+          <ArrowRight size={14} color={colors.onPrimary} />
+        </TouchableOpacity>
+        <Link href={`/learners/${learner.id}/prompt-settings`}>
+          <View style={styles.promptSettingsLink}>
+            <Settings size={14} color={colors.textSecondary} />
+            <Text style={styles.promptSettingsText}>Prompt Settings</Text>
+          </View>
+        </Link>
+      </View>
     </View>
   );
 };
@@ -242,6 +250,64 @@ const InlineAddChildForm: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) 
   );
 };
 
+// Prompt Transparency summary card for the parent dashboard
+const PromptTransparencyCard: React.FC<{ learners: any[] }> = ({ learners }) => {
+  const firstLearnerId = learners?.[0]?.id;
+
+  // Fetch prompt data for the first learner to show a preview
+  const { data: prompts = [] } = useQuery<any[]>({
+    queryKey: [`/api/learners/${firstLearnerId}/prompts`],
+    queryFn: () =>
+      apiRequest('GET', `/api/learners/${firstLearnerId}/prompts`).then(
+        (res: any) => res.data ?? res,
+      ),
+    enabled: !!firstLearnerId,
+    retry: 1,
+  });
+
+  // Count total lessons across all learners (from reports data already fetched)
+  const totalPrompts = prompts.length;
+  const uniqueLessons = new Set(prompts.map((p: any) => p.lessonId)).size;
+  const lastPrompt = prompts[0]; // Most recent first
+
+  const [, setLocation] = useLocation();
+
+  return (
+    <View style={styles.transparencyCard}>
+      <View style={styles.transparencyCardHeader}>
+        <Eye size={18} color={colors.primary} />
+        <Text style={styles.transparencyCardTitle}>Prompt Transparency</Text>
+      </View>
+      <View style={styles.transparencyStatsRow}>
+        <View style={styles.transparencyStat}>
+          <Text style={styles.transparencyStatValue}>{uniqueLessons}</Text>
+          <Text style={styles.transparencyStatLabel}>Lessons Generated</Text>
+        </View>
+        <View style={styles.transparencyStatDivider} />
+        <View style={styles.transparencyStat}>
+          <Text style={styles.transparencyStatValue}>{totalPrompts}</Text>
+          <Text style={styles.transparencyStatLabel}>Prompts Logged</Text>
+        </View>
+      </View>
+      {lastPrompt && (
+        <View style={styles.transparencyPreview}>
+          <Text style={styles.transparencyPreviewLabel}>Last prompt used:</Text>
+          <Text style={styles.transparencyPreviewText} numberOfLines={1}>
+            {lastPrompt.lessonTitle || `Lesson ${lastPrompt.lessonId}`} — {lastPrompt.model} — {new Date(lastPrompt.createdAt).toLocaleDateString()}
+          </Text>
+        </View>
+      )}
+      <TouchableOpacity
+        style={styles.transparencyLink}
+        onPress={() => setLocation('/prompts')}
+      >
+        <Text style={styles.transparencyLinkText}>View All Prompts</Text>
+        <ArrowRight size={14} color={colors.primary} />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -267,10 +333,80 @@ const DashboardPage: React.FC = () => {
 
   const hasChildren = learners && learners.length > 0;
 
+  // Fetch pending review lessons for all children
+  const { data: allLessons } = useQuery<any[]>({
+    queryKey: ['/api/lessons/all-pending'],
+    queryFn: async () => {
+      if (!learners || learners.length === 0) return [];
+      const lessonsPromises = learners.map((learner: any) =>
+        apiRequest('GET', `/api/lessons?learnerId=${learner.id}`).then(
+          (res: any) => (res.data ?? res).map((lesson: any) => ({ ...lesson, learnerName: learner.name }))
+        ).catch(() => [])
+      );
+      const allResults = await Promise.all(lessonsPromises);
+      return allResults.flat();
+    },
+    enabled: (user?.role === 'PARENT' || user?.role === 'ADMIN') && hasChildren,
+  });
+
+  const pendingLessons = allLessons?.filter((lesson: any) => lesson.status === 'PENDING_REVIEW') || [];
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.content}>
         <Text style={styles.welcomeText}>Welcome, {user?.name || 'User'}!</Text>
+
+        {/* Pending Review Banner */}
+        {pendingLessons.length > 0 && (
+          <View style={styles.pendingBanner}>
+            <Text style={styles.pendingBannerTitle}>
+              {pendingLessons.length} lesson{pendingLessons.length > 1 ? 's' : ''} waiting for your approval
+            </Text>
+            <Text style={styles.pendingBannerText}>
+              Review lessons before they become available to your children.
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pendingLessonsList}>
+              {pendingLessons.map((lesson: any) => (
+                <View key={lesson.id} style={styles.pendingLessonCard}>
+                  <Text style={styles.pendingLessonTitle} numberOfLines={1}>
+                    {lesson.spec?.title || 'Untitled Lesson'}
+                  </Text>
+                  <Text style={styles.pendingLessonLearner}>{lesson.learnerName}</Text>
+                  <View style={styles.pendingLessonActions}>
+                    <TouchableOpacity
+                      style={styles.approveButton}
+                      onPress={async () => {
+                        try {
+                          await apiRequest('PUT', `/api/lessons/${lesson.id}/approve`, {});
+                          queryClient.invalidateQueries({ queryKey: ['/api/lessons/all-pending'] });
+                          queryClient.invalidateQueries({ queryKey: [`/api/lessons`, lesson.learnerId] });
+                        } catch (err) {
+                          console.error('Failed to approve lesson:', err);
+                        }
+                      }}
+                    >
+                      <Text style={styles.approveButtonText}>✓ Approve</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.rejectButton}
+                      onPress={async () => {
+                        try {
+                          await apiRequest('PUT', `/api/lessons/${lesson.id}/reject`, { regenerate: true });
+                          queryClient.invalidateQueries({ queryKey: ['/api/lessons/all-pending'] });
+                          queryClient.invalidateQueries({ queryKey: [`/api/lessons`, lesson.learnerId] });
+                        } catch (err) {
+                          console.error('Failed to reject lesson:', err);
+                        }
+                      }}
+                    >
+                      <Text style={styles.rejectButtonText}>✗ Regenerate</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {(user?.role === 'PARENT' || user?.role === 'ADMIN') && (
           <>
@@ -308,10 +444,17 @@ const DashboardPage: React.FC = () => {
                   <Text style={styles.addAnotherButtonText}>Add Another Child</Text>
                 </TouchableOpacity>
 
+                {/* Prompt Transparency card */}
+                <PromptTransparencyCard learners={learners} />
+
                 {/* Minimal tools row */}
                 <View style={styles.toolsRow}>
                   <Link href="/reports">
                     <Text style={styles.toolLink}>Reports</Text>
+                  </Link>
+                  <Text style={styles.toolDivider}>·</Text>
+                  <Link href="/prompts">
+                    <Text style={styles.toolLink}>Prompts</Text>
                   </Link>
                   <Text style={styles.toolDivider}>·</Text>
                   <Link href="/rewards">
@@ -473,6 +616,20 @@ const styles = StyleSheet.create({
     color: colors.onPrimary,
     marginHorizontal: 8,
   },
+  childActionRow: {
+    gap: 8,
+  },
+  promptSettingsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    gap: 6,
+  },
+  promptSettingsText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
 
   // ------------------------------------------------------------------
   // Add Another Child button (subtle, secondary)
@@ -600,6 +757,81 @@ const styles = StyleSheet.create({
   },
 
   // ------------------------------------------------------------------
+  // Pending Review Banner
+  // ------------------------------------------------------------------
+  pendingBanner: {
+    backgroundColor: '#FFF4E6',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFB84D',
+  },
+  pendingBannerTitle: {
+    ...typography.h6,
+    color: '#CC5500',
+    marginBottom: 4,
+  },
+  pendingBannerText: {
+    ...typography.body2,
+    color: '#995000',
+    marginBottom: 12,
+  },
+  pendingLessonsList: {
+    marginTop: 8,
+  },
+  pendingLessonCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    padding: 12,
+    marginRight: 12,
+    width: 240,
+    borderWidth: 1,
+    borderColor: '#FFB84D',
+  },
+  pendingLessonTitle: {
+    ...typography.body1,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  pendingLessonLearner: {
+    ...typography.body2,
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  pendingLessonActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  approveButton: {
+    flex: 1,
+    backgroundColor: '#22C55E',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  approveButtonText: {
+    ...typography.body2,
+    color: '#FFF',
+    fontWeight: '600',
+  },
+  rejectButton: {
+    flex: 1,
+    backgroundColor: '#EF4444',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  rejectButtonText: {
+    ...typography.body2,
+    color: '#FFF',
+    fontWeight: '600',
+  },
+
+  // ------------------------------------------------------------------
   // Learner fallback
   // ------------------------------------------------------------------
   learnerRedirect: {
@@ -610,6 +842,87 @@ const styles = StyleSheet.create({
   learnerRedirectText: {
     ...typography.body2,
     color: colors.textSecondary,
+  },
+
+  // ------------------------------------------------------------------
+  // Prompt Transparency card
+  // ------------------------------------------------------------------
+  transparencyCard: {
+    backgroundColor: colors.surfaceColor,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  transparencyCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  transparencyCardTitle: {
+    ...typography.h6,
+    color: colors.text,
+    marginBottom: 0,
+  },
+  transparencyStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginBottom: 12,
+  },
+  transparencyStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  transparencyStatValue: {
+    ...typography.h6,
+    color: colors.primary,
+    marginBottom: 2,
+  },
+  transparencyStatLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 11,
+  },
+  transparencyStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: colors.border,
+  },
+  transparencyPreview: {
+    marginBottom: 12,
+  },
+  transparencyPreviewLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: 2,
+  },
+  transparencyPreviewText: {
+    ...typography.body2,
+    color: colors.text,
+    fontSize: 13,
+  },
+  transparencyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  transparencyLinkText: {
+    ...typography.button,
+    color: colors.primary,
+    fontSize: 13,
   },
 });
 

@@ -64,12 +64,12 @@ test.describe.serial('Parent: Rewards Full Cycle', () => {
     test.setTimeout(300_000);
     const { learnerId } = await setupParentSession(page, 'rwcycle_goals');
 
+    // Set learner context BEFORE creating reward (helper reads from localStorage)
+    await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), learnerId);
+
     // Create a reward for the learner to see
     const goalId = await createRewardGoal(page, 'Ice Cream Trip', 50);
     expect(goalId).toBeTruthy();
-
-    // Set learner context and navigate to /goals
-    await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), learnerId);
     await navigateAsLearner(page, '/goals');
     await page.waitForTimeout(3000);
 

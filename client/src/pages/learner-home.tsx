@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -124,7 +124,16 @@ const LearnerHome = () => {
     queryFn: async () => {
       try {
         const res = await apiRequest('GET', `/api/lessons/active?learnerId=${selectedLearner?.id}`);
-        return res.data;
+        const lesson = res.data;
+
+        // Persist active lesson ID to localStorage
+        if (lesson && lesson.id) {
+          localStorage.setItem(`activeLesson_${selectedLearner?.id}`, lesson.id.toString());
+        } else {
+          localStorage.removeItem(`activeLesson_${selectedLearner?.id}`);
+        }
+
+        return lesson;
       } catch (err) {
         console.error('Error fetching active lesson:', err);
         throw err;
@@ -151,6 +160,33 @@ const LearnerHome = () => {
     },
     enabled: !!selectedLearner?.id,
   });
+
+  // ─── Session persistence: save / restore active lesson ID ──────────────────
+  const ACTIVE_LESSON_KEY = 'activeLessonId';
+
+  // When an active lesson is loaded, persist its ID
+  useEffect(() => {
+    if (activeLesson?.id) {
+      try { localStorage.setItem(ACTIVE_LESSON_KEY, activeLesson.id); } catch { /* noop */ }
+    } else if (!isLessonLoading && !activeLesson) {
+      // Query settled with no active lesson — clear persisted ID
+      try { localStorage.removeItem(ACTIVE_LESSON_KEY); } catch { /* noop */ }
+    }
+  }, [activeLesson, isLessonLoading]);
+
+  // On mount, if the active-lesson query returned nothing, check localStorage
+  // and refetch in case it was a transient miss.
+  useEffect(() => {
+    if (!isLessonLoading && !activeLesson && selectedLearner?.id) {
+      try {
+        const savedId = localStorage.getItem(ACTIVE_LESSON_KEY);
+        if (savedId) {
+          queryClient.invalidateQueries({ queryKey: ['/api/lessons/active', selectedLearner.id] });
+        }
+      } catch { /* noop */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLessonLoading, selectedLearner?.id]);
 
   // Generate a new lesson (retries automatically on 503 from server)
     const generateLessonMutation = useMutation({
@@ -422,6 +458,10 @@ const LearnerHome = () => {
                     lesson={activeLesson}
                     onPress={handleViewLesson}
                   />
+                  {/* Cost indicator badge */}
+                  <Text style={styles.sourceIndicator}>
+                    {activeLesson.templateId ? '\u{1F4DA} From Library' : '\u2728 AI Generated'}
+                  </Text>
                   <View style={styles.newLessonActions}>
                     <TouchableOpacity
                       style={styles.selectSubjectButton}
@@ -880,6 +920,14 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     ...commonStyles.buttonText,
+  },
+  sourceIndicator: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 2,
+    fontSize: 12,
   },
 });
 

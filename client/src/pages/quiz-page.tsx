@@ -143,9 +143,60 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
     },
   });
 
+  // ─── Session persistence: save / restore quiz progress ─────────────────────
+  const QUIZ_PROGRESS_KEY = `quizProgress_${lessonId}`;
+
+  // Restore quiz progress from localStorage on mount
+  React.useEffect(() => {
+    if (lessonId && !quizSubmitted) {
+      try {
+        const savedProgress = localStorage.getItem(QUIZ_PROGRESS_KEY);
+        if (savedProgress) {
+          const parsed = JSON.parse(savedProgress);
+          if (parsed.answers && Array.isArray(parsed.answers)) {
+            setSelectedAnswers(parsed.answers);
+            if (parsed.quizStarted) {
+              setQuizStarted(parsed.quizStarted);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to restore quiz progress:', err);
+      }
+    }
+  }, [lessonId, QUIZ_PROGRESS_KEY, quizSubmitted]);
+
+  // Persist quiz progress whenever answers or quizStarted changes
+  React.useEffect(() => {
+    if (lessonId && !quizSubmitted && selectedAnswers.length > 0) {
+      try {
+        localStorage.setItem(
+          QUIZ_PROGRESS_KEY,
+          JSON.stringify({
+            answers: selectedAnswers,
+            quizStarted,
+          })
+        );
+      } catch (err) {
+        console.error('Failed to save quiz progress:', err);
+      }
+    }
+  }, [selectedAnswers, quizStarted, lessonId, QUIZ_PROGRESS_KEY, quizSubmitted]);
+
+  // Clear quiz progress when quiz is submitted
+  React.useEffect(() => {
+    if (quizSubmitted && lessonId) {
+      try {
+        localStorage.removeItem(QUIZ_PROGRESS_KEY);
+      } catch (err) {
+        console.error('Failed to clear quiz progress:', err);
+      }
+    }
+  }, [quizSubmitted, lessonId, QUIZ_PROGRESS_KEY]);
+
   const handleSelectAnswer = (questionIndex: number, answerIndex: number) => {
     if (quizSubmitted) return; // Don't allow changes after submission
-    
+
     const newAnswers = [...selectedAnswers];
     newAnswers[questionIndex] = answerIndex;
     setSelectedAnswers(newAnswers);

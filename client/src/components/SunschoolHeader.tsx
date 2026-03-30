@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 
 const windowWidth = Dimensions.get('window').width;
-import { Home, User, BookOpen, MessageCircle } from 'react-feather';
+import { Home, User, BookOpen, MessageCircle, Eye } from 'react-feather';
 import { colors, typography } from '../styles/theme';
 import { useLocation } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
@@ -76,6 +76,7 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
     if (!user || !user.role) return [];
     const navItems = [
       { label: 'Dashboard', path: '/dashboard', icon: Home },
+      { label: 'Prompts', path: '/prompts', icon: Eye },
     ];
     if (user.role === 'ADMIN') {
       navItems.push({ label: 'Admin', path: '/admin', icon: User });

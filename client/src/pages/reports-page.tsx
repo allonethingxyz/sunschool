@@ -11,13 +11,85 @@ import { useAuth } from '../hooks/use-auth';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest, queryClient } from '../lib/queryClient';
 import { colors, typography } from '../styles/theme';
-import { BarChart2, BookOpen, Award, FileText, Download, Users } from 'react-feather';
+import { BarChart2, BookOpen, Award, FileText, Download, Users, Eye, ChevronDown, ChevronRight } from 'react-feather';
 import { gradeToAge } from '../utils/gradeToAge';
+
+// Inline prompt viewer for a single lesson
+const LessonPromptViewer: React.FC<{ lessonId: number }> = ({ lessonId }) => {
+  const { data: prompts = [], isLoading } = useQuery<any[]>({
+    queryKey: [`/api/lessons/${lessonId}/prompts`],
+    queryFn: () =>
+      apiRequest('GET', `/api/lessons/${lessonId}/prompts`).then(
+        (res: any) => res.data ?? res,
+      ),
+    enabled: !!lessonId,
+  });
+
+  if (isLoading) {
+    return <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 8 }} />;
+  }
+
+  if (prompts.length === 0) {
+    return (
+      <View style={styles.promptViewerEmpty}>
+        <Text style={styles.emptyStateText}>No prompts recorded for this lesson.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.promptViewerContainer}>
+      {prompts.map((prompt: any, idx: number) => (
+        <View key={prompt.id ?? idx} style={styles.promptViewerEntry}>
+          <View style={styles.promptViewerHeader}>
+            <View style={[styles.promptTypeBadge, {
+              backgroundColor: prompt.type === 'lesson' ? '#2563EB'
+                : prompt.type === 'quiz' ? '#16A34A'
+                : prompt.type === 'svg' ? '#9333EA'
+                : '#EA580C',
+            }]}>
+              <Text style={styles.promptTypeBadgeText}>
+                {(prompt.type || 'prompt').toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.promptMetaBadges}>
+              <View style={styles.metaBadge}>
+                <Text style={styles.metaBadgeText}>{prompt.model || 'unknown'}</Text>
+              </View>
+              {prompt.temperature != null && (
+                <View style={styles.metaBadge}>
+                  <Text style={styles.metaBadgeText}>temp {prompt.temperature}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+          {prompt.systemMessage ? (
+            <View style={styles.promptCodeBlock}>
+              <Text style={styles.promptCodeLabel}>System Message</Text>
+              <View style={styles.promptCodeContent}>
+                <Text style={styles.promptCodeText} selectable>{prompt.systemMessage}</Text>
+              </View>
+            </View>
+          ) : null}
+          {prompt.userMessage ? (
+            <View style={styles.promptCodeBlock}>
+              <Text style={styles.promptCodeLabel}>User Message</Text>
+              <View style={styles.promptCodeContent}>
+                <Text style={styles.promptCodeText} selectable>{prompt.userMessage}</Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
+};
 
 const ReportsPage: React.FC = () => {
   const { user } = useAuth();
   const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null);
   const [selectedReportType, setSelectedReportType] = useState<string>('progress');
+  const [expandedLessonIds, setExpandedLessonIds] = useState<Set<number>>(new Set());
 
   // Fetch learners
   const {
@@ -273,33 +345,60 @@ const ReportsPage: React.FC = () => {
                   <View style={styles.reportContent}>
                     <Text style={styles.reportSectionTitle}>Recent Lessons</Text>
                     {lessons && lessons.length > 0 ? (
-                      lessons.slice(0, 5).map((lesson: any, index: number) => (
-                        <View key={index} style={styles.lessonItem}>
-                          <View style={styles.lessonItemContent}>
-                            <Text style={styles.lessonTitle}>{lesson.spec?.title || 'Untitled Lesson'}</Text>
-                            <Text style={styles.lessonDate}>
-                              {new Date(lesson.createdAt).toLocaleDateString()}
-                            </Text>
+                      lessons.slice(0, 5).map((lesson: any, index: number) => {
+                        const isPromptExpanded = expandedLessonIds.has(lesson.id);
+                        return (
+                          <View key={index}>
+                            <View style={styles.lessonItem}>
+                              <View style={styles.lessonItemContent}>
+                                <Text style={styles.lessonTitle}>{lesson.spec?.title || 'Untitled Lesson'}</Text>
+                                <Text style={styles.lessonDate}>
+                                  {new Date(lesson.createdAt).toLocaleDateString()}
+                                </Text>
+                              </View>
+                              <View style={styles.lessonActions}>
+                                <TouchableOpacity
+                                  style={styles.viewPromptsButton}
+                                  onPress={() => {
+                                    setExpandedLessonIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(lesson.id)) next.delete(lesson.id);
+                                      else next.add(lesson.id);
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  <Eye size={12} color={colors.primary} />
+                                  <Text style={styles.viewPromptsButtonText}>
+                                    {isPromptExpanded ? 'Hide' : 'View'} Prompts
+                                  </Text>
+                                  {isPromptExpanded
+                                    ? <ChevronDown size={12} color={colors.primary} />
+                                    : <ChevronRight size={12} color={colors.primary} />}
+                                </TouchableOpacity>
+                                <View style={[styles.lessonStatus, {
+                                  backgroundColor: lesson.status === 'DONE'
+                                    ? colors.success + '33'
+                                    : lesson.status === 'ACTIVE'
+                                      ? colors.warning + '33'
+                                      : colors.textSecondary + '33'
+                                }]}>
+                                  <Text style={[styles.lessonStatusText, {
+                                    color: lesson.status === 'DONE'
+                                      ? colors.success
+                                      : lesson.status === 'ACTIVE'
+                                        ? colors.warning
+                                        : colors.textSecondary
+                                  }]}>
+                                    {lesson.status}
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                            {isPromptExpanded && <LessonPromptViewer lessonId={lesson.id} />}
                           </View>
-                          <View style={[styles.lessonStatus, {
-                            backgroundColor: lesson.status === 'DONE' 
-                              ? colors.success + '33' 
-                              : lesson.status === 'ACTIVE' 
-                                ? colors.warning + '33' 
-                                : colors.textSecondary + '33'
-                          }]}>
-                            <Text style={[styles.lessonStatusText, {
-                              color: lesson.status === 'DONE' 
-                                ? colors.success 
-                                : lesson.status === 'ACTIVE' 
-                                  ? colors.warning 
-                                  : colors.textSecondary
-                            }]}>
-                              {lesson.status}
-                            </Text>
-                          </View>
-                        </View>
-                      ))
+                        );
+                      })
                     ) : (
                       <Text style={styles.emptyStateText}>No lessons recorded yet.</Text>
                     )}
@@ -687,6 +786,107 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     maxWidth: 300,
+  },
+
+  // ------------------------------------------------------------------
+  // Lesson prompt viewer styles
+  // ------------------------------------------------------------------
+  lessonActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewPromptsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.primary + '40',
+  },
+  viewPromptsButtonText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  promptViewerContainer: {
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderTopWidth: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+  },
+  promptViewerEmpty: {
+    padding: 12,
+    marginBottom: 8,
+  },
+  promptViewerEntry: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  promptViewerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  promptTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  promptTypeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  promptMetaBadges: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  metaBadge: {
+    backgroundColor: colors.surfaceColor,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  metaBadgeText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 10,
+  },
+  promptCodeBlock: {
+    marginTop: 8,
+  },
+  promptCodeLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  promptCodeContent: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 6,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  promptCodeText: {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.text,
   },
 });
 

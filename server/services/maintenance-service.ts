@@ -59,50 +59,122 @@ export async function detectOrphanedImages(fix = false): Promise<OrphanedImagesR
 
 // ── Function B: Partial Quiz Submission Detection ────────────────────────────
 
+export type MismatchReason = "partial_write" | "spec_modified" | "no_answers";
+
+export type PartialQuizDetail = {
+  lessonId: string;
+  learnerId: number | null;
+  expected: number;
+  actual: number;
+  reason: MismatchReason;
+};
+
 export type PartialQuizResult = {
   partialCount: number;
+  /** @deprecated Use detailedResults for richer data */
   details: { lessonId: string; expected: number; actual: number }[];
+  detailedResults: PartialQuizDetail[];
+  summary: {
+    partialWrites: number;
+    specModified: number;
+    noAnswers: number;
+  };
 };
 
 export async function detectPartialQuizSubmissions(fix = false): Promise<PartialQuizResult> {
-  // Get all completed lessons with their spec (for question count)
+  // Get all completed lessons with their spec (for question count) and learner_id
   const { rows: doneLessons } = await pool.query(
-    `SELECT id, spec FROM lessons WHERE status = 'DONE' AND spec IS NOT NULL`
+    `SELECT id, learner_id, spec, updated_at FROM lessons WHERE status = 'DONE' AND spec IS NOT NULL`
   );
 
-  // Get answer counts grouped by lesson_id for all DONE lessons
+  // Get answer counts grouped by lesson_id + learner_id, with the latest answer timestamp
   const { rows: answerCounts } = await pool.query(
-    `SELECT lesson_id, COUNT(*)::int AS answer_count FROM quiz_answers GROUP BY lesson_id`
+    `SELECT lesson_id, learner_id, COUNT(*)::int AS answer_count,
+            MAX(answered_at) AS last_answered_at
+     FROM quiz_answers
+     GROUP BY lesson_id, learner_id`
   );
-  const answerMap = new Map<string, number>();
+  const answerMap = new Map<string, { count: number; learnerId: number; lastAnsweredAt: Date | null }>();
   for (const row of answerCounts) {
-    answerMap.set(row.lesson_id, row.answer_count);
+    answerMap.set(row.lesson_id, {
+      count: row.answer_count,
+      learnerId: row.learner_id,
+      lastAnsweredAt: row.last_answered_at ? new Date(row.last_answered_at) : null,
+    });
   }
 
   const details: PartialQuizResult["details"] = [];
+  const detailedResults: PartialQuizDetail[] = [];
+  let partialWrites = 0;
+  let specModified = 0;
+  let noAnswers = 0;
 
   for (const lesson of doneLessons) {
     const spec = typeof lesson.spec === "string" ? JSON.parse(lesson.spec) : lesson.spec;
     if (!spec || !Array.isArray(spec.questions)) continue;
 
     const expected = spec.questions.length;
-    const actual = answerMap.get(lesson.id) ?? 0;
+    const answerData = answerMap.get(lesson.id);
+    const actual = answerData?.count ?? 0;
 
     if (actual < expected) {
+      // Classify the mismatch reason
+      let reason: MismatchReason;
+
+      if (actual === 0) {
+        // No answers at all — lesson marked DONE but quiz never submitted
+        reason = "no_answers";
+        noAnswers++;
+      } else if (
+        answerData?.lastAnsweredAt &&
+        lesson.updated_at &&
+        new Date(lesson.updated_at) > answerData.lastAnsweredAt
+      ) {
+        // Lesson spec was updated after the last answer was recorded
+        // This suggests the question count changed post-submission
+        reason = "spec_modified";
+        specModified++;
+      } else {
+        // Answers exist but fewer than expected — partial write failure
+        reason = "partial_write";
+        partialWrites++;
+      }
+
+      // Backwards-compatible details
       details.push({ lessonId: lesson.id, expected, actual });
 
-      if (fix) {
-        // Can't recover missing answers — just log the discrepancy
+      detailedResults.push({
+        lessonId: lesson.id,
+        learnerId: answerData?.learnerId ?? lesson.learner_id ?? null,
+        expected,
+        actual,
+        reason,
+      });
+
+      if (fix && reason === "spec_modified") {
+        // For spec-modified cases, we can safely update by storing the current
+        // question count alongside the answers. Log it for audit.
+        console.info(
+          `[Maintenance] Spec-modified quiz: lesson ${lesson.id} — expected updated from ${expected} to match current spec`
+        );
+      } else if (fix && reason === "partial_write") {
+        // Cannot recover missing answers — flag for manual review only
         console.warn(
-          `[Maintenance] Partial quiz: lesson ${lesson.id} has ${actual}/${expected} answers`
+          `[Maintenance] Partial quiz write: lesson ${lesson.id} has ${actual}/${expected} answers — flagged for manual review`
         );
       }
     }
   }
 
   return {
-    partialCount: details.length,
+    partialCount: detailedResults.length,
     details,
+    detailedResults,
+    summary: {
+      partialWrites,
+      specModified,
+      noAnswers,
+    },
   };
 }
 

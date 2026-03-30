@@ -471,10 +471,11 @@ export function registerRoutes(app: Express): Server {
       return res.status(400).json({ error: "Invalid user ID format" });
     }
 
-    const { gradeLevel, subjects, recommendedSubjects, strugglingAreas, graph } = req.body;
+    const { gradeLevel, subjects, recommendedSubjects, strugglingAreas, graph, parentPromptGuidelines, contentRestrictions, requireLessonApproval } = req.body;
 
     // If no valid update data was provided
-    if (!gradeLevel && !subjects && !recommendedSubjects && !strugglingAreas && !graph) {
+    if (!gradeLevel && !subjects && !recommendedSubjects && !strugglingAreas && !graph &&
+        parentPromptGuidelines === undefined && contentRestrictions === undefined && requireLessonApproval === undefined) {
       return res.status(400).json({ error: "No valid update data provided" });
     }
 
@@ -688,13 +689,34 @@ export function registerRoutes(app: Express): Server {
           }
         }
 
+
+        // Process parent prompt guidelines
+        let parentGuidelinesValue = existingProfile.parent_prompt_guidelines;
+        if (parentPromptGuidelines !== undefined) {
+          parentGuidelinesValue = parentPromptGuidelines || null;
+        }
+
+        // Process content restrictions
+        let contentRestrictionsValue = existingProfile.content_restrictions;
+        if (contentRestrictions !== undefined) {
+          contentRestrictionsValue = contentRestrictions || null;
+        }
+
+        // Process require lesson approval
+        let requireApprovalValue = existingProfile.require_lesson_approval;
+        if (requireLessonApproval !== undefined) {
+          requireApprovalValue = requireLessonApproval;
+        }
         const updateParams = [
           userId,
           gradeLevelNum !== undefined ? gradeLevelNum : existingProfile.grade_level,
           JSON.stringify(graphValue),
           JSON.stringify(subjectsValue),
           JSON.stringify(recommendedSubjectsValue),
-          JSON.stringify(strugglingAreasValue)
+          JSON.stringify(strugglingAreasValue),
+          parentGuidelinesValue,
+          contentRestrictionsValue,
+          requireApprovalValue
         ];
 
         const updateResult = await pool.query(updateQuery, updateParams);
@@ -887,6 +909,9 @@ export function registerRoutes(app: Express): Server {
         return res.status(503).json({ error: "Lesson generation produced invalid content (insufficient questions). Please try again." });
       }
 
+      // Determine lesson status: QUEUED if parent requires approval, ACTIVE otherwise
+      const lessonStatus = learnerProfile.requireLessonApproval ? "QUEUED" : "ACTIVE";
+
       // Retire any existing ACTIVE lesson — handle unique index conflict
       const previousLesson = await storage.getActiveLesson(targetLearnerId);
       if (previousLesson) {
@@ -900,7 +925,7 @@ export function registerRoutes(app: Express): Server {
           learnerId: Number(targetLearnerId),
           templateId,
           moduleId: "custom-" + Date.now(),
-          status: "ACTIVE",
+          status: lessonStatus,
           subject: finalSubject,
           category: finalCategory,
           difficulty,
@@ -919,7 +944,7 @@ export function registerRoutes(app: Express): Server {
             learnerId: Number(targetLearnerId),
             templateId,
             moduleId: "custom-" + Date.now(),
-            status: "ACTIVE",
+            status: lessonStatus,
             subject: finalSubject,
             category: finalCategory,
             difficulty,
@@ -2002,6 +2027,134 @@ export function registerRoutes(app: Express): Server {
       [learnerId]
     );
     res.json(rows);
+  }));
+
+  // ─── Parent Prompt Controls ─────────────────────────────────────────────────
+
+  // Update prompt settings for a learner profile
+  app.put("/api/learner-profile/:userId/prompt-settings", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
+    const userId = req.params.userId;
+    if (!userId) {
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
+
+    const { parentPromptGuidelines, contentRestrictions, requireLessonApproval } = req.body;
+
+    // Validate parent owns this learner
+    if (req.user?.role === "PARENT") {
+      const children = await storage.getUsersByParentId(req.user.id);
+      if (!children.some(child => child.id.toString() === userId.toString())) {
+        return res.status(403).json({ error: "Not authorized to update this profile" });
+      }
+    }
+
+    // Validate guidelines through prompt safety
+    if (parentPromptGuidelines) {
+      if (typeof parentPromptGuidelines !== 'string' || parentPromptGuidelines.length > 500) {
+        return res.status(400).json({ error: "Guidelines must be a string of 500 characters or fewer" });
+      }
+      const check = await validatePromptInput(parentPromptGuidelines);
+      if (!check.safe) {
+        return res.status(400).json({ error: `Invalid guidelines: ${check.reason}` });
+      }
+    }
+
+    if (contentRestrictions) {
+      if (typeof contentRestrictions !== 'string' || contentRestrictions.length > 500) {
+        return res.status(400).json({ error: "Content restrictions must be a string of 500 characters or fewer" });
+      }
+      const check = await validatePromptInput(contentRestrictions);
+      if (!check.safe) {
+        return res.status(400).json({ error: `Invalid content restrictions: ${check.reason}` });
+      }
+    }
+
+    try {
+      const updateQuery = `
+        UPDATE learner_profiles
+        SET parent_prompt_guidelines = COALESCE($2, parent_prompt_guidelines),
+            content_restrictions = COALESCE($3, content_restrictions),
+            require_lesson_approval = COALESCE($4, require_lesson_approval)
+        WHERE user_id = $1
+        RETURNING *
+      `;
+      const result = await pool.query(updateQuery, [
+        userId,
+        parentPromptGuidelines !== undefined ? parentPromptGuidelines : null,
+        contentRestrictions !== undefined ? contentRestrictions : null,
+        requireLessonApproval !== undefined ? requireLessonApproval : null,
+      ]);
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: "Learner profile not found" });
+      }
+
+      const row = result.rows[0];
+      return res.json({
+        parentPromptGuidelines: row.parent_prompt_guidelines,
+        contentRestrictions: row.content_restrictions,
+        requireLessonApproval: row.require_lesson_approval,
+      });
+    } catch (error: any) {
+      console.error('Error updating prompt settings:', error);
+      return res.status(500).json({ error: "Failed to update prompt settings" });
+    }
+  }));
+
+  // Approve a queued lesson (parent approval flow)
+  app.put("/api/lessons/:lessonId/approve", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
+    const lessonId = req.params.lessonId;
+    const lesson = await storage.getLessonById(lessonId);
+
+    if (!lesson) {
+      return res.status(404).json({ error: "Lesson not found" });
+    }
+
+    if (lesson.status !== "QUEUED") {
+      return res.status(400).json({ error: "Lesson is not pending approval" });
+    }
+
+    // Verify parent owns this learner
+    if (req.user?.role === "PARENT") {
+      const children = await storage.getUsersByParentId(req.user.id);
+      if (!children.some(child => child.id === lesson.learnerId)) {
+        return res.status(403).json({ error: "Not authorized to approve this lesson" });
+      }
+    }
+
+    const updated = await storage.updateLessonStatus(lessonId, "DONE");
+    return res.json(updated);
+  }));
+
+  // Reject a queued lesson (parent approval flow)
+  app.put("/api/lessons/:lessonId/reject", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
+    const lessonId = req.params.lessonId;
+    const lesson = await storage.getLessonById(lessonId);
+
+    if (!lesson) {
+      return res.status(404).json({ error: "Lesson not found" });
+    }
+
+    if (lesson.status !== "QUEUED") {
+      return res.status(400).json({ error: "Lesson is not pending approval" });
+    }
+
+    // Verify parent owns this learner
+    if (req.user?.role === "PARENT") {
+      const children = await storage.getUsersByParentId(req.user.id);
+      if (!children.some(child => child.id === lesson.learnerId)) {
+        return res.status(403).json({ error: "Not authorized to reject this lesson" });
+      }
+    }
+
+    // Delete the rejected lesson
+    try {
+      await pool.query('DELETE FROM lessons WHERE id = $1', [lessonId]);
+      return res.json({ message: "Lesson rejected and removed" });
+    } catch (error: any) {
+      console.error('Error rejecting lesson:', error);
+      return res.status(500).json({ error: "Failed to reject lesson" });
+    }
   }));
 
   // Error handling middleware

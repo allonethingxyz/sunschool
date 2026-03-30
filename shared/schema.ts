@@ -61,6 +61,9 @@ export const learnerProfiles = pgTable("learner_profiles", {
   }>>().default({}),
   recommendedSubjects: json("recommended_subjects").$type<string[]>().default([]),
   strugglingAreas: json("struggling_areas").$type<string[]>().default([]),
+  parentPromptGuidelines: text("parent_prompt_guidelines"),
+  contentRestrictions: text("content_restrictions"),
+  requireLessonApproval: boolean("require_lesson_approval").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

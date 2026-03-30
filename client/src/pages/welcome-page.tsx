@@ -171,7 +171,7 @@ const WelcomePage: React.FC = () => {
                 School {'\u2014'} anywhere{'\n'}under the sun.
               </Text>
               <Text style={styles.heroSub}>
-                An AI tutor that adapts to your child. Open source, so you can see exactly how it works.
+                An AI tutor that adapts to your child. You see every prompt. You set the guidelines. You approve the lessons. Open source, so you can verify every word.
               </Text>
 
               <View style={styles.heroCtas}>
@@ -256,10 +256,10 @@ const WelcomePage: React.FC = () => {
         <View style={styles.trustBar}>
           <View style={styles.trustInner}>
             {[
+              { icon: <Eye size={20} color={brand.amber} aria-hidden="true" />, label: 'Prompt Transparent' },
+              { icon: <Lock size={20} color={brand.green} aria-hidden="true" />, label: 'Parent-Controlled' },
               { icon: <Globe size={20} color={brand.primary} aria-hidden="true" />, label: 'Open Source' },
               { icon: <BookOpen size={20} color={brand.secondary} aria-hidden="true" />, label: 'K-12' },
-              { icon: <Zap size={20} color={brand.amber} aria-hidden="true" />, label: 'AI-Powered' },
-              { icon: <Lock size={20} color={brand.green} aria-hidden="true" />, label: 'Parent-Controlled' },
             ].map((item, i) => (
               <View key={i} style={styles.trustItem}>
                 {item.icon}

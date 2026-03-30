@@ -510,9 +510,9 @@ const AuthPage = () => {
               <User size={24} color={colors.primary} aria-hidden={true} />
             </View>
             <View style={styles.featureContent}>
-              <Text style={styles.featureTitle}>Parent Involvement</Text>
+              <Text style={styles.featureTitle}>Own the Prompt</Text>
               <Text style={styles.featureDescription}>
-                Monitor progress and support your child's learning journey
+                See every AI instruction. Set custom guidelines. Approve lessons before your child sees them.
               </Text>
             </View>
           </View>

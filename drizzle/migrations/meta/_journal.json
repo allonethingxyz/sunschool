@@ -99,6 +99,13 @@
       "when": 1743206400000,
       "tag": "0013_prompt_log",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1743379200000,
+      "tag": "0014_parent_prompt_controls",
+      "breakpoints": true
     }
   ]
 }

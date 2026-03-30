@@ -311,6 +311,9 @@ export class DatabaseStorage implements IStorage {
           subjectPerformance,
           recommendedSubjects,
           strugglingAreas,
+          parentPromptGuidelines: row.parent_prompt_guidelines,
+          contentRestrictions: row.content_restrictions,
+          requireLessonApproval: row.require_lesson_approval,
           createdAt: row.created_at
         };
 
@@ -487,6 +490,9 @@ export class DatabaseStorage implements IStorage {
           subjectPerformance,
           recommendedSubjects,
           strugglingAreas,
+          parentPromptGuidelines: updatedRow.parent_prompt_guidelines,
+          contentRestrictions: updatedRow.content_restrictions,
+          requireLessonApproval: updatedRow.require_lesson_approval,
           createdAt: updatedRow.created_at
         };
 

@@ -1,7 +1,13 @@
 {
-  "name": "workspace",
-  "version": "1.0.0",
+  "name": "sunschool",
+  "version": "0.4.3",
+  "description": "AI-powered adaptive learning platform where parents own the prompt",
   "main": "index.js",
+  "homepage": "https://sunschool.xyz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/allonethingxyz/sunschool"
+  },
   "scripts": {
     "test": "jest --testPathPattern='tests/unit' --passWithNoTests",
     "build": "cd client && npx vite build",
@@ -10,9 +16,12 @@
     "migrate": "ts-node --transpile-only scripts/migrate.ts",
     "deploy": "TS_NODE_TRANSPILE_ONLY=true TS_NODE_PROJECT=tsconfig.deploy.json ts-node server/index.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["education", "ai", "adaptive-learning", "k12", "react-native-web"],
+  "author": "All One Thing Labs <info@allonething.xyz>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "description": "",
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",

@@ -26,7 +26,6 @@ const AuthPage = () => {
   // Kid-friendly session expiry screen state
   const [showLoginForm, setShowLoginForm] = useState(false);
 
-
   // Login form state
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');

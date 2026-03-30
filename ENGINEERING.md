@@ -20,7 +20,7 @@ server/              Express.js backend
   config/            Environment vars (env.ts) and feature flags (flags.ts)
   bittensor.ts       Bittensor Subnet 1 client
 shared/              TypeScript schemas and types (schema.ts)
-drizzle/migrations/  Database migration SQL files (0000-0010)
+drizzle/migrations/  Database migration SQL files (0000-0011)
 scripts/             Admin onboarding, password reset, migrations
 tests/e2e/           Playwright end-to-end tests
 ```
@@ -197,7 +197,7 @@ BITTENSOR_WALLET_HOTKEY=...
 - Neon serverless PostgreSQL with WebSocket connections
 - Connection pooling (max 10), keep-alive pings every 2 min
 - Migrations auto-run on startup; failures don't block server start
-- Migration folder: `drizzle/migrations/` (0000-0010)
+- Migration folder: `drizzle/migrations/` (0000-0011)
 - First registered user auto-promoted to ADMIN
 
 ## Security Notes
@@ -219,27 +219,33 @@ SVG content is sanitized server-side via a regex-based sanitizer in `server/serv
 - `npx playwright test` — E2E tests (auto-starts local server)
 - `PLAYWRIGHT_BASE_URL=https://sunschool.xyz npx playwright test` — E2E against production
 
-### E2E Test Suite (82 tests across 15 spec files)
+### E2E Test Suite (117 tests across 21 spec files)
 
 Tests live in `tests/e2e/specs/` organized by persona:
 
 | Persona | Spec File | Tests | Coverage |
 |---------|-----------|-------|----------|
+| **Auth** | `registration-login.spec.ts` | 7 | Registration, login, invalid creds, session, logout, token clearing |
 | **Learner** | `lesson-flow.spec.ts` | 2 | Lesson generation, content navigation |
 | | `quiz-assessment.spec.ts` | 4 | Quiz pre-screen, answering via API, results |
 | | `content-display.spec.ts` | 5 | Text sections, SVG/image display, difficulty levels |
 | | `achievements.spec.ts` | 5 | Progress page, zero state, lesson history, mastery |
 | | `points-rewards.spec.ts` | 5 | Point balance, goals page, reward progress |
 | | `card-carousel.spec.ts` | 5 | Cover card render, progress bar, navigation |
-| | `svg-rendering.spec.ts` | 6 | SVG in API response, DOM rendering, sanitization |
+| | `svg-rendering.spec.ts` | 3 | SVG in API response, DOM rendering, image references |
 | | `input-safety.spec.ts` | 8 | Prompt injection, DAN mode, env var exfiltration |
 | | `chaotic-kid.spec.ts` | 10 | Spam-click, cancel mid-gen, rapid subject switch, refresh during load, random taps, bookmark recovery, error recovery |
+| | `template-reuse.spec.ts` | 1 | Shared lesson library, cached template reuse |
 | **Parent** | `auth.spec.ts` | 4 | Login form, invalid creds, registration, token clearing |
 | | `dashboard.spec.ts` | 5 | Dashboard loads, stats, reports nav, rewards nav, mode switch |
-| | `learner-management.spec.ts` | 5 | Learner list, add child, child cards, add-learner page |
-| | `prompt-audit.spec.ts` | 5 | Lesson API transparency, reports, progress, dashboard |
-| | `public-pages.spec.ts` | 7 | Welcome, auth tabs, privacy, terms |
-| | `rewards.spec.ts` | 6 | Rewards page, create goal, tabs/sections |
+| | `learner-management.spec.ts` | 4 | Learner list, add child, child cards, add-learner page |
+| | `parent-workflows.spec.ts` | 8 | Dashboard, learner management, rewards, reports, mode switch |
+| | `prompt-audit.spec.ts` | 4 | Lesson API transparency, reports, progress, dashboard |
+| | `public-pages.spec.ts` | 4 | Welcome, auth tabs, privacy, terms |
+| | `rewards.spec.ts` | 3 | Rewards page, create goal, tabs/sections |
+| | `signup-login.spec.ts` | 5 | Registration with age disclaimer, login, invalid creds, session persistence, logout |
+| | `workflow-validation.spec.ts` | 19 | Full workflow validation: public pages, parent/learner flows, SVG rendering, navigation |
+| **Public** | `public-pages.spec.ts` | 6 | Welcome, auth tabs, privacy, terms, healthcheck, unauthenticated redirect |
 
 ### Test Helpers
 

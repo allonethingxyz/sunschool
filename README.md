@@ -63,7 +63,7 @@ If you don't know what's in the prompt, you don't really know what's in the less
 | Database | PostgreSQL (Neon serverless) |
 | AI | OpenRouter API (primary), Bittensor Subnet 1 (experimental), Perplexity API |
 | Deployment | Railway (NIXPACKS), auto-deploy on push to `main` |
-| Testing | Jest (unit), Playwright (e2e — 82 tests, 15 specs) |
+| Testing | Jest (unit), Playwright (e2e — 117 tests, 21 specs) |
 
 ### Architecture
 

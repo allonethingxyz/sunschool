@@ -204,7 +204,7 @@ const WelcomePage: React.FC = () => {
               Sunschool is an AI-powered tutor that meets your kid where they are {'\u2014'} grade level, learning style, speed. Every lesson adapts in real time. No two kids get the same experience.
             </Text>
             <Text style={styles.productDesc}>
-              It works on a blue-light-free e-reader tablet that runs on solar and satellite {'\u2014'} no Wi-Fi, no outlet, no classroom required. Backyard. Beach. Backseat. If the sun's out, school's on.
+              Coming soon: a blue-light-free e-reader tablet designed for solar and satellite {'\u2014'} no Wi-Fi, no outlet, no classroom required. Backyard. Beach. Backseat. If the sun's out, school's on.
             </Text>
           </View>
         </View>
@@ -330,12 +330,12 @@ const WelcomePage: React.FC = () => {
         {/* ── Testimonials ── */}
         <View style={styles.sectionWhite}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">From parents using Sunschool</Text>
+            <Text style={styles.sectionTitle} accessibilityRole="header">What we're building toward</Text>
             <View style={styles.testimonialGrid}>
               {[
                 { quote: 'She takes it outside and does math in the hammock. Voluntarily. I have no explanation.', name: 'Sarah M.', detail: 'Parent of a 3rd grader', color: brand.primary },
                 { quote: 'I read the source code before my kids touched it. Every ed-tech company should have to clear that bar.', name: 'James T.', detail: 'Parent of 2', color: brand.secondary },
-                { quote: 'We travel full-time. Sunschool works on a beach in Portugal or a cabin in Montana \u2014 no Wi-Fi needed.', name: 'Mia L.', detail: 'Homeschool parent', color: brand.green },
+                { quote: 'We travel full-time. Sunschool works on a beach in Portugal or a cabin in Montana \u2014 even offline.', name: 'Mia L.', detail: 'Homeschool parent', color: brand.green },
               ].map((t, i) => (
                 <View key={i} style={[styles.testimonialCard, { borderLeftColor: t.color }]}>
                   <Text style={styles.testimonialQuote}>{'\u201C'}{t.quote}{'\u201D'}</Text>
@@ -353,7 +353,7 @@ const WelcomePage: React.FC = () => {
             <Text style={styles.finalCtaTitle} accessibilityRole="header">
               School {'\u2014'} anywhere{'\n'}under the sun.
             </Text>
-            <Text style={styles.finalCtaNote}>Free forever for core features. No credit card needed.</Text>
+            <Text style={styles.finalCtaNote}>Free for core features during alpha. No credit card needed.</Text>
             <TouchableOpacity style={styles.finalCtaButton} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started Free">
               <Text style={styles.finalCtaButtonText}>Get Started Free</Text>
               <ArrowRight size={18} color={brand.white} style={{ marginLeft: 8 }} aria-hidden="true" />

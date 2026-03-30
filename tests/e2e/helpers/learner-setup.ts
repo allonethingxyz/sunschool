@@ -456,14 +456,10 @@ export async function createRewardGoal(
   title: string,
   cost: number
 ): Promise<number | null> {
-  const learnerId = await page.evaluate(() =>
-    Number(localStorage.getItem('selectedLearnerId'))
-  );
   const result = await apiCall(page, 'POST', '/api/rewards', {
-    learnerId,
     title,
-    cost,
-    emoji: '🎮',
+    tokenCost: cost,
+    imageEmoji: '🎮',
     color: '#4CAF50',
   });
 

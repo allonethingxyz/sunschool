@@ -3,10 +3,7 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   testMatch: ['**/tests/unit/**/*.test.ts'],
-  moduleNameMapper: {
-    // Prevent Jest from trying to load client-side React Native modules
-    '^react-native$': '<rootDir>/tests/__mocks__/react-native.js',
-  },
+  moduleNameMapper: {},
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
       tsconfig: {

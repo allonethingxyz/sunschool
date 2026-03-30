@@ -23,6 +23,7 @@ import LessonsPage from './pages/lessons-page';
 import SelectLearnerPage from './pages/select-learner-page';
 import ParentRewardsPage from './pages/parent-rewards-page';
 import LearnerGoalsPage from './pages/learner-goals-page';
+import PromptSettingsPage from './pages/prompt-settings-page';
 import { ProtectedRoute } from './lib/protected-route';
 import { AdminRoute } from './lib/admin-route';
 import { LearnerRoute } from './lib/learner-route';
@@ -141,6 +142,7 @@ export default function App() {
             <ProtectedRoute path="/reports" component={ReportsPage} />
             <ProtectedRoute path="/database-sync" component={DatabaseSyncPage} />
             <ProtectedRoute path="/rewards" component={ParentRewardsPage} />
+            <ProtectedRoute path="/learners/:id/prompt-settings" component={PromptSettingsPage} />
             
             {/* Learner specific routes */}
             <LearnerRoute path="/learner" component={LearnerHome} />

@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import DOMPurify from 'isomorphic-dompurify';
 import { ChevronLeft, ChevronRight } from 'react-feather';
@@ -281,6 +282,8 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
   onStartQuiz,
 }) => {
   const theme = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const isNarrow = windowWidth < 400;
   // Restore card position from localStorage (survives refresh)
   const storageKey = `carousel_pos_${enhancedSpec.title}`;
   const [currentIndex, setCurrentIndex] = useState(() => {
@@ -776,10 +779,18 @@ const LessonCardCarousel: React.FC<LessonCardCarouselProps> = ({
         <ScrollView
           ref={scrollRef}
           style={s.cardScroll}
-          contentContainerStyle={s.cardScrollContent}
+          contentContainerStyle={[
+            s.cardScrollContent,
+            isNarrow && { paddingHorizontal: 16 },
+          ]}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[s.card, { backgroundColor: theme.colors.surfaceColor }]}>
+          <View
+            style={[
+              s.card,
+              { backgroundColor: theme.colors.surfaceColor },
+            ]}
+          >
             {renderCurrentCard()}
           </View>
         </ScrollView>
@@ -875,6 +886,7 @@ const s = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 12,
     overflow: 'hidden',
+    width: '100%',
   },
   cardInner: {
     padding: 24,

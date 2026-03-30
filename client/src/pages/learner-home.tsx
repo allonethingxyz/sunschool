@@ -112,6 +112,7 @@ const LearnerHome = () => {
   const [pendingSubjectLabel, setPendingSubjectLabel] = useState<string | null>(null);
   const [pendingSubject, setPendingSubject] = useState<{ name: string; category: string; difficulty: 'beginner' | 'intermediate' | 'advanced' } | null>(null);
   const [showErrorDetail, setShowErrorDetail] = useState(false);
+  const [generationComplete, setGenerationComplete] = useState(false);
 
   // Fetch active lesson
   const {
@@ -161,6 +162,12 @@ const LearnerHome = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/lessons/active', selectedLearner?.id] });
       setPendingSubjectLabel(null);
+      setGenerationComplete(true);
+      // Brief "Ready!" state, then auto-navigate to the lesson
+      setTimeout(() => {
+        setGenerationComplete(false);
+        setLocation('/lesson');
+      }, 1500);
     },
     onError: (error) => {
       console.error('Error generating lesson:', error);
@@ -221,6 +228,7 @@ const LearnerHome = () => {
   const handleCancelGeneration = () => {
     generateLessonMutation.reset();
     setPendingSubjectLabel(null);
+    setGenerationComplete(false);
   };
 
   const handleOpenSubjectSelector = () => {
@@ -317,7 +325,11 @@ const LearnerHome = () => {
           </View>
         )}
 
-        {generateLessonMutation.isPending ? (
+        {generationComplete ? (
+          <FunLoader
+            message="Ready! \uD83C\uDF89"
+          />
+        ) : generateLessonMutation.isPending ? (
           <FunLoader
             progressMessages={['Finding the best lesson for you...', 'Almost ready...', 'Here it comes!']}
             subjectLabel={pendingSubjectLabel || undefined}
@@ -557,6 +569,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: colors.primary,
+    minHeight: 56,
   },
   selectSubjectButtonText: {
     ...typography.button,
@@ -825,6 +838,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
+    minHeight: 56,
   },
   generateButtonText: {
     ...commonStyles.buttonText,

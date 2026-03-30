@@ -115,8 +115,10 @@ const styles = StyleSheet.create({
   },
   navButton: {
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 4,
     paddingHorizontal: 16,
+    minHeight: 56,
   },
   navIcon: {
     fontSize: 24,

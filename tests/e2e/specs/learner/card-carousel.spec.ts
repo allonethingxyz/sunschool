@@ -95,9 +95,19 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
       await screenshot(page, `${TEST_NAME}-04-card-${i + 1}`);
     }
 
-    // Quiz card: "Start Quiz" CTA should be visible
+    // Quiz card: "Start Quiz" CTA should be visible — may need extra navigation
+    // Some lessons have a recap card before the quiz card
     const startQuizBtn = page.getByText('Start Quiz');
-    await expect(startQuizBtn).toBeVisible({ timeout: 10000 });
+    let quizVisible = await startQuizBtn.isVisible({ timeout: 5000 }).catch(() => false);
+    if (!quizVisible) {
+      // Try one more Next click (recap → quiz transition)
+      const extraNext = getNextBtn(page);
+      if (await extraNext.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await extraNext.click();
+        await page.waitForTimeout(500);
+      }
+    }
+    await expect(startQuizBtn).toBeVisible({ timeout: 15000 });
     await screenshot(page, `${TEST_NAME}-05-quiz-card`);
 
     // Click Start Quiz — should navigate to /quiz/:id

@@ -530,9 +530,18 @@ test.describe('Parent & Learner Workflows', () => {
 
   test('12. Progress page shows lesson history', async () => {
     await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+
+    // Ensure learnerId is set — fetch from API if upstream test didn't propagate it
+    if (!learnerId || learnerId <= 0) {
+      const result = await apiCall(page, 'GET', '/api/learners');
+      if (result.status === 200 && Array.isArray(result.data) && result.data.length > 0) {
+        learnerId = result.data[0].id;
+      }
+    }
+
+    await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), learnerId);
     await page.goto('/progress');
     await page.waitForLoadState('networkidle');
-    await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), learnerId);
     await page.waitForTimeout(3000);
     await screenshot(page, '12-progress');
     expect(page.url()).toMatch(/progress/);

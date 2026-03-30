@@ -10,10 +10,9 @@
  */
 import { test, expect } from '@playwright/test';
 import {
-  createTestUser,
-  registerParent,
-  loginParent,
-  dismissModal,
+  generateTestUser,
+  registerParentViaAPI,
+  apiCall,
   screenshot,
 } from '../../helpers/learner-setup';
 
@@ -25,7 +24,7 @@ async function waitForAuthPage(page: import('@playwright/test').Page): Promise<v
   await page.waitForFunction(() => {
     return !document.body.textContent?.includes('Initializing authentication');
   }, { timeout: 15000 }).catch(() => {});
-  await dismissModal(page);
+  await page.getByText(/got it|close|dismiss/i).first().click().catch(() => {});
   // Wait for login form inputs to render (signals SPA is ready)
   await page.locator('input[placeholder="Enter your username"]')
     .waitFor({ state: 'visible', timeout: 15000 })
@@ -37,7 +36,7 @@ test.describe('Parent Signup & Login', () => {
 
   test('Registration flow with age disclaimer', async ({ page }) => {
     page.setDefaultTimeout(30000);
-    const user = createTestUser('signup');
+    const user = generateTestUser('signup');
 
     await waitForAuthPage(page);
 
@@ -96,12 +95,12 @@ test.describe('Parent Signup & Login', () => {
 
   test('Login with valid credentials', async ({ page }) => {
     page.setDefaultTimeout(30000);
-    const user = createTestUser('loginok');
+    const user = generateTestUser('loginok');
 
     await waitForAuthPage(page);
 
     // Register via API first
-    await registerParent(page, user);
+    await registerParentViaAPI(page, user);
 
     // Ensure we're on login tab
     const loginTab = page.getByText(/login/i).first();
@@ -157,12 +156,12 @@ test.describe('Parent Signup & Login', () => {
   // QUARANTINED: Production SPA does not persist auth sessions across full page reloads.
   test.skip('Session persistence across page reload', async ({ page }) => {
     page.setDefaultTimeout(30000);
-    const user = createTestUser('persist');
+    const user = generateTestUser('persist');
 
     await waitForAuthPage(page);
 
     // Register via API
-    await registerParent(page, user);
+    await registerParentViaAPI(page, user);
 
     // Login via UI to establish proper session state
     await page.getByText(/login/i).first().click();
@@ -217,11 +216,11 @@ test.describe('Parent Signup & Login', () => {
 
   test('Logout redirects to public page', async ({ page }) => {
     page.setDefaultTimeout(30000);
-    const user = createTestUser('signout');
+    const user = generateTestUser('signout');
 
     await waitForAuthPage(page);
 
-    await registerParent(page, user);
+    await registerParentViaAPI(page, user);
 
     // Login via UI
     const loginTab = page.getByText(/login/i).first();

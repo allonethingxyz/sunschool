@@ -35,11 +35,8 @@ export const DATABASE_SSL = getEnv('DATABASE_SSL', 'true') === 'true';
 // Server configuration
 export const PORT = parseInt(getEnv('PORT', '5000'));
 export const NODE_ENV = getEnv('NODE_ENV', 'development');
-export const SESSION_SECRET = getEnv('SESSION_SECRET', 'dev-secret-change-me');
-
 // Authentication
-export const JWT_SECRET = getEnv('JWT_SECRET', SESSION_SECRET);
-export const JWT_EXPIRY = getEnv('JWT_EXPIRY', '7d');
+export const JWT_SECRET = getEnv('JWT_SECRET', getEnv('SESSION_SECRET', 'dev-secret-change-me'));
 
 // LLM Provider Configuration
 export const LLM_PROVIDER = process.env.LLM_PROVIDER || 'openrouter'; // 'openrouter', 'bittensor', 'perplexity'

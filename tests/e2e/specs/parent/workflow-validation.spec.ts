@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
+import { apiCall } from '../../helpers/learner-setup';
 
 /**
  * Comprehensive workflow validation tests for Sunschool.
@@ -62,62 +63,7 @@ async function loginViaAPI(page: Page): Promise<string> {
   return result.token;
 }
 
-/** Navigate within the SPA without full page reload (preserves auth state) */
-async function spaNavigate(page: Page, path: string) {
-  await page.evaluate((url) => {
-    window.history.pushState({}, '', url);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }, path);
-  await page.waitForTimeout(2000);
-  await page.evaluate(() => window.dispatchEvent(new Event('popstate')));
-  await page.waitForTimeout(1000);
-}
 
-/** Set auth token in localStorage and navigate */
-async function setAuthAndNavigate(page: Page, token: string, path: string) {
-  const currentUrl = page.url();
-  if (currentUrl.includes('sunschool.xyz') || currentUrl.includes('localhost')) {
-    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
-    await spaNavigate(page, path);
-  } else {
-    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
-    await page.goto(path);
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000);
-  }
-}
-
-/** API helper — makes authenticated requests from browser context with timeout */
-async function apiCall(page: Page, method: string, url: string, body?: any): Promise<any> {
-  try {
-    return await page.evaluate(async ({ method, url, body }) => {
-      // Read token from localStorage (SPA may have refreshed it)
-      const token = localStorage.getItem('AUTH_TOKEN') || '';
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-      try {
-        const res = await fetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          signal: controller.signal,
-          ...(body ? { body: JSON.stringify(body) } : {}),
-        });
-        clearTimeout(timeoutId);
-        const text = await res.text();
-        try { return { status: res.status, data: JSON.parse(text) }; }
-        catch { return { status: res.status, data: text }; }
-      } catch (err: any) {
-        clearTimeout(timeoutId);
-        return { status: 0, data: `fetch error: ${err.message}` };
-      }
-    }, { method, url, body });
-  } catch (err: any) {
-    return { status: 0, data: `evaluate error: ${err.message}` };
-  }
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PUBLIC WORKFLOWS
@@ -213,8 +159,9 @@ test.describe('Parent & Learner Workflows', () => {
   // ── PARENT WORKFLOWS ──────────────────────────────────────────────────────
 
   test('14. Parent dashboard loads after login', async () => {
-    await setAuthAndNavigate(page, authToken, '/dashboard');
-    await page.waitForTimeout(2000);
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
 
     // Dismiss welcome card
     const gotItDash = page.getByText('GOT IT!');
@@ -258,24 +205,27 @@ test.describe('Parent & Learner Workflows', () => {
   });
 
   test('15. Learners management page shows child', async () => {
-    await setAuthAndNavigate(page, authToken, '/learners');
-    await page.waitForTimeout(2000);
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/learners');
+    await page.waitForLoadState('networkidle');
 
     await expect(page.getByText(childName).first()).toBeVisible();
     await screenshot(page, '15-learners-management');
   });
 
   test('18. Reports page loads', async () => {
-    await setAuthAndNavigate(page, authToken, '/reports');
-    await page.waitForTimeout(2000);
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/reports');
+    await page.waitForLoadState('networkidle');
     await screenshot(page, '18-reports');
     // Should show report page (may be empty for new learner)
     expect(page.url()).toMatch(/reports/);
   });
 
   test('19. Rewards management page loads', async () => {
-    await setAuthAndNavigate(page, authToken, '/rewards');
-    await page.waitForTimeout(2000);
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/rewards');
+    await page.waitForLoadState('networkidle');
     await screenshot(page, '19-rewards');
     expect(page.url()).toMatch(/rewards/);
   });
@@ -283,8 +233,9 @@ test.describe('Parent & Learner Workflows', () => {
   // ── SWITCH TO LEARNER MODE ─────────────────────────────────────────────────
 
   test('7. Switch to learner mode', async () => {
-    await setAuthAndNavigate(page, authToken, '/dashboard');
-    await page.waitForTimeout(2000);
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
 
     // Dismiss welcome card
     const gotItDash = page.getByText('GOT IT!');
@@ -387,7 +338,9 @@ test.describe('Parent & Learner Workflows', () => {
     }
 
     // Navigate to lesson page
-    await setAuthAndNavigate(page, authToken, '/lesson');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/lesson');
+    await page.waitForLoadState('networkidle');
     await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), learnerId);
 
     // Wait for lesson content to load
@@ -458,7 +411,9 @@ test.describe('Parent & Learner Workflows', () => {
     }
 
     // Navigate to lesson and click Start Quiz
-    await setAuthAndNavigate(page, authToken, '/lesson');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/lesson');
+    await page.waitForLoadState('networkidle');
     await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), learnerId);
     await page.waitForTimeout(3000);
 
@@ -574,7 +529,9 @@ test.describe('Parent & Learner Workflows', () => {
   });
 
   test('12. Progress page shows lesson history', async () => {
-    await setAuthAndNavigate(page, authToken, '/progress');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/progress');
+    await page.waitForLoadState('networkidle');
     await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), learnerId);
     await page.waitForTimeout(3000);
     await screenshot(page, '12-progress');
@@ -582,7 +539,9 @@ test.describe('Parent & Learner Workflows', () => {
   });
 
   test('13. Learner goals page loads', async () => {
-    await setAuthAndNavigate(page, authToken, '/goals');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/goals');
+    await page.waitForLoadState('networkidle');
     await page.evaluate((id) => localStorage.setItem('selectedLearnerId', String(id)), learnerId);
     await page.waitForTimeout(3000);
     await screenshot(page, '13-learner-goals');
@@ -592,7 +551,9 @@ test.describe('Parent & Learner Workflows', () => {
   // ── PARENT POST-QUIZ WORKFLOWS ────────────────────────────────────────────
 
   test('18b. Reports page shows completed lesson', async () => {
-    await setAuthAndNavigate(page, authToken, '/reports');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), authToken);
+    await page.goto('/reports');
+    await page.waitForLoadState('networkidle');
     await page.waitForTimeout(3000);
     await screenshot(page, '18b-reports-with-data');
   });

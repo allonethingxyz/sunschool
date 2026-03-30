@@ -427,6 +427,17 @@ const styles = StyleSheet.create({
     ...typography.body2,
     color: colors.error,
     textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    ...typography.button,
+    color: colors.onPrimary,
   },
   retryButton: {
     backgroundColor: colors.primary,

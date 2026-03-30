@@ -247,11 +247,14 @@ const DashboardPage: React.FC = () => {
   const {
     data: learners,
     isLoading: learnersLoading,
+    error: learnersError,
   } = useQuery<any[]>({
     queryKey: ['/api/learners'],
     queryFn: () => apiRequest('GET', '/api/learners').then((res: any) => res.data ?? res),
     enabled: user?.role === 'PARENT' || user?.role === 'ADMIN',
   });
+
+  const queryClient = useQueryClient();
 
   // Handle "Start Learning" on a child card -- switch into that learner's mode
   const handleViewChild = (learner: { id: number; name: string; email: string; role: string }) => {
@@ -269,6 +272,18 @@ const DashboardPage: React.FC = () => {
           <>
             {learnersLoading ? (
               <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 24 }} />
+            ) : learnersError ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>
+                  Unable to load your children. Please try again.
+                </Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => queryClient.invalidateQueries({ queryKey: ['/api/learners'] })}
+                >
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
             ) : hasChildren ? (
               <>
                 {/* Child cards */}
@@ -552,6 +567,32 @@ const styles = StyleSheet.create({
   inlineFormErrorText: {
     ...typography.body2,
     color: colors.error,
+  },
+
+  // ------------------------------------------------------------------
+  // Error / retry
+  // ------------------------------------------------------------------
+  errorContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+  },
+  errorText: {
+    ...typography.body1,
+    color: colors.error,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    ...typography.button,
+    color: colors.onPrimary,
   },
 
   // ------------------------------------------------------------------

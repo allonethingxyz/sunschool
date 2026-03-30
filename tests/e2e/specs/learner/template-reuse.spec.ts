@@ -18,7 +18,7 @@ test.describe('Shared Lesson Library: Template Reuse', () => {
   test('second lesson for same subject/grade reuses cached template', async ({ page }) => {
     test.setTimeout(600_000);
 
-    const ctx = await setupLearnerSession(page, { prefix: 'tmpl', childGrade: 3 });
+    const ctx = await setupLearnerSession(page, 'tmpl');
 
     // --- Lesson 1: should generate or reuse a template ---
     const start1 = Date.now();

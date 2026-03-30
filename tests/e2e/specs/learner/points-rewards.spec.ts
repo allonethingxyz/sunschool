@@ -15,7 +15,6 @@ import {
   generateAndWaitForLesson,
   createRewardGoal,
   apiCall,
-  spaNavigate,
   enterLearnerContext,
 } from '../../helpers/learner-setup';
 

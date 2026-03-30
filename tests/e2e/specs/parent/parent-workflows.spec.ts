@@ -1,41 +1,18 @@
 import { test, expect } from '@playwright/test';
 import {
-  generateTestUser,
-  registerParentViaAPI,
   apiCall,
-  createChildViaAPI,
-  setAuthAndNavigate,
+  setupParentSession,
 } from '../../helpers/learner-setup';
 
 const SCREENSHOT_DIR = 'tests/e2e/screenshots/parent';
 
-async function setupParentSession(page: any, prefix: string = 'parent') {
-  const user = generateTestUser(prefix);
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
-
-  const token = await registerParentViaAPI(page, user);
-  await page.evaluate((t: string) => localStorage.setItem('AUTH_TOKEN', t), token);
-
-  const childName = `Child_${Date.now()}`;
-  const learnerId = await createChildViaAPI(page, childName);
-
-  await page.reload();
-  await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
-
-  return { token, learnerId, childName, user };
-}
 
 test.describe('Parent: Dashboard & Management', () => {
   test('dashboard loads and shows child cards', async ({ page }) => {
     const { childName, token } = await setupParentSession(page, 'dash');
-    await setAuthAndNavigate(page, token, '/dashboard');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), token);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
 
     const hasDashboard = await page.getByText(/Dashboard|My Learners/i)
       .first().isVisible({ timeout: 15000 }).catch(() => false);
@@ -48,7 +25,9 @@ test.describe('Parent: Dashboard & Management', () => {
 
   test('learners management page shows enrolled children', async ({ page }) => {
     const { childName, token } = await setupParentSession(page, 'learners');
-    await setAuthAndNavigate(page, token, '/learners');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), token);
+    await page.goto('/learners');
+    await page.waitForLoadState('networkidle');
 
     const hasLearnersList = await page.getByText(/Learners|Children|Students/i)
       .first().isVisible({ timeout: 15000 }).catch(() => false);
@@ -72,7 +51,9 @@ test.describe('Parent: Dashboard & Management', () => {
     expect(result.data.id).toBeTruthy();
 
     // Navigate to learners page and verify both children show
-    await setAuthAndNavigate(page, token, '/learners');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), token);
+    await page.goto('/learners');
+    await page.waitForLoadState('networkidle');
     const hasNewChild = await page.getByText(new RegExp(newChildName.slice(0, 10), 'i'))
       .first().isVisible({ timeout: 15000 }).catch(() => false);
 
@@ -82,7 +63,9 @@ test.describe('Parent: Dashboard & Management', () => {
 
   test('reports page loads for a learner', async ({ page }) => {
     const { learnerId, token } = await setupParentSession(page, 'reports');
-    await setAuthAndNavigate(page, token, '/reports');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), token);
+    await page.goto('/reports');
+    await page.waitForLoadState('networkidle');
 
     // Reports page should show some content (may need to select learner)
     const hasReports = await page.getByText(/Reports|Analytics|Progress|Performance/i)
@@ -94,7 +77,9 @@ test.describe('Parent: Dashboard & Management', () => {
 
   test('rewards management page loads', async ({ page }) => {
     const { token } = await setupParentSession(page, 'rewards');
-    await setAuthAndNavigate(page, token, '/rewards');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), token);
+    await page.goto('/rewards');
+    await page.waitForLoadState('networkidle');
 
     const hasRewards = await page.getByText(/Rewards|Goals|Manage/i)
       .first().isVisible({ timeout: 15000 }).catch(() => false);
@@ -112,7 +97,9 @@ test.describe('Parent: Dashboard & Management', () => {
       localStorage.setItem('preferredMode', 'LEARNER');
     }, learnerId);
 
-    await setAuthAndNavigate(page, token, '/learner');
+    await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), token);
+    await page.goto('/learner');
+    await page.waitForLoadState('networkidle');
 
     const hasLearnerHome = await page.getByText(/Hello|Current Lesson|SELECT A SUBJECT/i)
       .first().isVisible({ timeout: 15000 }).catch(() => false);

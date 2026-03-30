@@ -45,6 +45,7 @@ import { storeQuestionHashes } from './services/question-deduplication';
 import { validatePromptInput } from './services/prompt-safety';
 import { detectOrphanedImages, detectPartialQuizSubmissions, reconcilePointsBalances } from './services/maintenance-service';
 import { getLessonAnalytics, flagLowQualityTemplates } from './services/lesson-analytics-service';
+import { getTuningHistory, runAutoTuner } from './services/lesson-validation-tuner';
 import { getAllCircuitBreakerStates } from './services/circuit-breaker';
 
 function hasRole(roles: string[]) {
@@ -2080,6 +2081,16 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/admin/low-quality-templates", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
     const flagged = await flagLowQualityTemplates();
     return res.json({ count: flagged.length, templates: flagged });
+  }));
+
+  app.get("/api/admin/auto-tuner/history", hasRole(["ADMIN"]), (_req: Request, res: Response) => {
+    const history = getTuningHistory(50);
+    res.json({ history });
+  });
+
+  app.post("/api/admin/auto-tuner/run", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    await runAutoTuner();
+    res.json({ message: "Auto-tuner run completed" });
   }));
 
   // ── Maintenance endpoints (admin-only) ────────────────────────────────────

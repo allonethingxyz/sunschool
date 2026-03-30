@@ -1,7 +1,7 @@
 import { relations } from "drizzle-orm";
-import { 
-  integer, pgEnum, pgTable, serial, text, timestamp, uuid, json, boolean, 
-  varchar, jsonb, index 
+import {
+  integer, pgEnum, pgTable, serial, text, timestamp, uuid, json, boolean,
+  varchar, jsonb, index, real
 } from "drizzle-orm/pg-core";
 
 // Enums
@@ -430,3 +430,21 @@ export type PointsLedgerEntry = {
   description: string;
   createdAt: string;
 };
+
+// Prompt Log table — tracks every LLM prompt sent for parent transparency
+export const promptLog = pgTable('prompt_log', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  lessonId: text('lesson_id').references(() => lessons.id, { onDelete: 'cascade' }),
+  learnerId: integer('learner_id').references(() => users.id, { onDelete: 'cascade' }),
+  promptType: text('prompt_type').notNull(), // 'lesson_generation', 'quiz_generation', 'image_generation', 'svg_generation', 'feedback', 'knowledge_graph'
+  systemMessage: text('system_message').notNull(),
+  userMessage: text('user_message').notNull(),
+  model: text('model').notNull(),
+  temperature: real('temperature'),
+  responsePreview: text('response_preview'), // first 500 chars
+  tokensUsed: integer('tokens_used'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export type PromptLog = typeof promptLog.$inferSelect;
+export type InsertPromptLog = typeof promptLog.$inferInsert;

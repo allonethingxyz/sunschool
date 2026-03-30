@@ -228,7 +228,9 @@ export async function generateEnhancedLesson(
   topic: string,
   withImages: boolean = true,
   subject?: string,
-  difficulty: 'beginner' | 'intermediate' | 'advanced' = 'beginner'
+  difficulty: 'beginner' | 'intermediate' | 'advanced' = 'beginner',
+  lessonId?: string,
+  learnerId?: number
 ): Promise<EnhancedLessonSpec | null> {
   try {
     // 1. Generate the lesson content structure with OpenRouter
@@ -247,6 +249,11 @@ export async function generateEnhancedLesson(
       ],
       model: 'google/gemini-2.0-flash-001',
       temperature: 0.7,
+      context: {
+        lessonId,
+        learnerId,
+        promptType: 'lesson_generation'
+      },
     });
     
     // Validate we have a response
@@ -560,6 +567,7 @@ export async function generateEnhancedQuestions(
       ],
       model: 'google/gemini-2.0-flash-001',
       temperature: 0.7,
+      context: { promptType: 'quiz_generation' },
     });
 
     const rawQText = response.choices[0].message.content

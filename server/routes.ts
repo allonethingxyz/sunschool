@@ -1400,11 +1400,15 @@ export function registerRoutes(app: Express): Server {
     }
 
     // Get all the learner data
-    const [learner, profile, lessons, achievements] = await Promise.all([
+    const [learner, profile, lessons, achievements, promptLogResult] = await Promise.all([
       storage.getUser(learnerId),
       storage.getLearnerProfile(learnerId),
       storage.getLessonHistory(learnerId, 1000), // Get a large number of lessons
-      storage.getAchievements(learnerId)
+      storage.getAchievements(learnerId),
+      pool.query(
+        `SELECT * FROM prompt_log WHERE learner_id = $1 ORDER BY created_at DESC`,
+        [parseInt(learnerId, 10)]
+      )
     ]);
 
     if (!learner) {
@@ -1425,6 +1429,7 @@ export function registerRoutes(app: Express): Server {
       profile,
       lessons,
       achievements,
+      promptLog: promptLogResult.rows,
       exportDate: new Date().toISOString(),
       exportedBy: req.user.id
     });
@@ -1964,6 +1969,39 @@ export function registerRoutes(app: Express): Server {
       reconcilePointsBalances(false),
     ]);
     res.json({ orphanedImages, partialQuizzes, pointsReconciliation });
+  }));
+
+  // ── Prompt Audit Endpoints ──────────────────────────────────────────────
+  // GET /api/lessons/:lessonId/prompts — all prompt_log entries for a lesson
+  app.get("/api/lessons/:lessonId/prompts", isAuthenticated, asyncHandler(async (req: AuthRequest, res) => {
+    const { lessonId } = req.params;
+    const { rows } = await pool.query(
+      `SELECT * FROM prompt_log WHERE lesson_id = $1 ORDER BY created_at DESC`,
+      [lessonId]
+    );
+    res.json(rows);
+  }));
+
+  // GET /api/learners/:learnerId/prompts — all prompt_log entries for a learner
+  app.get("/api/learners/:learnerId/prompts", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
+    const learnerId = parseInt(req.params.learnerId, 10);
+    if (isNaN(learnerId)) {
+      return res.status(400).json({ error: "Invalid learnerId" });
+    }
+
+    // Verify parent has access to this learner
+    if (req.user && req.user.role === "PARENT") {
+      const children = await storage.getUsersByParentId(req.user.id);
+      if (!children.some(child => child.id === learnerId)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+    }
+
+    const { rows } = await pool.query(
+      `SELECT * FROM prompt_log WHERE learner_id = $1 ORDER BY created_at DESC`,
+      [learnerId]
+    );
+    res.json(rows);
   }));
 
   // Error handling middleware

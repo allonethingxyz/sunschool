@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { CircuitBreaker } from './services/circuit-breaker';
+import { logPrompt } from './services/prompt-logger';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -25,6 +26,12 @@ export interface Message {
   content: string;
 }
 
+export interface AskOpenRouterContext {
+  lessonId?: string;
+  learnerId?: number;
+  promptType?: string;
+}
+
 interface OpenRouterOptions {
   messages: Message[];
   model?: string;
@@ -35,6 +42,7 @@ interface OpenRouterOptions {
     type: 'json_schema';
     json_schema: any;
   };
+  context?: AskOpenRouterContext;
 }
 
 interface OpenRouterResponse {
@@ -91,6 +99,25 @@ export async function askOpenRouter(options: OpenRouterOptions): Promise<OpenRou
 
     // Successful response — reset the breaker
     openRouterBreaker.recordSuccess();
+
+    // Fire-and-forget prompt logging
+    if (options.context?.promptType) {
+      const systemMsg = options.messages.find(m => m.role === 'system')?.content || '';
+      const userMsg = options.messages.find(m => m.role === 'user')?.content || '';
+      const responseContent = response.data.choices?.[0]?.message?.content || '';
+      logPrompt({
+        lessonId: options.context.lessonId,
+        learnerId: options.context.learnerId,
+        promptType: options.context.promptType,
+        systemMessage: systemMsg,
+        userMessage: userMsg,
+        model: response.data.model || options.model || 'openai/gpt-4o',
+        temperature: options.temperature,
+        responsePreview: responseContent.slice(0, 500),
+        tokensUsed: response.data.usage?.total_tokens,
+      });
+    }
+
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
@@ -118,7 +145,12 @@ import { validateLessonContent } from './services/content-validator';
  * Generate a lesson for a specific grade level and topic
  * WITH CONTENT VALIDATION AND RETRY LOGIC
  */
-export async function generateLessonContent(gradeLevel: number, topic: string): Promise<string> {
+export async function generateLessonContent(
+  gradeLevel: number,
+  topic: string,
+  lessonId?: string,
+  learnerId?: number
+): Promise<string> {
   const messages: Message[] = [
     {
       role: 'system',
@@ -138,7 +170,12 @@ export async function generateLessonContent(gradeLevel: number, topic: string): 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const response = await askOpenRouter({
       messages,
-      temperature: 0.4 + (attempt * 0.1) // Lower temperature for stricter following
+      temperature: 0.4 + (attempt * 0.1), // Lower temperature for stricter following
+      context: {
+        lessonId,
+        learnerId,
+        promptType: 'lesson_generation'
+      }
     });
 
     const content = response.choices[0].message.content;
@@ -180,7 +217,8 @@ export async function generateQuizQuestions(
   questionCount: number = 5,
   learnerId?: number,
   weakConcepts?: string[],
-  recentQuestions?: string[]
+  recentQuestions?: string[],
+  lessonId?: string
 ): Promise<any[]> {
   // Build adaptive prompt additions
   let adaptiveInstructions = '';
@@ -252,7 +290,12 @@ export async function generateQuizQuestions(
     const response = await askOpenRouter({
       messages,
       response_format,
-      temperature: 0.3 + (attempt * 0.1) // Lower temperature for stricter following
+      temperature: 0.3 + (attempt * 0.1), // Lower temperature for stricter following
+      context: {
+        lessonId,
+        learnerId,
+        promptType: 'quiz_generation'
+      }
     });
 
     try {
@@ -293,7 +336,14 @@ import { FEEDBACK_PROMPTS } from './prompts';
 /**
  * Generate personalized feedback for a learner based on their quiz performance
  */
-export async function generateFeedback(quizQuestions: any[], userAnswers: number[], score: number, gradeLevel: number): Promise<string> {
+export async function generateFeedback(
+  quizQuestions: any[],
+  userAnswers: number[],
+  score: number,
+  gradeLevel: number,
+  lessonId?: string,
+  learnerId?: number
+): Promise<string> {
   const questionAnalysis = quizQuestions.map((q, i) => {
     const isCorrect = userAnswers[i] === q.correctIndex;
     return {
@@ -316,7 +366,15 @@ export async function generateFeedback(quizQuestions: any[], userAnswers: number
     }
   ];
 
-  const response = await askOpenRouter({ messages, temperature: 0.7 });
+  const response = await askOpenRouter({
+    messages,
+    temperature: 0.7,
+    context: {
+      lessonId,
+      learnerId,
+      promptType: 'feedback'
+    }
+  });
   return response.choices[0].message.content;
 }
 
@@ -325,7 +383,12 @@ import { KNOWLEDGE_GRAPH_PROMPTS } from './prompts';
 /**
  * Generate a knowledge graph based on a topic
  */
-export async function generateKnowledgeGraph(topic: string, gradeLevel: number): Promise<any> {
+export async function generateKnowledgeGraph(
+  topic: string,
+  gradeLevel: number,
+  lessonId?: string,
+  learnerId?: number
+): Promise<any> {
   const messages: Message[] = [
     {
       role: 'system',
@@ -378,10 +441,15 @@ export async function generateKnowledgeGraph(topic: string, gradeLevel: number):
     }
   };
 
-  const response = await askOpenRouter({ 
-    messages, 
+  const response = await askOpenRouter({
+    messages,
     response_format,
-    temperature: 0.3
+    temperature: 0.3,
+    context: {
+      lessonId,
+      learnerId,
+      promptType: 'knowledge_graph'
+    }
   });
   
   try {

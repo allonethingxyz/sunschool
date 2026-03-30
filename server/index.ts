@@ -9,6 +9,7 @@ import { Pool, neonConfig } from '@neondatabase/serverless';
 import { migrate } from 'drizzle-orm/neon-serverless/migrator';
 import ws from 'ws';
 import * as schema from '../shared/schema';
+import { startAutoTuner } from './services/lesson-validation-tuner';
 
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
@@ -115,4 +116,7 @@ app.use((req, res) => {
 // Start server
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
+
+  // Start the lesson validation auto-tuner (runs every 15 minutes)
+  startAutoTuner(15);
 });

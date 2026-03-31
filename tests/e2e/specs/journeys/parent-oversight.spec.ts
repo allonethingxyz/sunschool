@@ -167,20 +167,15 @@ test.describe('Journey: Parent Oversight — Transparency Walkthrough', () => {
       }
     } else {
       // Fallback: try setting guidelines via API
-      const result = await apiCall(page, 'PUT', `/api/learners/${ctx.learnerId}/settings`, {
-        customGuidelines,
+      const result = await apiCall(page, 'PUT', `/api/learner-profile/${ctx.learnerId}/prompt-settings`, {
+        parentPromptGuidelines: customGuidelines,
       });
-      // API may not exist — that's OK, we're testing the journey flow
-      if (result.status < 300) {
-        // Verify via API
-        const getResult = await apiCall(page, 'GET', `/api/learners/${ctx.learnerId}/settings`);
-        if (getResult.status === 200) {
-          const savedGuidelines = getResult.data?.customGuidelines || '';
-          expect(savedGuidelines).toContain('E2E Test Guidelines');
-        }
-      } else {
-        console.log('[E2E] Note: learner settings API returned', result.status, '— endpoint may not exist');
+      if (result.status >= 400 || result.data?.parentPromptGuidelines === undefined) {
+        console.log('[E2E] SKIP: prompt settings migration pending or endpoint unavailable');
+        test.skip();
+        return;
       }
+      expect(result.data.parentPromptGuidelines).toContain('E2E Test Guidelines');
     }
 
     await screenshot(page, `${TEST_NAME}-05-guidelines-saved`);

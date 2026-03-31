@@ -250,7 +250,11 @@ test.describe('Journey: First-Time Parent — Critical Path', () => {
   });
 
   test('6. Child card appears on dashboard with name', async () => {
-    // Verify child name appears on the dashboard
+    // Reload dashboard and wait for child data to appear
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(3000);
+
     const hasChild = await page.getByText(new RegExp(childName.slice(0, 10), 'i'))
       .first().isVisible({ timeout: 15000 }).catch(() => false);
 

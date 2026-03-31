@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { useLocation, Redirect } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
 import { GitHub, BookOpen, Eye, Shield, Users, Award, BarChart2, Star, ArrowRight, Zap, Lock, Globe, Map, Code, AlertTriangle, MessageCircle } from 'react-feather';

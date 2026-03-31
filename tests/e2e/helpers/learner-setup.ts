@@ -34,6 +34,15 @@ export function generateTestUser(prefix: string): TestUser {
   };
 }
 
+/** Wait for the app to fully mount (past HTML loading screen and React auth init) */
+async function waitForAppReady(page: Page, timeout = 30000): Promise<void> {
+  await page.waitForFunction(() => {
+    const text = document.body.textContent || '';
+    return !text.includes('Loading Sunschool') &&
+           !text.includes('Initializing authentication');
+  }, { timeout }).catch(() => {});
+}
+
 /** Take a labelled screenshot */
 export async function screenshot(page: Page, name: string): Promise<void> {
   await page.screenshot({
@@ -48,7 +57,7 @@ export async function registerParentViaAPI(
   user: TestUser
 ): Promise<string> {
   const result = await page.evaluate(async (userData) => {
-    const res = await fetch('/register', {
+    const res = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
@@ -143,10 +152,8 @@ export async function setupLearnerSession(
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  // Wait for auth initialization to complete
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
+  // Wait for app to fully mount (past loading screen and auth init)
+  await waitForAppReady(page);
 
   // Register parent via direct fetch (bypasses React auth system)
   const token = await registerParentViaAPI(page, user);
@@ -174,18 +181,14 @@ export async function setupLearnerSession(
   await page.reload();
   await page.waitForLoadState('networkidle');
 
-  // Wait for auth to complete — the user should now be authenticated
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
+  // Wait for app to fully mount
+  await waitForAppReady(page);
 
   // Navigate to learner home with full page load (spaNavigate + wouter is unreliable)
   await page.evaluate(() => localStorage.setItem('preferredMode', 'LEARNER'));
   await page.goto('/learner');
   await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
+  await waitForAppReady(page);
 
   return { token, learnerId, childName };
 }
@@ -370,9 +373,7 @@ export async function navigateAsLearner(page: Page, path: string): Promise<void>
   });
   await page.goto(path);
   await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
+  await waitForAppReady(page);
 }
 
 /**
@@ -386,9 +387,7 @@ export async function navigateAsParent(page: Page, path: string): Promise<void> 
   });
   await page.goto(path);
   await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
+  await waitForAppReady(page);
 }
 
 /**
@@ -406,9 +405,7 @@ export async function setupParentSession(
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
+  await waitForAppReady(page);
 
   const token = await registerParentViaAPI(page, user);
 
@@ -426,9 +423,7 @@ export async function setupParentSession(
   await page.reload();
   await page.waitForLoadState('networkidle');
 
-  await page.waitForFunction(() => {
-    return !document.body.textContent?.includes('Initializing authentication');
-  }, { timeout: 15000 }).catch(() => {});
+  await waitForAppReady(page);
 
   await navigateAsParent(page, '/dashboard');
 

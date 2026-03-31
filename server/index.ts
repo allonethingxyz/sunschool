@@ -101,11 +101,11 @@ if (process.env.NODE_ENV === 'production') {
   clientDistPath = path.join(process.cwd(), "client/dist");
 }
 
+// Register API routes FIRST (before static files)
+const server = registerRoutes(app);
+
 // Serve static files from the client dist folder
 app.use(express.static(clientDistPath));
-
-// Register API routes first
-const server = registerRoutes(app);
 
 // Serve React app for all other routes - this must come after API routes
 app.use((req, res) => {

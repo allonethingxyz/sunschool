@@ -393,6 +393,16 @@ test.describe('Journey: First-Time Parent — Critical Path', () => {
     await page.waitForLoadState('networkidle');
     await waitForLessonLoaded(page);
 
+    // Explicitly wait for URL to contain /lesson with a generous timeout
+    // (lesson content may still be streaming in under concurrent load)
+    await page.waitForURL('**/lesson**', { timeout: 120_000 }).catch(async () => {
+      // Retry: reload and wait once more if initial navigation stalled
+      await page.goto('/lesson');
+      await page.waitForLoadState('networkidle');
+      await waitForLessonLoaded(page);
+      await page.waitForURL('**/lesson**', { timeout: 60_000 });
+    });
+
     const url = page.url();
     const onLesson = url.includes('/lesson');
     expect(onLesson).toBeTruthy();

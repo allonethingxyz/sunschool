@@ -153,8 +153,7 @@ test.describe('Parent Signup & Login', () => {
     await screenshot(page, 'login-error');
   });
 
-  // QUARANTINED: Production SPA does not persist auth sessions across full page reloads.
-  test.skip('Session persistence across page reload', async ({ page }) => {
+  test('Session persistence across page reload', async ({ page }) => {
     page.setDefaultTimeout(30000);
     const user = generateTestUser('persist');
 
@@ -177,39 +176,24 @@ test.describe('Parent Signup & Login', () => {
     const urlBeforeReload = page.url();
     expect(urlBeforeReload).not.toMatch(/\/auth/);
 
-    // Capture ALL auth-related localStorage entries
-    const authData = await page.evaluate(() => {
-      const data: Record<string, string> = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key) data[key] = localStorage.getItem(key) || '';
-      }
-      return data;
-    });
-    console.log('localStorage keys after login:', JSON.stringify(Object.keys(authData)));
+    // Verify AUTH_TOKEN was set by the login flow
+    const hasToken = await page.evaluate(() => !!localStorage.getItem('AUTH_TOKEN'));
+    expect(hasToken).toBeTruthy();
 
     await page.reload();
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(3000);
+    // Wait for auth init to complete (the fixed use-auth.tsx reads token before clearing)
+    await page.waitForFunction(() => {
+      return !document.body.textContent?.includes('Initializing authentication');
+    }, { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(2000);
 
     const urlAfterReload = page.url();
     console.log(`URL before reload: ${urlBeforeReload}, after: ${urlAfterReload}`);
 
-    if (urlAfterReload.includes('/auth')) {
-      await page.evaluate((data) => {
-        for (const [key, value] of Object.entries(data)) {
-          localStorage.setItem(key, value);
-        }
-      }, authData);
-
-      await page.goto('/dashboard');
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(3000);
-
-      const finalUrl = page.url();
-      console.log(`After restoring all auth data: ${finalUrl}`);
-      expect(finalUrl).toMatch(/dashboard/);
-    }
+    // Auth should persist — user stays on dashboard/learner, not bounced to /auth
+    const persisted = !urlAfterReload.includes('/auth');
+    expect(persisted).toBeTruthy();
 
     await screenshot(page, 'session-persist');
   });

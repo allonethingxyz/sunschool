@@ -107,7 +107,8 @@ test.describe('Parent: Prompt Transparency', () => {
     const POLL_ATTEMPTS = 10;
     const POLL_INTERVAL_MS = 2_000;
     for (let i = 0; i < POLL_ATTEMPTS; i++) {
-      promptResult = await apiCall(page, 'GET', `/api/lessons/${lessonId}/prompts`);
+      // Query by learnerId (lessonId is not yet known during generation)
+      promptResult = await apiCall(page, 'GET', `/api/learners/${learnerId}/prompts`);
       if (promptResult.status >= 400) {
         console.log(`SKIP: prompt_log endpoint returned ${promptResult.status} (migration pending)`);
         test.skip();
@@ -124,12 +125,10 @@ test.describe('Parent: Prompt Transparency', () => {
       return;
     }
 
-    if (promptResult.data.length > 0) {
-      const entry = promptResult.data[0];
-      // At least one of these model-identifying fields should exist
-      const hasModel = entry.model || entry.model_id || entry.provider;
-      expect(hasModel).toBeTruthy();
-    }
+    const entry = promptResult.data[0];
+    // Model field should contain the LLM model identifier
+    expect(entry.model).toBeTruthy();
+    expect(typeof entry.model).toBe('string');
 
     await screenshot(page, 'prompt-02-model-info');
   });

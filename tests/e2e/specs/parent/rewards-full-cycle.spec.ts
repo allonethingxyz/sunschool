@@ -94,13 +94,35 @@ test.describe.serial('Parent: Rewards Full Cycle', () => {
     const rewardId = rewardResult.data.id;
 
     // Complete a lesson to earn points (needed before saving)
+    // Try with Science first, then retry with a unique topic to avoid template cache
+    let lessonCompleted = false;
     try {
-      await completeOneLesson(page, 'Science');
+      lessonCompleted = await completeOneLesson(page, 'Science');
     } catch {
-      console.log('SKIP: Lesson completion failed (AI service unavailable)');
+      lessonCompleted = false;
+    }
+
+    if (!lessonCompleted) {
+      // Retry with a unique topic to bypass template cache
+      const uniqueTopic = `History_${Date.now()}`;
+      console.log(`[E2E] Science lesson failed to award points, retrying with topic: ${uniqueTopic}`);
+      try {
+        lessonCompleted = await completeOneLesson(page, uniqueTopic);
+      } catch {
+        console.log('SKIP: Lesson completion failed on retry (AI service unavailable)');
+        test.skip();
+        return;
+      }
+    }
+
+    if (!lessonCompleted) {
+      console.log('SKIP: Lesson completion returned false');
       test.skip();
       return;
     }
+
+    // Allow the points service time to process the quiz submission
+    await page.waitForTimeout(3000);
 
     // Check if learner has any points
     const balanceResult = await apiCall(page, 'GET', `/api/points/balance?learnerId=${learnerId}`);
@@ -108,7 +130,9 @@ test.describe.serial('Parent: Rewards Full Cycle', () => {
       (balanceResult.data?.balance > 0 || balanceResult.data > 0);
 
     if (!hasPoints) {
-      console.log('SKIP: Learner has no points to save');
+      // Verify via lesson completion API that quiz was actually scored
+      console.log(`[E2E] Balance check: status=${balanceResult.status}, data=${JSON.stringify(balanceResult.data)}`);
+      console.log('SKIP: Learner has no points to save (quiz may not have awarded points)');
       test.skip();
       return;
     }
@@ -150,13 +174,34 @@ test.describe.serial('Parent: Rewards Full Cycle', () => {
     const reward2Id = reward2Result.data.id;
 
     // Complete a lesson to earn some points
+    // Try Science first, retry with unique topic to avoid template cache issues
+    let lessonCompleted = false;
     try {
-      await completeOneLesson(page, 'Science');
+      lessonCompleted = await completeOneLesson(page, 'Science');
     } catch {
-      console.log('SKIP: Lesson completion failed (AI service unavailable)');
+      lessonCompleted = false;
+    }
+
+    if (!lessonCompleted) {
+      const uniqueTopic = `Math_${Date.now()}`;
+      console.log(`[E2E] Science lesson failed, retrying with: ${uniqueTopic}`);
+      try {
+        lessonCompleted = await completeOneLesson(page, uniqueTopic);
+      } catch {
+        console.log('SKIP: Lesson completion failed on retry (AI service unavailable)');
+        test.skip();
+        return;
+      }
+    }
+
+    if (!lessonCompleted) {
+      console.log('SKIP: Lesson completion returned false');
       test.skip();
       return;
     }
+
+    // Allow points service time to process
+    await page.waitForTimeout(3000);
 
     // Request redemption for reward 1
     const redeem1Result = await apiCall(

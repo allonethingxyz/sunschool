@@ -39,7 +39,8 @@ test.describe('Parent: Prompt Transparency', () => {
     // Generate a lesson to produce prompt log entries
     let lessonId: number;
     try {
-      lessonId = await generateAndWaitForLesson(page, 'Science');
+      // Use a unique topic to force fresh LLM generation (template-cached lessons skip OpenRouter)
+      lessonId = await generateAndWaitForLesson(page, `Oceanography ${Date.now()}`);
     } catch {
       console.log('SKIP: Lesson generation failed (AI service unavailable)');
       test.skip();
@@ -92,7 +93,8 @@ test.describe('Parent: Prompt Transparency', () => {
 
     let lessonId: number;
     try {
-      lessonId = await generateAndWaitForLesson(page, 'Math');
+      // Use a unique topic to force fresh LLM generation (template-cached lessons skip OpenRouter)
+      lessonId = await generateAndWaitForLesson(page, `Astronomy ${Date.now()}`);
     } catch {
       console.log('SKIP: Lesson generation failed (AI service unavailable)');
       test.skip();

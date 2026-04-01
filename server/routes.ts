@@ -1496,7 +1496,7 @@ export function registerRoutes(app: Express): Server {
       }
 
       // Check if the sync config belongs to the requesting parent (admins can access all)
-      if (req.user.role !== 'ADMIN' && syncConfig.parentId !== ensureString(req.user.id)) {
+      if (req.user.role !== 'ADMIN' && ensureString(syncConfig.parentId) !== ensureString(req.user.id)) {
         return res.status(403).json({ error: "Forbidden" });
       }
 

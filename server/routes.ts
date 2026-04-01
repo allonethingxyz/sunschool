@@ -1495,8 +1495,8 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ error: "Sync configuration not found" });
       }
 
-      // Check if the sync config belongs to the requesting parent
-      if (syncConfig.parentId !== ensureString(req.user.id)) {
+      // Check if the sync config belongs to the requesting parent (admins can access all)
+      if (req.user.role !== 'ADMIN' && syncConfig.parentId !== ensureString(req.user.id)) {
         return res.status(403).json({ error: "Forbidden" });
       }
 

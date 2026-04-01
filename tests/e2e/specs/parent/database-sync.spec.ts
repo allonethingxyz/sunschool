@@ -100,16 +100,11 @@ test.describe('Parent: Database Sync', () => {
     expect(found).toBeTruthy();
     expect(found.targetDbUrl).toBe(FAKE_CONN_STRING);
 
-    // Step 3: Update the sync config (may 403 if user was promoted to ADMIN)
+    // Step 3: Update the sync config
     const updateResult = await apiCall(page, 'PUT', `/api/sync-configs/${configId}`, {
       targetDbUrl: UPDATED_CONN_STRING,
       continuousSync: true,
     });
-    if (updateResult.status === 403) {
-      console.log('SKIP: User was promoted to ADMIN — sync-configs requires PARENT role');
-      test.skip();
-      return;
-    }
     expect(updateResult.status).toBe(200);
 
     await screenshot(page, 'dbsync-04-updated');

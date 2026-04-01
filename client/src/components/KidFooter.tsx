@@ -78,6 +78,16 @@ const KidFooter: React.FC = () => {
         <Text style={styles.navLabel}>Progress</Text>
       </TouchableOpacity>
 
+      {/* Goals button */}
+      <TouchableOpacity
+        style={styles.navButton}
+        onPress={() => setLocation('/goals')}
+        accessibilityLabel="Goals"
+      >
+        <Text style={styles.navIcon}>🏆</Text>
+        <Text style={styles.navLabel}>Goals</Text>
+      </TouchableOpacity>
+
       {/* Triple-tap parental gate */}
       <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
         <TouchableOpacity

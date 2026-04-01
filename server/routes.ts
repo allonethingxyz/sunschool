@@ -379,12 +379,12 @@ export function registerRoutes(app: Express): Server {
     // Verify the learner exists
     const learner = await storage.getUser(learnerId);
     if (!learner) {
-      res.status(404).json({ error: "Learner not found" });
+      return res.status(404).json({ error: "Learner not found" });
     }
 
     // Verify this is actually a learner account
     if (learner.role !== "LEARNER") {
-      res.status(400).json({ error: "Can only delete learner accounts" });
+      return res.status(400).json({ error: "Can only delete learner accounts" });
     }
 
     // Check authorization (parents can only delete their own learners)
@@ -1442,7 +1442,7 @@ export function registerRoutes(app: Express): Server {
     ]);
 
     if (!learner) {
-      res.status(404).json({ error: "Learner not found" });
+      return res.status(404).json({ error: "Learner not found" });
     }
 
     // Remove sensitive information

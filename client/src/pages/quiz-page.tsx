@@ -136,10 +136,8 @@ const QuizPage = ({ params }: { params?: { lessonId?: string } }) => {
         queryClient.invalidateQueries({ queryKey: ['/api/learner-profile', lesson.learnerId] });
       }
     },
-    onError: (_error) => {
-      // Mutation failed — answers are preserved in state so the user can retry.
-      // No state reset here; the submit button will re-enable automatically
-      // because isPending becomes false.
+    onError: (error) => {
+      console.error('Quiz submission failed:', error);
     },
   });
 

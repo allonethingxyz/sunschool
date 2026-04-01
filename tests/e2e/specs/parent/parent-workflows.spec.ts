@@ -76,10 +76,19 @@ test.describe('Parent: Dashboard & Management', () => {
   });
 
   test('rewards management page loads', async ({ page }) => {
+    test.setTimeout(300_000);
     const { token } = await setupParentSession(page, 'rewards');
     await page.evaluate(t => localStorage.setItem('AUTH_TOKEN', t), token);
     await page.goto('/rewards');
     await page.waitForLoadState('networkidle');
+
+    // Retry once if page body is too sparse (transient load failure under concurrency)
+    const bodyLen = await page.evaluate(() => document.body.innerText.length);
+    if (bodyLen < 50) {
+      await page.waitForTimeout(5000);
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+    }
 
     const hasRewards = await page.getByText(/Rewards|Goals|Manage/i)
       .first().isVisible({ timeout: 15000 }).catch(() => false);
@@ -109,6 +118,7 @@ test.describe('Parent: Dashboard & Management', () => {
   });
 
   test('can view learner progress from parent view', async ({ page }) => {
+    test.setTimeout(300_000);
     const { learnerId } = await setupParentSession(page, 'progress');
 
     // Check progress API

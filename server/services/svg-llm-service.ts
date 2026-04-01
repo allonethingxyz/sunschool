@@ -13,13 +13,13 @@ function getSvgModelChain(): string[] {
 /** Returns true for errors that indicate the model should be skipped (unavailable or over budget) */
 function isModelUnavailable(error: any): boolean {
   const msg = error?.message || '';
-  return msg.includes('404') || msg.includes('402') || msg.includes('No endpoints found') || msg.includes('not available') || msg.includes('credits') || msg.includes('afford');
+  return msg.includes('404') || msg.includes('402') || msg.includes('403') || msg.includes('No endpoints found') || msg.includes('not available') || msg.includes('credits') || msg.includes('afford') || msg.includes('Key limit');
 }
 
-/** Returns true for billing errors (402/credits) — all models share the same account so no point trying fallbacks */
+/** Returns true for billing errors (402/403 billing/credits) — all models share the same account so no point trying fallbacks */
 function isBillingError(error: any): boolean {
   const msg = error?.message || '';
-  return msg.includes('402') || msg.includes('credits') || msg.includes('afford') || msg.includes('Insufficient');
+  return msg.includes('402') || msg.includes('credits') || msg.includes('afford') || msg.includes('Insufficient') || msg.includes('Key limit exceeded') || msg.includes('rate limit') || (msg.includes('403') && (msg.includes('limit') || msg.includes('billing') || msg.includes('exceed')));
 }
 
 /**

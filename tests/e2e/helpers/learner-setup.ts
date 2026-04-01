@@ -441,6 +441,78 @@ export async function waitForLessonLoaded(page: Page): Promise<void> {
 }
 
 /**
+ * Full setup for admin persona tests: log in as the existing admin user,
+ * create a child learner (admin tests may need one), set auth, navigate
+ * to /admin.
+ *
+ * Uses env vars E2E_ADMIN_USERNAME / E2E_ADMIN_PASSWORD with fallback
+ * to the same hardcoded defaults used in global-teardown.ts.
+ */
+export async function setupAdminSession(
+  page: Page,
+  prefix: string = 'admin'
+): Promise<SetupResult> {
+  const adminUsername = process.env.E2E_ADMIN_USERNAME || 'realityinspector';
+  const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'SunschoolAdmin2026!';
+  const childName = `Child_${Date.now()}`;
+
+  // Navigate to site first (needed for evaluate calls)
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await waitForAppReady(page);
+
+  // Log in as the existing admin user via direct fetch
+  const loginResult = await page.evaluate(
+    async ({ username, password }) => {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        return { token: data.token, status: res.status };
+      } catch {
+        return { token: null, status: res.status, body: text.substring(0, 200) };
+      }
+    },
+    { username: adminUsername, password: adminPassword }
+  );
+
+  if (!loginResult.token) {
+    throw new Error(`Admin login failed: ${JSON.stringify(loginResult)}`);
+  }
+
+  const token = loginResult.token;
+
+  // Set token in localStorage
+  await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), token);
+
+  // Create child learner via API (admin tests may need one)
+  const learnerId = await createChildViaAPI(page, childName);
+
+  await page.evaluate(
+    (id) => localStorage.setItem('selectedLearnerId', String(id)),
+    learnerId
+  );
+
+  await page.evaluate(() => localStorage.setItem('preferredMode', 'PARENT'));
+
+  // Reload so auth init reads the token
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await waitForAppReady(page);
+
+  // Navigate to /admin
+  await page.goto('/admin');
+  await page.waitForLoadState('networkidle');
+  await waitForAppReady(page);
+
+  return { token, learnerId, childName };
+}
+
+/**
  * Create a reward goal via API (as parent).
  * Returns the goal ID if successful, null otherwise.
  */

@@ -488,6 +488,8 @@ export async function generateLessonWithRetry(
     subject?: string;
     difficulty?: 'beginner' | 'intermediate' | 'advanced';
     maxRetries?: number;
+    lessonId?: string;
+    learnerId?: number;
   } = {}
 ): Promise<EnhancedLessonSpec> {
   const {
@@ -495,6 +497,8 @@ export async function generateLessonWithRetry(
     subject,
     difficulty = 'beginner',
     maxRetries = 3,
+    lessonId,
+    learnerId,
   } = options;
 
   // ── Circuit breaker fast-path: serve from template library when OPEN ──
@@ -521,7 +525,9 @@ export async function generateLessonWithRetry(
         topic,
         withImages,
         subject,
-        difficulty
+        difficulty,
+        lessonId,
+        learnerId
       );
 
       if (!spec) {

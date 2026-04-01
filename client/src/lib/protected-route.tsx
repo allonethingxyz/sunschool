@@ -39,4 +39,11 @@ export function ProtectedRoute({
       </Route>
     );
   }
+
+  // LEARNER role — redirect to learner home
+  return (
+    <Route path={path}>
+      <Redirect to="/learner" />
+    </Route>
+  );
 }

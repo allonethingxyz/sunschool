@@ -71,6 +71,7 @@ const AddLearnerPage = () => {
 
       // Refresh learners list
       queryClient.invalidateQueries({ queryKey: ['/api/learners', user?.id, user?.role] });
+      queryClient.invalidateQueries({ queryKey: ['/api/learners'] });
 
       // Navigate back to learners page
       setLocation('/learners');

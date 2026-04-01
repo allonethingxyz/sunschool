@@ -151,7 +151,7 @@ export function registerRoutes(app: Express): Server {
       } else if (req.user?.role === "PARENT") {
         learners = await storage.getUsersByParentId(req.user.id);
       } else {
-        res.status(400).json({ error: "Invalid request" });
+        return res.status(400).json({ error: "Invalid request" });
       }
 
       res.json(learners);
@@ -166,7 +166,7 @@ export function registerRoutes(app: Express): Server {
     const { name, role = "LEARNER" } = req.body;
 
     if (!name) {
-      res.status(400).json({ error: "Missing required field: name" });
+      return res.status(400).json({ error: "Missing required field: name" });
     }
 
     try {
@@ -177,20 +177,20 @@ export function registerRoutes(app: Express): Server {
       if (email) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-          res.status(400).json({ error: "Invalid email format" });
+          return res.status(400).json({ error: "Invalid email format" });
         }
 
         // Check if email already exists - first check by username
         const existingUserByUsername = await storage.getUserByUsername(email);
         if (existingUserByUsername) {
-          res.status(409).json({ error: "Email already in use as a username" });
+          return res.status(409).json({ error: "Email already in use as a username" });
         }
 
         // Also check the email field directly to prevent database constraint violations
         try {
           const emailCheckResult = await db.select().from(users).where(sql`LOWER(email) = LOWER(${email})`);
           if (emailCheckResult.length > 0) {
-            res.status(409).json({ error: "Email already in use" });
+            return res.status(409).json({ error: "Email already in use" });
           }
         } catch (emailCheckError) {
           console.error("Error checking email existence:", emailCheckError);
@@ -220,7 +220,7 @@ export function registerRoutes(app: Express): Server {
       // For any other scenario where a LEARNER is being created without a parent
       else if (role === "LEARNER" && !parentId) {
         // Learners must have a parent
-        res.status(400).json({ error: "Learner accounts must have a parent" });
+        return res.status(400).json({ error: "Learner accounts must have a parent" });
       }
 
       // Generate a unique username based on name and timestamp
@@ -295,12 +295,12 @@ export function registerRoutes(app: Express): Server {
       // Provide more specific error messages based on the error type
       if (error.code === '23505' && error.constraint === 'users_email_key') {
         // Duplicate email error - this means our earlier check missed it
-        res.status(409).json({ 
+        return res.status(409).json({
           error: "This email is already registered. Please use a different email address."
         });
       } else if (error.code === '23505' && error.constraint === 'users_username_key') {
         // Duplicate username error
-        res.status(409).json({ 
+        return res.status(409).json({
           error: "This username is already taken. Please choose a different username."
         });
       } else if (error.code === '23502' && error.column === 'email') {
@@ -356,17 +356,17 @@ export function registerRoutes(app: Express): Server {
 
           // Return the created user without password
           const { password: _, ...userResponse } = newUser;
-          res.status(201).json(userResponse);
+          return res.status(201).json(userResponse);
         } catch (retryError) {
           console.error('Retry failed:', retryError);
-          res.status(500).json({
+          return res.status(500).json({
             error: "Failed to create learner account. Please try again."
           });
         }
       }
 
       // Default error response
-      res.status(500).json({ 
+      return res.status(500).json({
         error: "Failed to create learner account. Please try again."
       });
     }
@@ -391,7 +391,7 @@ export function registerRoutes(app: Express): Server {
     if (req.user?.role === "PARENT") {
       // Check if the learner belongs to this parent
       if (learner.parentId !== req.user.id && learner.parentId.toString() !== ensureString(req.user.id)) {
-        res.status(403).json({ error: "Not authorized to delete this learner" });
+        return res.status(403).json({ error: "Not authorized to delete this learner" });
       }
     }
 
@@ -1556,7 +1556,7 @@ export function registerRoutes(app: Express): Server {
       // Validate PostgreSQL connection string format
       const postgresRegex = /^postgresql:\/\/\w+:.*@[\w.-]+:\d+\/\w+(\?.*)?$/;
       if (!postgresRegex.test(targetDbUrl)) {
-        res.status(400).json({ 
+        return res.status(400).json({
           error: "Invalid PostgreSQL connection string format",
           message: "Connection string should be in format: postgresql://username:password@hostname:port/database"
         });

@@ -141,17 +141,22 @@ test.describe('Parent: Data Export', () => {
     // Switch back to parent and export
     await page.evaluate(() => localStorage.setItem('preferredMode', 'PARENT'));
 
-    const exportResult = await apiCall(page, 'GET', `/api/export?learnerId=${learnerId}`);
-    expect(exportResult.status).toBe(200);
+    // Poll export until prompt log entries appear (logPrompt is fire-and-forget)
+    let data: any = null;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const exportResult = await apiCall(page, 'GET', `/api/export?learnerId=${learnerId}`);
+      expect(exportResult.status).toBe(200);
+      data = exportResult.data;
 
-    const data = exportResult.data;
-
-    // Prompt log should have entries from the lesson generation (skip if migration pending)
-    if (!data.promptLog || !Array.isArray(data.promptLog)) {
-      console.log('SKIP: promptLog not in export (migration pending)');
-      test.skip();
-      return;
+      if (!data.promptLog || !Array.isArray(data.promptLog)) {
+        console.log('SKIP: promptLog not in export (migration pending)');
+        test.skip();
+        return;
+      }
+      if (data.promptLog.length > 0) break;
+      if (attempt < 9) await new Promise(r => setTimeout(r, 2000));
     }
+
     expect(data.promptLog.length).toBeGreaterThanOrEqual(1);
 
     // Verify prompt log entries have expected structure

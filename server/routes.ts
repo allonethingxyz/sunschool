@@ -1576,7 +1576,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ error: "Sync configuration not found" });
       }
 
-      if (syncConfig.parentId !== ensureString(req.user.id)) {
+      if (req.user.role !== 'ADMIN' && ensureString(syncConfig.parentId) !== ensureString(req.user.id)) {
         return res.status(403).json({ error: "Forbidden" });
       }
 
@@ -1603,7 +1603,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ error: "Sync configuration not found" });
       }
 
-      if (syncConfig.parentId !== ensureString(req.user.id)) {
+      if (req.user.role !== 'ADMIN' && ensureString(syncConfig.parentId) !== ensureString(req.user.id)) {
         return res.status(403).json({ error: "Forbidden" });
       }
 
@@ -1635,7 +1635,7 @@ export function registerRoutes(app: Express): Server {
         return res.status(404).json({ error: "Sync configuration not found" });
       }
 
-      if (syncConfig.parentId !== ensureString(req.user.id)) {
+      if (req.user.role !== 'ADMIN' && ensureString(syncConfig.parentId) !== ensureString(req.user.id)) {
         return res.status(403).json({ error: "Forbidden" });
       }
 

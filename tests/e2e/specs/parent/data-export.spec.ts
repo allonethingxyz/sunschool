@@ -130,8 +130,11 @@ test.describe('Parent: Data Export', () => {
     await page.goto('/learner');
     await page.waitForLoadState('networkidle');
 
+    // Use a unique topic to force fresh LLM generation (not template cache)
+    // Template-cached lessons don't call OpenRouter, so no prompt_log entries
+    const uniqueTopic = `Marine Biology ${Date.now()}`;
     try {
-      await generateAndWaitForLesson(page, 'Math');
+      await generateAndWaitForLesson(page, uniqueTopic);
     } catch {
       console.log('SKIP: Lesson generation failed (AI service unavailable)');
       test.skip();

@@ -34,7 +34,7 @@ async function screenshot(page: Page, name: string) {
 /** Register via API, return token */
 async function registerViaAPI(page: Page): Promise<string> {
   const result = await page.evaluate(async (userData) => {
-    const res = await fetch('/register', {
+    const res = await fetch('/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
@@ -50,7 +50,7 @@ async function registerViaAPI(page: Page): Promise<string> {
 /** Login via API, return token */
 async function loginViaAPI(page: Page): Promise<string> {
   const result = await page.evaluate(async (creds) => {
-    const res = await fetch('/login', {
+    const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(creds),
@@ -590,7 +590,7 @@ test.describe('SVG Rendering Validation', () => {
     };
 
     const regResult = await page.evaluate(async (u) => {
-      const res = await fetch('/register', {
+      const res = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...u, role: 'PARENT' }),
@@ -809,7 +809,7 @@ test.describe('Navigation Elements', () => {
     const navTs = Date.now();
     const navUser = { username: `navtest_${navTs}`, email: `navtest_${navTs}@test.com`, password: 'TestPassword123!', name: 'Nav Test', role: 'PARENT' };
     await page.evaluate(async (u) => {
-      const res = await fetch('/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
+      const res = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(u) });
       return res.json();
     }, navUser);
 

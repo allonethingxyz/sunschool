@@ -353,9 +353,7 @@ export async function enterLearnerContext(page: Page, childName?: string): Promi
   if (visible) {
     await startBtn.click();
     await page.waitForLoadState('networkidle');
-    await page.waitForFunction(() => {
-      return !document.body.textContent?.includes('Initializing authentication');
-    }, { timeout: 15000 }).catch(() => {});
+    await waitForAppReady(page);
     return;
   }
   // Fallback: navigate directly to learner home

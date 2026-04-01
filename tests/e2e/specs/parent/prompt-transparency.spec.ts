@@ -46,10 +46,26 @@ test.describe('Parent: Prompt Transparency', () => {
       return;
     }
 
-    // Fetch prompt log for this learner (skip if migration hasn't run yet)
-    const promptResult = await apiCall(page, 'GET', `/api/learners/${learnerId}/prompts`);
-    if (promptResult.status >= 400 || !Array.isArray(promptResult.data) || promptResult.data.length === 0) {
-      console.log('SKIP: prompt_log table not yet created or empty (migration pending)');
+    // Poll for prompt log entries — logPrompt() is fire-and-forget so the
+    // INSERT may still be in-flight when the lesson response arrives.
+    let promptResult: any = { status: 0, data: [] };
+    const POLL_ATTEMPTS = 10;
+    const POLL_INTERVAL_MS = 2_000;
+    for (let i = 0; i < POLL_ATTEMPTS; i++) {
+      promptResult = await apiCall(page, 'GET', `/api/learners/${learnerId}/prompts`);
+      // 4xx/5xx means the table likely doesn't exist yet — skip immediately
+      if (promptResult.status >= 400) {
+        console.log(`SKIP: prompt_log endpoint returned ${promptResult.status} (migration pending)`);
+        test.skip();
+        return;
+      }
+      if (Array.isArray(promptResult.data) && promptResult.data.length > 0) break;
+      if (i < POLL_ATTEMPTS - 1) {
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+      }
+    }
+    if (!Array.isArray(promptResult.data) || promptResult.data.length === 0) {
+      console.log('SKIP: prompt_log still empty after polling — fire-and-forget INSERT may have failed');
       test.skip();
       return;
     }
@@ -83,10 +99,25 @@ test.describe('Parent: Prompt Transparency', () => {
       return;
     }
 
-    // Get prompt log for the specific lesson (skip if migration pending)
-    const promptResult = await apiCall(page, 'GET', `/api/lessons/${lessonId}/prompts`);
-    if (promptResult.status >= 400 || !Array.isArray(promptResult.data) || promptResult.data.length === 0) {
-      console.log('SKIP: prompt_log table not yet created or empty (migration pending)');
+    // Poll for prompt log entries — logPrompt() is fire-and-forget so the
+    // INSERT may still be in-flight when the lesson response arrives.
+    let promptResult: any = { status: 0, data: [] };
+    const POLL_ATTEMPTS = 10;
+    const POLL_INTERVAL_MS = 2_000;
+    for (let i = 0; i < POLL_ATTEMPTS; i++) {
+      promptResult = await apiCall(page, 'GET', `/api/lessons/${lessonId}/prompts`);
+      if (promptResult.status >= 400) {
+        console.log(`SKIP: prompt_log endpoint returned ${promptResult.status} (migration pending)`);
+        test.skip();
+        return;
+      }
+      if (Array.isArray(promptResult.data) && promptResult.data.length > 0) break;
+      if (i < POLL_ATTEMPTS - 1) {
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+      }
+    }
+    if (!Array.isArray(promptResult.data) || promptResult.data.length === 0) {
+      console.log('SKIP: prompt_log still empty after polling — fire-and-forget INSERT may have failed');
       test.skip();
       return;
     }

@@ -593,12 +593,15 @@ export function registerRoutes(app: Express): Server {
         // Directly perform the update with all fields at once for simplicity and safety
         const updateQuery = `
           UPDATE learner_profiles
-          SET 
+          SET
             grade_level = $2,
             graph = $3,
             subjects = $4,
             recommended_subjects = $5,
-            struggling_areas = $6
+            struggling_areas = $6,
+            parent_prompt_guidelines = $7,
+            content_restrictions = $8,
+            require_lesson_approval = $9
           WHERE user_id = $1
           RETURNING *
         `;
@@ -878,6 +881,7 @@ export function registerRoutes(app: Express): Server {
           () => generateLessonWithRetry(gradeLevel, topic, {
             subject: finalSubject,
             difficulty: difficulty as 'beginner' | 'intermediate' | 'advanced',
+            learnerId: Number(targetLearnerId),
           })
         );
         spec = templateResult.spec;
@@ -1249,6 +1253,7 @@ export function registerRoutes(app: Express): Server {
         () => generateLessonWithRetry(profile.gradeLevel, nextSubject, {
           subject: nextSubject,
           difficulty: 'beginner',
+          learnerId: Number(learnerId),
         })
       );
 
@@ -1463,7 +1468,7 @@ export function registerRoutes(app: Express): Server {
   // Database Synchronization Endpoints
 
   // Get all sync configurations for a parent
-  app.get("/api/sync-configs", hasRole(["PARENT"]), asyncHandler(async (req: AuthRequest, res: Response) => {
+  app.get("/api/sync-configs", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res: Response) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1478,7 +1483,7 @@ export function registerRoutes(app: Express): Server {
   }));
 
   // Get a specific sync configuration
-  app.get("/api/sync-configs/:id", hasRole(["PARENT"]), asyncHandler(async (req: AuthRequest, res) => {
+  app.get("/api/sync-configs/:id", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1503,7 +1508,7 @@ export function registerRoutes(app: Express): Server {
   }));
 
   // Create a new sync configuration
-  app.post("/api/sync-configs", hasRole(["PARENT"]), asyncHandler(async (req: AuthRequest, res) => {
+  app.post("/api/sync-configs", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1539,7 +1544,7 @@ export function registerRoutes(app: Express): Server {
   }));
 
   // Update a sync configuration
-  app.put("/api/sync-configs/:id", hasRole(["PARENT"]), asyncHandler(async (req: AuthRequest, res) => {
+  app.put("/api/sync-configs/:id", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1585,7 +1590,7 @@ export function registerRoutes(app: Express): Server {
   }));
 
   // Delete a sync configuration
-  app.delete("/api/sync-configs/:id", hasRole(["PARENT"]), asyncHandler(async (req: AuthRequest, res) => {
+  app.delete("/api/sync-configs/:id", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1617,7 +1622,7 @@ export function registerRoutes(app: Express): Server {
   }));
 
   // Initiate a one-time sync (push)
-  app.post("/api/sync-configs/:id/push", hasRole(["PARENT"]), asyncHandler(async (req: AuthRequest, res) => {
+  app.post("/api/sync-configs/:id/push", hasRole(["PARENT", "ADMIN"]), asyncHandler(async (req: AuthRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -1813,8 +1818,16 @@ export function registerRoutes(app: Express): Server {
     const learnerId = req.query.learnerId
       ? Number(req.query.learnerId)
       : Number(authReq.user!.id);
-    await rewardsService.delegatePointsToGoal(learnerId, req.params.rewardId, Number(points));
-    res.json({ success: true, pointsDelegated: Number(points) });
+    try {
+      await rewardsService.delegatePointsToGoal(learnerId, req.params.rewardId, Number(points));
+      res.json({ success: true, pointsDelegated: Number(points) });
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+      if (msg.includes('Insufficient balance')) {
+        return res.status(400).json({ error: 'Insufficient balance' });
+      }
+      throw err;
+    }
   }));
 
   app.post('/api/rewards/:rewardId/redeem', isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
@@ -1822,8 +1835,22 @@ export function registerRoutes(app: Express): Server {
     const learnerId = req.query.learnerId
       ? Number(req.query.learnerId)
       : Number(authReq.user!.id);
-    const redemption = await rewardsService.requestRedemption(learnerId, req.params.rewardId);
-    res.status(201).json(redemption);
+    try {
+      const redemption = await rewardsService.requestRedemption(learnerId, req.params.rewardId);
+      res.status(201).json(redemption);
+    } catch (err: any) {
+      const msg = err?.message ?? '';
+      if (msg.includes('saved points') || msg.includes('Insufficient') || msg.includes('Need ')) {
+        return res.status(400).json({ error: 'Insufficient saved points' });
+      }
+      if (msg.includes('not found')) {
+        return res.status(404).json({ error: msg });
+      }
+      if (msg.includes('already pending')) {
+        return res.status(409).json({ error: msg });
+      }
+      throw err;
+    }
   }));
 
   // ── Parent: Redemption management ────────────────────────────────────

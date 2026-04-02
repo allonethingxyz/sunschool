@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { useMode } from '../context/ModeContext';
 import { useLocation } from 'wouter';
@@ -25,6 +25,18 @@ const KidFooter: React.FC = () => {
   const [showHint, setShowHint] = useState(false);
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  const hintOpacity = useRef(new Animated.Value(1)).current;
+  const [showInitialHint, setShowInitialHint] = useState(true);
+
+  useEffect(() => {
+    // Show hint for 4 seconds on first mount, then fade out
+    const timer = setTimeout(() => {
+      Animated.timing(hintOpacity, { toValue: 0, duration: 800, useNativeDriver: true }).start(() => {
+        setShowInitialHint(false);
+      });
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleLockTap = useCallback(() => {
     const newCount = tapCount + 1;
@@ -96,15 +108,18 @@ const KidFooter: React.FC = () => {
           accessibilityLabel="Parent exit — tap three times quickly"
         >
           <Text style={styles.lockIcon}>🔒</Text>
-          {showHint ? (
+          {showHint && (
             <Text style={styles.lockHint}>
               {3 - tapCount} more
             </Text>
-          ) : (
-            <Text style={styles.lockHintStatic}>Tap 3× for parent mode</Text>
           )}
         </TouchableOpacity>
       </Animated.View>
+      {showInitialHint && (
+        <Animated.Text style={[styles.lockHintStatic, { opacity: hintOpacity }]}>
+          Tap 🔒 3× for parent mode
+        </Animated.Text>
+      )}
     </View>
   );
 };

@@ -226,23 +226,17 @@ test.describe('Parent Signup & Login', () => {
     await expect(logoutBtn).toBeVisible({ timeout: 10000 });
     await logoutBtn.click();
 
-    // Wait for redirect
-    await page.waitForTimeout(5000);
-
-    // After logout, should be on a public page
-    const url = page.url();
-    const isPublicPage = url.includes('/auth') || url.includes('/welcome') || url.endsWith('.xyz/');
-
-    if (!isPublicPage) {
+    // Wait for redirect to a public page (auth, welcome, or root)
+    await page.waitForURL(/\/(auth|welcome)|\.xyz\/$/, { timeout: 15000 }).catch(async () => {
+      // Logout may clear token without immediate redirect — verify token is gone and reload
       const tokenCleared = await page.evaluate(() => !localStorage.getItem('AUTH_TOKEN'));
-      console.log(`After logout — URL: ${url}, token cleared: ${tokenCleared}`);
+      console.log(`Logout redirect didn't fire — token cleared: ${tokenCleared}, reloading...`);
       await page.reload();
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(3000);
-      const urlAfterReload = page.url();
-      console.log(`After reload: ${urlAfterReload}`);
-      expect(urlAfterReload).toMatch(/\/(auth|welcome)/);
-    }
+      await page.waitForURL(/\/(auth|welcome)|\.xyz\/$/, { timeout: 15000 });
+    });
+
+    const url = page.url();
+    expect(url).toMatch(/\/(auth|welcome)|\.xyz\/$/);
 
     await screenshot(page, 'logout-redirect');
   });

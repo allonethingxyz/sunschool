@@ -268,28 +268,26 @@ test.describe('Journey: First-Time Parent — Critical Path', () => {
       } catch {}
     });
 
-    // Full reload to force fresh fetch
-    await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(5000);
+    // Full reload to force fresh fetch — poll until child card renders
+    const childPrefix = childName.slice(0, 8);
+    let childVisible = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await page.goto('/dashboard');
+      await page.waitForLoadState('networkidle');
+      childVisible = await page.getByText(new RegExp(childPrefix, 'i'))
+        .first().isVisible({ timeout: 10000 }).catch(() => false);
+      if (childVisible) break;
+      // React Query cache may be stale — wait and retry with fresh page load
+      await page.waitForTimeout(2000);
+    }
 
     // Verify via API as ground truth
     const learnersResult = await apiCall(page, 'GET', '/api/learners');
     const childExists = Array.isArray(learnersResult.data) &&
-      learnersResult.data.some((l: any) => l.name?.includes(childName.slice(0, 8)));
+      learnersResult.data.some((l: any) => l.name?.includes(childPrefix));
 
-    // Check UI
-    const hasChild = await page.getByText(new RegExp(childName.slice(0, 8), 'i'))
-      .first().isVisible({ timeout: 10000 }).catch(() => false);
-
-    const bodyText = await page.evaluate(() => document.body.innerText);
-    const bodyHasChild = bodyText.includes(childName.slice(0, 8));
-
-    // Child must exist in API; UI visibility may lag behind cache
     expect(childExists).toBeTruthy();
-    if (!hasChild && !bodyHasChild) {
-      console.log('[E2E] Note: child exists in API but not yet visible in dashboard UI (React Query cache)');
-    }
+    expect(childVisible).toBeTruthy();
 
     await screenshot(page, `${TEST_NAME}-06-child-card`);
   });

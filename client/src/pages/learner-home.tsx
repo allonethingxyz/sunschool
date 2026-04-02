@@ -193,8 +193,7 @@ const LearnerHome = () => {
     mutationFn: (data: { learnerId: number, topic: string, gradeLevel: number, subject: string, category: string, difficulty: 'beginner' | 'intermediate' | 'advanced' }) => {
       return apiRequest('POST', '/api/lessons/create', data).then(res => res.data);
     },
-    retry: 2,
-    retryDelay: 1000,
+    retry: 0,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/lessons/active', selectedLearner?.id] });
       setPendingSubjectLabel(null);

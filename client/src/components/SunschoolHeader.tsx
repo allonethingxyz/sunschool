@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
-
-const windowWidth = Dimensions.get('window').width;
-import { Home, User, BookOpen, MessageCircle, Eye } from 'react-feather';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { Home, User, BookOpen, MessageCircle, Eye, LogOut } from 'react-feather';
 import { colors, typography } from '../styles/theme';
 import { useLocation } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
@@ -60,9 +58,10 @@ const KidHeader: React.FC<{ learnerName: string; navigate: (path: string) => voi
 
 const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
   const [location, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, logoutMutation } = useAuth();
   const { isLearnerMode, selectedLearner } = useMode();
   const [showSupport, setShowSupport] = useState(false);
+  const { width: windowWidth } = useWindowDimensions();
 
   // Learner mode: clean, minimal kid header
   if (isLearnerMode) {
@@ -122,7 +121,7 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
           </TouchableOpacity>
 
           {user && (
-            <View style={styles.navItems} accessibilityRole="list">
+            <View style={[styles.navItems, { marginLeft: windowWidth >= 480 ? 24 : 8 }]} accessibilityRole="list">
               {getNavItems().map((item, index) => (
                 <TouchableOpacity
                   key={index}
@@ -173,9 +172,9 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
           </View>
         </View>
 
-        {/* Right: Mode badge */}
+        {/* Right: Mode badge + logout */}
         {user && (
-          <View style={styles.rightSection}>
+          <View style={[styles.rightSection, { gap: windowWidth >= 480 ? 8 : 4 }]}>
             <View
               style={[styles.modeBadge, styles.parentBadge]}
               accessibilityRole="text"
@@ -183,6 +182,17 @@ const SunschoolHeader: React.FC<SunschoolHeaderProps> = ({ subtitle }) => {
             >
               <Text style={styles.modeBadgeText}>PARENT</Text>
             </View>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={() => logoutMutation.mutate()}
+              accessibilityRole="button"
+              accessibilityLabel="Logout"
+            >
+              <LogOut size={14} color={colors.onPrimary} aria-hidden={true} />
+              {windowWidth >= 480 && (
+                <Text style={styles.logoutText}>Logout</Text>
+              )}
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -235,7 +245,6 @@ const styles = StyleSheet.create({
   navItems: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: windowWidth >= 480 ? 24 : 8,
     gap: 4,
   },
   navItem: {
@@ -261,7 +270,6 @@ const styles = StyleSheet.create({
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: windowWidth >= 480 ? 8 : 4,
     zIndex: 1000,
     overflow: 'visible',
     flexShrink: 0,
@@ -308,6 +316,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.onPrimary,
     letterSpacing: 0.3,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  logoutText: {
+    fontSize: 13,
+    color: colors.onPrimary,
+    fontWeight: '500',
   },
 });
 

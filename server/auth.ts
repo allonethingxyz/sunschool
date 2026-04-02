@@ -122,6 +122,10 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ error: "Invalid role" });
       }
 
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters" });
+      }
+
       const existingUser = await storage.getUserByUsername(username);
       if (existingUser) {
         return res.status(409).json({ error: "Username already exists" });
@@ -188,6 +192,33 @@ export async function setupAuth(app: Express) {
       console.error('Error retrieving user info:', error);
       return res.status(500).json({ error: 'Failed to retrieve user info' });
     }
+  }));
+
+  // Change password (authenticated)
+  app.post("/api/change-password", authenticateJwt, authLimiter, asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Current password and new password are required." });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+
+    const user = await storage.getUserByUsername(req.user.username);
+    if (!user || !user.password) {
+      return res.status(400).json({ error: "Cannot change password for this account." });
+    }
+
+    const valid = await comparePasswords(currentPassword, user.password);
+    if (!valid) {
+      return res.status(403).json({ error: "Current password is incorrect." });
+    }
+
+    const hashed = await hashPassword(newPassword);
+    await db.update(users).set({ password: hashed }).where(eq(users.id, user.id));
+    return res.json({ message: "Password changed successfully." });
   }));
 
   // Forgot password endpoint

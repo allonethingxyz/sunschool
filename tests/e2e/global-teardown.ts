@@ -23,7 +23,10 @@ async function globalTeardown() {
     // Try to clean up test users via the admin endpoint
     // We need an admin token — try logging in
     const loginRes = await context.post('/api/login', {
-      data: { username: 'realityinspector', password: 'SunschoolAdmin2026!' },
+      data: {
+        username: process.env.E2E_ADMIN_USERNAME || '',
+        password: process.env.E2E_ADMIN_PASSWORD || '',
+      },
     });
 
     if (loginRes.ok()) {

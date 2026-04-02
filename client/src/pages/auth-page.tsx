@@ -122,6 +122,15 @@ const AuthPage = () => {
       return;
     }
     
+    if (regPassword.length < 8) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 8 characters',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (regPassword !== regConfirmPassword) {
       toast({
         title: 'Error',
@@ -402,7 +411,7 @@ const AuthPage = () => {
                 <Text style={styles.label} nativeID="reg-password-label">Password</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Create a password"
+                  placeholder="Create a password (8+ characters)"
                   secureTextEntry
                   value={regPassword}
                   onChangeText={setRegPassword}

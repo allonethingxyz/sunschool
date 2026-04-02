@@ -5,7 +5,7 @@ import { colors, typography, commonStyles } from '../styles/theme';
 import { Link, useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../lib/queryClient';
-import { BookOpen, Award, BarChart2, Plus, ArrowRight, User, Eye, Settings } from 'react-feather';
+import { BookOpen, Award, BarChart2, Plus, ArrowRight, User, Eye, Settings, Trash2 } from 'react-feather';
 import { useMode } from '../context/ModeContext';
 import { useToast } from '../hooks/use-toast';
 import GradePicker from '../components/GradePicker';
@@ -24,7 +24,9 @@ interface ChildReport {
 const ChildCard: React.FC<{
   learner: { id: number; name: string; email: string; role: string };
   onView: () => void;
-}> = ({ learner, onView }) => {
+  onRemove: (id: number) => void;
+}> = ({ learner, onView, onRemove }) => {
+  const [confirmRemove, setConfirmRemove] = useState(false);
   // Fetch report data for this child
   const { data: report, isLoading: reportLoading, error: reportError } = useQuery<ChildReport>({
     queryKey: [`/api/reports`, learner.id, 'progress'],
@@ -144,12 +146,41 @@ const ChildCard: React.FC<{
           <Text style={styles.childViewButtonText}>Start Learning as {learner.name}</Text>
           <ArrowRight size={14} color={colors.onPrimary} />
         </TouchableOpacity>
-        <Link href={`/learners/${learner.id}/prompt-settings`}>
-          <View style={styles.promptSettingsLink}>
-            <Settings size={14} color={colors.textSecondary} />
-            <Text style={styles.promptSettingsText}>Prompt Settings</Text>
-          </View>
-        </Link>
+        <View style={styles.childCardFooterRow}>
+          <Link href={`/learners/${learner.id}/prompt-settings`}>
+            <View style={styles.promptSettingsLink}>
+              <Settings size={14} color={colors.textSecondary} />
+              <Text style={styles.promptSettingsText}>Prompt Settings</Text>
+            </View>
+          </Link>
+          {!confirmRemove ? (
+            <TouchableOpacity
+              style={styles.removeLink}
+              onPress={() => setConfirmRemove(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${learner.name}`}
+            >
+              <Trash2 size={12} color={colors.error} />
+              <Text style={styles.removeLinkText}>Remove</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.removeConfirm}>
+              <Text style={styles.removeConfirmText}>Remove {learner.name}?</Text>
+              <TouchableOpacity
+                onPress={() => { onRemove(learner.id); setConfirmRemove(false); }}
+                style={styles.removeYes}
+              >
+                <Text style={styles.removeYesText}>Yes</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setConfirmRemove(false)}
+                style={styles.removeNo}
+              >
+                <Text style={styles.removeNoText}>No</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -331,6 +362,16 @@ const DashboardPage: React.FC = () => {
     selectLearner(learner);
   };
 
+  // Handle removing a child
+  const handleRemoveChild = async (learnerId: number) => {
+    try {
+      await apiRequest('DELETE', `/api/learners/${learnerId}`);
+      queryClient.invalidateQueries({ queryKey: ['/api/learners'] });
+    } catch (err) {
+      console.error('Failed to remove learner:', err);
+    }
+  };
+
   const hasChildren = learners && learners.length > 0;
 
   // Fetch pending review lessons for all children
@@ -432,6 +473,7 @@ const DashboardPage: React.FC = () => {
                     key={learner.id}
                     learner={learner}
                     onView={() => handleViewChild(learner)}
+                    onRemove={handleRemoveChild}
                   />
                 ))}
 
@@ -629,6 +671,57 @@ const styles = StyleSheet.create({
   promptSettingsText: {
     fontSize: 13,
     color: colors.textSecondary,
+  },
+  childCardFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  removeLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+  },
+  removeLinkText: {
+    fontSize: 12,
+    color: colors.error,
+    fontWeight: '500',
+  },
+  removeConfirm: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  removeConfirmText: {
+    fontSize: 12,
+    color: colors.error,
+    fontWeight: '500',
+  },
+  removeYes: {
+    backgroundColor: colors.error,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+  },
+  removeYesText: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  removeNo: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  removeNoText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
 
   // ------------------------------------------------------------------

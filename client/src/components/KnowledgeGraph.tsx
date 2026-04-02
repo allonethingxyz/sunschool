@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Line, G, Text as SvgText, Path, Defs, Marker } from 'react-native-svg';
 import { colors, typography } from '../styles/theme';
 import { ZoomIn, ZoomOut } from 'react-feather';
@@ -38,7 +38,8 @@ const KnowledgeGraph: React.FC<KnowledgeGraphProps> = ({ graph }) => {
   // Simple zoom state
   const [zoom, setZoom] = useState(1);
   
-  const width = Dimensions.get('window').width - 64;
+  const { width: windowWidth } = useWindowDimensions();
+  const width = windowWidth - 64;
   const height = 300; // Made taller for better visualization
   
   // Handle zoom in and out

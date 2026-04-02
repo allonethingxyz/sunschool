@@ -96,10 +96,12 @@ const KidFooter: React.FC = () => {
           accessibilityLabel="Parent exit — tap three times quickly"
         >
           <Text style={styles.lockIcon}>🔒</Text>
-          {showHint && (
+          {showHint ? (
             <Text style={styles.lockHint}>
               {3 - tapCount} more
             </Text>
+          ) : (
+            <Text style={styles.lockHintStatic}>Tap 3× for parent mode</Text>
           )}
         </TouchableOpacity>
       </Animated.View>
@@ -152,6 +154,12 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: 'rgba(255,255,255,0.5)',
     marginTop: 1,
+  },
+  lockHintStatic: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.35)',
+    marginTop: 1,
+    opacity: 0.5,
   },
 });
 

@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, Linking, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
 import { useLocation, Redirect } from 'wouter';
 import { useAuth } from '../hooks/use-auth';
 import { GitHub, BookOpen, Eye, Shield, Users, Award, BarChart2, Star, ArrowRight, Zap, Lock, Globe, Map, Code, AlertTriangle, MessageCircle } from 'react-feather';
 import SocialLinks from '../components/SocialLinks';
 import SupportModal from '../components/SupportModal';
-
-const windowWidth = Dimensions.get('window').width;
 
 const brand = {
   primary: '#4A90D9',
@@ -102,12 +100,12 @@ const WelcomePage: React.FC = () => {
   const { user, isLoading } = useAuth();
   const [location] = useLocation();
   const [showSupport, setShowSupport] = useState(false);
+  const { width: windowWidth } = useWindowDimensions();
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : location;
 
+  const responsiveStyles = useMemo(() => createResponsiveStyles(windowWidth), [windowWidth]);
+
   if (user && !isLoading && (location === '/welcome' || currentPath === '/welcome')) {
-    if (typeof window !== 'undefined') {
-      window.location.href = '/dashboard';
-    }
     return <Redirect to="/dashboard" />;
   }
 
@@ -163,18 +161,18 @@ const WelcomePage: React.FC = () => {
         </View>
 
         {/* ── Hero ── */}
-        <View style={styles.hero}>
-          <View style={styles.heroInner}>
-            <View style={styles.heroLeft}>
+        <View style={[styles.hero, responsiveStyles.hero]}>
+          <View style={[styles.heroInner, responsiveStyles.heroInner]}>
+            <View style={[styles.heroLeft, responsiveStyles.heroLeft]}>
               <Text style={styles.heroLabel}>SUNSCHOOL</Text>
-              <Text style={styles.heroTitle} accessibilityRole="header">
+              <Text style={[styles.heroTitle, responsiveStyles.heroTitle]} accessibilityRole="header">
                 School {'\u2014'} anywhere{'\n'}under the sun.
               </Text>
-              <Text style={styles.heroSub}>
+              <Text style={[styles.heroSub, responsiveStyles.heroSub]}>
                 An AI tutor that adapts to your child. You see every prompt. You set the guidelines. You approve the lessons. Open source, so you can verify every word.
               </Text>
 
-              <View style={styles.heroCtas}>
+              <View style={[styles.heroCtas, responsiveStyles.heroCtas]}>
                 <TouchableOpacity style={styles.ctaPrimary} onPress={goToAuth} accessibilityRole="button" accessibilityLabel="Get Started Free">
                   <Text style={styles.ctaPrimaryText}>Get Started Free</Text>
                   <ArrowRight size={16} color={brand.white} style={{ marginLeft: 8 }} aria-hidden="true" />
@@ -195,17 +193,17 @@ const WelcomePage: React.FC = () => {
         </View>
 
         {/* ── The parent owns the prompt (HERO) ── */}
-        <View style={styles.promptHeroSection}>
-          <View style={styles.promptHeroInner}>
-            <View style={styles.promptHeroLeft}>
+        <View style={[styles.promptHeroSection, responsiveStyles.promptHeroSection]}>
+          <View style={[styles.promptHeroInner, responsiveStyles.promptHeroInner]}>
+            <View style={[styles.promptHeroLeft, responsiveStyles.promptHeroLeft]}>
               <View style={styles.promptIconWrap} aria-hidden="true">
                 <Code size={40} color={brand.amber} aria-hidden="true" />
               </View>
-              <Text style={styles.promptHeroTitle} accessibilityRole="header">The parent owns the prompt.</Text>
-              <Text style={styles.promptHeroBody}>
+              <Text style={[styles.promptHeroTitle, responsiveStyles.promptHeroTitle]} accessibilityRole="header">The parent owns the prompt.</Text>
+              <Text style={[styles.promptHeroBody, responsiveStyles.promptHeroBody]}>
                 AI models are sensitive to steering. Small changes in a prompt {'\u2014'} the instructions that tell the AI what to teach and how {'\u2014'} can shift tone, difficulty, and emphasis in ways that aren{'\u2019'}t obvious from the output alone.
               </Text>
-              <Text style={styles.promptHeroBody}>
+              <Text style={[styles.promptHeroBody, responsiveStyles.promptHeroBody]}>
                 If you don{'\u2019'}t know what{'\u2019'}s in the prompt, you don{'\u2019'}t really know what{'\u2019'}s in the lesson. When it{'\u2019'}s your kid, you should be able to read every word the AI was told before it started teaching.
               </Text>
               <TouchableOpacity style={styles.promptCta} onPress={() => { if (typeof window !== 'undefined') window.location.href = '/dashboard'; }} accessibilityRole="button" accessibilityLabel="See every prompt">
@@ -238,15 +236,15 @@ const WelcomePage: React.FC = () => {
         </View>
 
         {/* ── Product Description ── */}
-        <View style={styles.sectionWhite}>
+        <View style={[styles.sectionWhite, responsiveStyles.sectionWhite]}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">
+            <Text style={[styles.sectionTitle, responsiveStyles.sectionTitle]} accessibilityRole="header">
               Your child's tutor. Their pace. Their place.
             </Text>
-            <Text style={styles.productDesc}>
+            <Text style={[styles.productDesc, responsiveStyles.productDesc]}>
               Sunschool is an AI-powered tutor that meets your kid where they are {'\u2014'} grade level, learning style, speed. Every lesson adapts in real time. No two kids get the same experience.
             </Text>
-            <Text style={styles.productDesc}>
+            <Text style={[styles.productDesc, responsiveStyles.productDesc]}>
               Coming soon: a blue-light-free e-reader tablet designed for solar and satellite {'\u2014'} no Wi-Fi, no outlet, no classroom required. Backyard. Beach. Backseat. If the sun's out, school's on.
             </Text>
           </View>
@@ -270,9 +268,9 @@ const WelcomePage: React.FC = () => {
         </View>
 
         {/* ── What kids experience ── */}
-        <View style={styles.sectionTinted}>
+        <View style={[styles.sectionTinted, responsiveStyles.sectionTinted]}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">What kids experience</Text>
+            <Text style={[styles.sectionTitle, responsiveStyles.sectionTitle]} accessibilityRole="header">What kids experience</Text>
 
             <View style={styles.cardGrid}>
               {[
@@ -281,7 +279,7 @@ const WelcomePage: React.FC = () => {
                 { icon: <Star size={28} color={brand.white} aria-hidden="true" />, bg: brand.green, title: 'Trophies and streaks', desc: 'Badges and milestones keep momentum going. Progress they can see and celebrate.' },
                 { icon: <Map size={28} color={brand.white} aria-hidden="true" />, bg: brand.purple, title: 'A map of everything they know', desc: 'Subjects connect visually. Kids see where they\u2019ve been and what\u2019s next \u2014 curiosity does the rest.' },
               ].map((card, i) => (
-                <View key={i} style={styles.featureCard}>
+                <View key={i} style={[styles.featureCard, responsiveStyles.featureCard]}>
                   <View style={[styles.featureIconCircle, { backgroundColor: card.bg }]}>
                     {card.icon}
                   </View>
@@ -294,9 +292,9 @@ const WelcomePage: React.FC = () => {
         </View>
 
         {/* ── What parents get ── */}
-        <View style={styles.sectionWhite}>
+        <View style={[styles.sectionWhite, responsiveStyles.sectionWhite]}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">What parents get</Text>
+            <Text style={[styles.sectionTitle, responsiveStyles.sectionTitle]} accessibilityRole="header">What parents get</Text>
 
             <View style={styles.cardGrid}>
               {[
@@ -305,7 +303,7 @@ const WelcomePage: React.FC = () => {
                 { icon: <GitHub size={28} color={brand.white} aria-hidden="true" />, bg: brand.text, title: 'Open Source', desc: 'Read the code. Audit the prompts. Self-host if you want. Education you can verify, not just trust.' },
                 { icon: <Shield size={28} color={brand.white} aria-hidden="true" />, bg: brand.green, title: 'Privacy First', desc: 'Your data stays yours. Nothing gets sold. Nothing trains a model. Export or delete anytime.' },
               ].map((card, i) => (
-                <View key={i} style={styles.featureCard}>
+                <View key={i} style={[styles.featureCard, responsiveStyles.featureCard]}>
                   <View style={[styles.featureIconCircle, { backgroundColor: card.bg }]}>
                     {card.icon}
                   </View>
@@ -319,9 +317,9 @@ const WelcomePage: React.FC = () => {
 
 
         {/* ── How It Works ── */}
-        <View style={styles.sectionTinted}>
+        <View style={[styles.sectionTinted, responsiveStyles.sectionTinted]}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">Up and running in minutes</Text>
+            <Text style={[styles.sectionTitle, responsiveStyles.sectionTitle]} accessibilityRole="header">Up and running in minutes</Text>
 
             <View style={styles.stepsContainer}>
               {[
@@ -344,10 +342,10 @@ const WelcomePage: React.FC = () => {
         </View>
 
         {/* ── Testimonials ── */}
-        <View style={styles.sectionWhite}>
+        <View style={[styles.sectionWhite, responsiveStyles.sectionWhite]}>
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle} accessibilityRole="header">What we're building toward</Text>
-            <View style={styles.testimonialGrid}>
+            <Text style={[styles.sectionTitle, responsiveStyles.sectionTitle]} accessibilityRole="header">What we're building toward</Text>
+            <View style={[styles.testimonialGrid, responsiveStyles.testimonialGrid]}>
               {[
                 { quote: 'She takes it outside and does math in the hammock. Voluntarily. I have no explanation.', name: 'Sarah M.', detail: 'Parent of a 3rd grader', color: brand.primary },
                 { quote: 'I checked the actual AI prompts before my daughter started. I can see exactly how the AI is being instructed. That peace of mind changed everything.', name: 'James T.', detail: 'Parent of 2', color: brand.amber },
@@ -364,9 +362,9 @@ const WelcomePage: React.FC = () => {
         </View>
 
         {/* ── Final CTA ── */}
-        <View style={styles.finalCta}>
+        <View style={[styles.finalCta, responsiveStyles.finalCta]}>
           <View style={styles.finalCtaInner}>
-            <Text style={styles.finalCtaTitle} accessibilityRole="header">
+            <Text style={[styles.finalCtaTitle, responsiveStyles.finalCtaTitle]} accessibilityRole="header">
               School {'\u2014'} anywhere{'\n'}under the sun.
             </Text>
             <Text style={styles.finalCtaNote}>Free for core features during alpha. No credit card needed.</Text>
@@ -386,7 +384,7 @@ const WelcomePage: React.FC = () => {
             </View>
             <Text style={styles.footerTagline}>Part of All One Thing.{'\n'}Open source education for all.</Text>
 
-            <View style={styles.footerLinks} accessibilityRole="list">
+            <View style={[styles.footerLinks, responsiveStyles.footerLinks]} accessibilityRole="list">
               <TouchableOpacity onPress={() => { if (typeof window !== 'undefined') window.location.href = '/privacy'; }} accessibilityRole="link" accessibilityLabel="Privacy Policy">
                 <Text style={styles.footerLinkText}>Privacy Policy</Text>
               </TouchableOpacity>
@@ -418,7 +416,80 @@ const WelcomePage: React.FC = () => {
   );
 };
 
-// ─── Styles ─────────────────────────────────────────────────────────────────
+// ─── Responsive styles (depend on window width) ────────────────────────────
+
+const createResponsiveStyles = (w: number) => StyleSheet.create({
+  hero: {
+    paddingTop: w < 768 ? 50 : 80,
+    paddingBottom: w < 768 ? 60 : 90,
+  },
+  heroInner: {
+    flexDirection: w < 768 ? 'column' : 'row',
+  },
+  heroLeft: {
+    flex: w < 768 ? 0 : 1,
+  },
+  heroTitle: {
+    fontSize: w < 768 ? 34 : 50,
+    lineHeight: w < 768 ? 42 : 60,
+  },
+  heroSub: {
+    fontSize: w < 768 ? 17 : 20,
+    lineHeight: w < 768 ? 26 : 30,
+  },
+  heroCtas: {
+    flexDirection: w < 480 ? 'column' : 'row',
+    alignItems: w < 480 ? 'stretch' : 'center',
+  },
+  productDesc: {
+    fontSize: w < 768 ? 16 : 18,
+    lineHeight: w < 768 ? 26 : 30,
+  },
+  promptHeroSection: {
+    paddingVertical: w < 768 ? 60 : 80,
+  },
+  promptHeroInner: {
+    flexDirection: w < 768 ? 'column' : 'row',
+  },
+  promptHeroLeft: {
+    maxWidth: w < 768 ? '100%' as any : 560,
+  },
+  promptHeroTitle: {
+    fontSize: w < 768 ? 28 : 38,
+    lineHeight: w < 768 ? 36 : 46,
+  },
+  promptHeroBody: {
+    fontSize: w < 768 ? 16 : 18,
+    lineHeight: w < 768 ? 26 : 30,
+  },
+  sectionWhite: {
+    paddingVertical: w < 768 ? 50 : 80,
+  },
+  sectionTinted: {
+    paddingVertical: w < 768 ? 50 : 80,
+  },
+  sectionTitle: {
+    fontSize: w < 768 ? 26 : 34,
+  },
+  featureCard: {
+    width: w < 768 ? '100%' as any : w < 1024 ? '46%' as any : '22%' as any,
+  },
+  testimonialGrid: {
+    flexDirection: w < 768 ? 'column' : 'row',
+  },
+  finalCta: {
+    paddingVertical: w < 768 ? 60 : 80,
+  },
+  finalCtaTitle: {
+    fontSize: w < 768 ? 28 : 40,
+    lineHeight: w < 768 ? 36 : 50,
+  },
+  footerLinks: {
+    gap: w < 480 ? 16 : 28,
+  },
+});
+
+// ─── Static styles ──────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   scrollView: {
@@ -493,8 +564,6 @@ const styles = StyleSheet.create({
   hero: {
     backgroundColor: brand.primary,
     backgroundImage: `linear-gradient(135deg, ${brand.primary} 0%, ${brand.primaryDark} 100%)`,
-    paddingTop: windowWidth < 768 ? 50 : 80,
-    paddingBottom: windowWidth < 768 ? 60 : 90,
     paddingHorizontal: 20,
     alignItems: 'center',
   } as any,
@@ -502,13 +571,11 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 1200,
     marginHorizontal: 'auto',
-    flexDirection: windowWidth < 768 ? 'column' : 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 40,
   },
   heroLeft: {
-    flex: windowWidth < 768 ? 0 : 1,
     maxWidth: 600,
     width: '100%',
   },
@@ -520,23 +587,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   heroTitle: {
-    fontSize: windowWidth < 768 ? 34 : 50,
     fontWeight: '800',
     color: brand.white,
-    lineHeight: windowWidth < 768 ? 42 : 60,
     marginBottom: 20,
     letterSpacing: -0.5,
   },
   heroSub: {
-    fontSize: windowWidth < 768 ? 17 : 20,
-    lineHeight: windowWidth < 768 ? 26 : 30,
     color: 'rgba(255,255,255,0.9)',
     marginBottom: 32,
   },
   heroCtas: {
-    flexDirection: windowWidth < 480 ? 'column' : 'row',
     gap: 14,
-    alignItems: windowWidth < 480 ? 'stretch' : 'center',
   },
   ctaPrimary: {
     backgroundColor: brand.secondary,
@@ -577,8 +638,6 @@ const styles = StyleSheet.create({
 
   /* Product description */
   productDesc: {
-    fontSize: windowWidth < 768 ? 16 : 18,
-    lineHeight: windowWidth < 768 ? 26 : 30,
     color: brand.textLight,
     textAlign: 'center',
     marginBottom: 16,
@@ -589,19 +648,16 @@ const styles = StyleSheet.create({
   /* Parent owns the prompt - HERO VERSION */
   promptHeroSection: {
     backgroundColor: brand.text,
-    paddingVertical: windowWidth < 768 ? 60 : 80,
     paddingHorizontal: 20,
   },
   promptHeroInner: {
     maxWidth: 1200,
     marginHorizontal: 'auto',
-    flexDirection: windowWidth < 768 ? 'column' : 'row',
     alignItems: 'center',
     gap: 48,
   },
   promptHeroLeft: {
     flex: 1,
-    maxWidth: windowWidth < 768 ? '100%' : 560,
   },
   promptIconWrap: {
     width: 72,
@@ -613,15 +669,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   promptHeroTitle: {
-    fontSize: windowWidth < 768 ? 28 : 38,
     fontWeight: '800',
     color: brand.white,
     marginBottom: 20,
-    lineHeight: windowWidth < 768 ? 36 : 46,
   },
   promptHeroBody: {
-    fontSize: windowWidth < 768 ? 16 : 18,
-    lineHeight: windowWidth < 768 ? 26 : 30,
     color: 'rgba(255,255,255,0.85)',
     marginBottom: 16,
   },
@@ -720,12 +772,10 @@ const styles = StyleSheet.create({
   /* Sections */
   sectionWhite: {
     backgroundColor: brand.white,
-    paddingVertical: windowWidth < 768 ? 50 : 80,
     paddingHorizontal: 20,
   },
   sectionTinted: {
     backgroundColor: brand.bg,
-    paddingVertical: windowWidth < 768 ? 50 : 80,
     paddingHorizontal: 20,
   },
   sectionWrap: {
@@ -734,7 +784,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   sectionTitle: {
-    fontSize: windowWidth < 768 ? 26 : 34,
     fontWeight: '700',
     color: brand.text,
     textAlign: 'center',
@@ -750,7 +799,6 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   featureCard: {
-    width: windowWidth < 768 ? '100%' : windowWidth < 1024 ? '46%' : '22%',
     backgroundColor: brand.white,
     borderRadius: 16,
     padding: 28,
@@ -827,7 +875,6 @@ const styles = StyleSheet.create({
 
   /* Testimonials */
   testimonialGrid: {
-    flexDirection: windowWidth < 768 ? 'column' : 'row',
     gap: 24,
     justifyContent: 'center',
     marginTop: 24,
@@ -867,7 +914,6 @@ const styles = StyleSheet.create({
   finalCta: {
     backgroundColor: brand.primary,
     backgroundImage: `linear-gradient(135deg, ${brand.primaryDark} 0%, ${brand.primary} 100%)`,
-    paddingVertical: windowWidth < 768 ? 60 : 80,
     paddingHorizontal: 20,
     alignItems: 'center',
   } as any,
@@ -877,12 +923,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   finalCtaTitle: {
-    fontSize: windowWidth < 768 ? 28 : 40,
     fontWeight: '800',
     color: brand.white,
     textAlign: 'center',
     marginBottom: 16,
-    lineHeight: windowWidth < 768 ? 36 : 50,
   },
   finalCtaNote: {
     fontSize: 16,
@@ -939,7 +983,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: windowWidth < 480 ? 16 : 28,
     marginBottom: 24,
   },
   footerLinkText: {

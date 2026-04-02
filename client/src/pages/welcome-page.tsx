@@ -103,7 +103,9 @@ const WelcomePage: React.FC = () => {
   const { width: windowWidth } = useWindowDimensions();
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : location;
 
-  const responsiveStyles = useMemo(() => createResponsiveStyles(windowWidth), [windowWidth]);
+  // Quantize to breakpoints to avoid StyleSheet.create() on every pixel of resize
+  const breakpoint = windowWidth < 480 ? 480 : windowWidth < 768 ? 768 : windowWidth < 1024 ? 1024 : 1200;
+  const responsiveStyles = useMemo(() => createResponsiveStyles(windowWidth), [breakpoint]);
 
   if (user && !isLoading && (location === '/welcome' || currentPath === '/welcome')) {
     return <Redirect to="/dashboard" />;

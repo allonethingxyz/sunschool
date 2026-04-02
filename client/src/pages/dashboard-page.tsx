@@ -25,7 +25,8 @@ const ChildCard: React.FC<{
   learner: { id: number; name: string; email: string; role: string };
   onView: () => void;
   onRemove: (id: number) => void;
-}> = ({ learner, onView, onRemove }) => {
+  removing?: boolean;
+}> = ({ learner, onView, onRemove, removing }) => {
   const [confirmRemove, setConfirmRemove] = useState(false);
   // Fetch report data for this child
   const { data: report, isLoading: reportLoading, error: reportError } = useQuery<ChildReport>({
@@ -169,8 +170,9 @@ const ChildCard: React.FC<{
               <TouchableOpacity
                 onPress={() => { onRemove(learner.id); setConfirmRemove(false); }}
                 style={styles.removeYes}
+                disabled={removing}
               >
-                <Text style={styles.removeYesText}>Yes</Text>
+                <Text style={styles.removeYesText}>{removing ? '...' : 'Yes'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setConfirmRemove(false)}
@@ -363,12 +365,20 @@ const DashboardPage: React.FC = () => {
   };
 
   // Handle removing a child
+  const [removingId, setRemovingId] = useState<number | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const handleRemoveChild = async (learnerId: number) => {
+    if (removingId) return; // prevent double-tap
+    setRemovingId(learnerId);
+    setRemoveError(null);
     try {
       await apiRequest('DELETE', `/api/learners/${learnerId}`);
       queryClient.invalidateQueries({ queryKey: ['/api/learners'] });
     } catch (err) {
+      setRemoveError('Could not remove child. Please try again.');
       console.error('Failed to remove learner:', err);
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -474,8 +484,13 @@ const DashboardPage: React.FC = () => {
                     learner={learner}
                     onView={() => handleViewChild(learner)}
                     onRemove={handleRemoveChild}
+                    removing={removingId === learner.id}
                   />
                 ))}
+
+                {removeError && (
+                  <Text style={{ color: colors.error, fontSize: 13, textAlign: 'center', marginBottom: 8 }}>{removeError}</Text>
+                )}
 
                 {/* Add Another Child */}
                 <TouchableOpacity

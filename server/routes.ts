@@ -390,7 +390,7 @@ export function registerRoutes(app: Express): Server {
     // Check authorization (parents can only delete their own learners)
     if (req.user?.role === "PARENT") {
       // Check if the learner belongs to this parent
-      if (learner.parentId !== req.user.id && learner.parentId.toString() !== ensureString(req.user.id)) {
+      if (ensureString(learner.parentId) !== ensureString(req.user.id)) {
         return res.status(403).json({ error: "Not authorized to delete this learner" });
       }
     }

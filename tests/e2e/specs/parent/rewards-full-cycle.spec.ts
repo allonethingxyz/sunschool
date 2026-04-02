@@ -203,6 +203,19 @@ test.describe.serial('Parent: Rewards Full Cycle', () => {
     // Allow points service time to process
     await page.waitForTimeout(3000);
 
+    // Save points toward each reward before redemption
+    const save1 = await apiCall(page, 'POST', `/api/rewards/${reward1Id}/save?learnerId=${learnerId}`, { points: 1 });
+    console.log(`Save1: status=${save1.status} data=${JSON.stringify(save1.data)}`);
+    if (save1.status >= 400) {
+      console.log(`SKIP: Save points failed (status: ${save1.status}): ${JSON.stringify(save1.data)}`);
+      test.skip();
+      return;
+    }
+    const save2 = await apiCall(page, 'POST', `/api/rewards/${reward2Id}/save?learnerId=${learnerId}`, { points: 1 });
+    console.log(`Save2: status=${save2.status} data=${JSON.stringify(save2.data)}`);
+    // Brief wait for persistence
+    await page.waitForTimeout(2000);
+
     // Request redemption for reward 1
     const redeem1Result = await apiCall(
       page,

@@ -450,8 +450,11 @@ export async function setupAdminSession(
   page: Page,
   prefix: string = 'admin'
 ): Promise<SetupResult> {
-  const adminUsername = process.env.E2E_ADMIN_USERNAME || 'realityinspector';
-  const adminPassword = process.env.E2E_ADMIN_PASSWORD || 'SunschoolAdmin2026!';
+  const adminUsername = process.env.E2E_ADMIN_USERNAME || '';
+  const adminPassword = process.env.E2E_ADMIN_PASSWORD || '';
+  if (!adminUsername || !adminPassword) {
+    throw new Error('E2E_ADMIN_USERNAME and E2E_ADMIN_PASSWORD env vars must be set for admin tests');
+  }
   const childName = `Child_${Date.now()}`;
 
   // Navigate to site first (needed for evaluate calls)

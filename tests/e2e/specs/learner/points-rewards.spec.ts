@@ -6,30 +6,38 @@
  *
  * Points come from quiz completion. Rewards are parent-created goals
  * that learners save points toward and request redemption.
+ *
+ * Session is created once and reused across tests (serial mode)
+ * to avoid 30-60s registration overhead per test in headed mode.
  */
 import { test, expect } from '@playwright/test';
 import { selfHealingLocator } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
+  reuseSession,
   screenshot,
   generateAndWaitForLesson,
   createRewardGoal,
   apiCall,
   enterLearnerContext,
+  SetupResult,
 } from '../../helpers/learner-setup';
 
-test.describe('Learner: Points & Rewards', () => {
+test.describe.serial('Learner: Points & Rewards', () => {
   test.describe.configure({ retries: 2 });
+
+  let shared: SetupResult;
+
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
   });
 
   test('can view point balance on learner home', async ({ page }) => {
     test.setTimeout(600_000);
-    const ctx = await setupLearnerSession(page, 'reward');
+    shared = await setupLearnerSession(page, 'reward');
 
     // Enter the learner context via the dashboard
-    await enterLearnerContext(page, ctx.childName);
+    await enterLearnerContext(page, shared.childName);
     await screenshot(page, 'points-01-learner-home');
 
     // The learner home or dashboard should show the child's name and lesson section
@@ -47,7 +55,7 @@ test.describe('Learner: Points & Rewards', () => {
 
   test('can check point balance via API and see it reflected', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'reward_balance');
+    await reuseSession(page, shared.token, shared.learnerId);
 
     await page.goto('/learner');
     await page.waitForLoadState('networkidle');
@@ -72,7 +80,7 @@ test.describe('Learner: Points & Rewards', () => {
 
   test('can navigate to goals page and see reward goals', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'reward_goals');
+    await reuseSession(page, shared.token, shared.learnerId);
 
     // Create a reward goal as the parent
     const goalId = await createRewardGoal(page, 'Extra Screen Time', 10);
@@ -99,7 +107,7 @@ test.describe('Learner: Points & Rewards', () => {
 
   test('can see reward goal progress and save points action', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'reward_progress');
+    await reuseSession(page, shared.token, shared.learnerId);
 
     // Create a reward goal
     const goalId = await createRewardGoal(page, 'Movie Night', 5);
@@ -135,7 +143,7 @@ test.describe('Learner: Points & Rewards', () => {
 
   test('points are awarded after completing a quiz', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'reward_quiz');
+    await reuseSession(page, shared.token, shared.learnerId);
 
     // Check initial balance
     const learnerId = await page.evaluate(() =>
@@ -149,7 +157,7 @@ test.describe('Learner: Points & Rewards', () => {
     const initialBalance = initialResult.data?.balance || initialResult.data?.points || 0;
 
     // Generate a lesson
-    let lessonId: string;
+    let lessonId: number;
     try {
       lessonId = await generateAndWaitForLesson(page, 'Math');
     } catch {

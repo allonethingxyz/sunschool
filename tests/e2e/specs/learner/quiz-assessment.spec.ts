@@ -9,35 +9,44 @@
  * - View score, points earned, and feedback
  *
  * AI-generated quiz questions are non-deterministic — assertions are structural.
+ *
+ * Session is created once and reused across tests (serial mode)
+ * to avoid 30-60s registration overhead per test in headed mode.
  */
 import { test, expect } from '@playwright/test';
 import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
+  reuseSession,
   screenshot,
   generateAndWaitForLesson,
   apiCall,
   enterLearnerContext,
+  SetupResult,
 } from '../../helpers/learner-setup';
 
-test.describe('Learner: Quiz Assessment', () => {
+test.describe.serial('Learner: Quiz Assessment', () => {
   test.describe.configure({ retries: 2 });
+
+  let shared: SetupResult;
+  let sharedLessonId: number;
+
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
   });
 
   test('can navigate to quiz pre-screen from lesson', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'quiz');
+    shared = await setupLearnerSession(page, 'quiz');
 
-    const lessonId = await generateAndWaitForLesson(page);
-    expect(lessonId).toBeTruthy();
+    sharedLessonId = await generateAndWaitForLesson(page);
+    expect(sharedLessonId).toBeTruthy();
 
     // Enter learner context first (required for quiz route)
     await enterLearnerContext(page);
 
     // Navigate directly to quiz page
-    await page.goto(`/quiz/${lessonId}`);
+    await page.goto(`/quiz/${sharedLessonId}`);
     await page.waitForLoadState('networkidle');
 
     await screenshot(page, 'quiz-02-pre-quiz-screen');
@@ -52,13 +61,14 @@ test.describe('Learner: Quiz Assessment', () => {
 
   test('can answer quiz questions and see options', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'quiz_answer');
+    await reuseSession(page, shared.token, shared.learnerId);
 
-    const lessonId = await generateAndWaitForLesson(page);
-    expect(lessonId).toBeTruthy();
+    // Generate a fresh lesson for this test (previous may have been consumed)
+    sharedLessonId = await generateAndWaitForLesson(page);
+    expect(sharedLessonId).toBeTruthy();
 
     // Go directly to quiz
-    await page.goto(`/quiz/${lessonId}`);
+    await page.goto(`/quiz/${sharedLessonId}`);
     await page.waitForLoadState('networkidle');
 
     // Click "Start Quiz" on pre-quiz screen if present
@@ -117,23 +127,24 @@ test.describe('Learner: Quiz Assessment', () => {
 
   test('can submit quiz and view results with score', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'quiz_submit');
+    await reuseSession(page, shared.token, shared.learnerId);
 
-    const lessonId = await generateAndWaitForLesson(page);
-    expect(lessonId).toBeTruthy();
+    // Generate a fresh lesson for submission
+    sharedLessonId = await generateAndWaitForLesson(page);
+    expect(sharedLessonId).toBeTruthy();
 
     // Submit quiz via API for reliability (UI answer selection is flaky)
     const learnerId = await page.evaluate(() =>
       Number(localStorage.getItem('selectedLearnerId'))
     );
-    const lessonResult = await apiCall(page, 'GET', `/api/lessons/${lessonId}`);
+    const lessonResult = await apiCall(page, 'GET', `/api/lessons/${sharedLessonId}`);
     const questions = lessonResult.data?.spec?.questions || [];
     const answers = questions.map((_: any, i: number) => ({
       questionIndex: i,
       selectedIndex: 0,
     }));
 
-    const submitResult = await apiCall(page, 'POST', `/api/lessons/${lessonId}/answer`, {
+    const submitResult = await apiCall(page, 'POST', `/api/lessons/${sharedLessonId}/answer`, {
       answers,
       learnerId,
     });
@@ -148,8 +159,9 @@ test.describe('Learner: Quiz Assessment', () => {
 
   test('can return to learner home after quiz completion', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'quiz_home');
+    await reuseSession(page, shared.token, shared.learnerId);
 
+    // Generate a fresh lesson
     const lessonId = await generateAndWaitForLesson(page);
     expect(lessonId).toBeTruthy();
 

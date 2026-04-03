@@ -133,6 +133,41 @@ export async function createChildViaAPI(
 }
 
 /**
+ * Lightweight session restore: sets auth token + learner context in localStorage,
+ * then navigates to /learner. Skips registration + child creation.
+ * Use after a full setupLearnerSession() to re-establish an existing session
+ * on a fresh page (e.g. in serial test suites that share credentials).
+ *
+ * Takes ~1-2s instead of 30-60s (headed) per test.
+ */
+export async function reuseSession(
+  page: Page,
+  token: string,
+  learnerId: number
+): Promise<void> {
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await waitForAppReady(page);
+
+  await page.evaluate(
+    ({ token, learnerId }) => {
+      localStorage.setItem('AUTH_TOKEN', token);
+      localStorage.setItem('selectedLearnerId', String(learnerId));
+      localStorage.setItem('preferredMode', 'LEARNER');
+    },
+    { token, learnerId }
+  );
+
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await waitForAppReady(page);
+
+  await page.goto('/learner');
+  await page.waitForLoadState('networkidle');
+  await waitForAppReady(page);
+}
+
+/**
  * Full setup: register parent, create child, set auth, navigate to learner home.
  * Returns token, learnerId, and childName for use in tests.
  *

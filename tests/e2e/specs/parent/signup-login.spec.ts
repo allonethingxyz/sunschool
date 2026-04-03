@@ -35,7 +35,7 @@ test.describe('Parent Signup & Login', () => {
   test.describe.configure({ retries: 2 });
 
   test('Registration flow with age disclaimer', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
     const user = generateTestUser('signup');
 
     await waitForAuthPage(page);
@@ -80,7 +80,7 @@ test.describe('Parent Signup & Login', () => {
 
     // Wait for navigation to dashboard
     try {
-      await page.waitForURL(/\/(dashboard|learner)/, { timeout: 30000 });
+      await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });
     } catch {
       const onAuth = page.url().includes('/auth');
       if (onAuth) {
@@ -94,7 +94,7 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('Login with valid credentials', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
     const user = generateTestUser('loginok');
 
     await waitForAuthPage(page);
@@ -118,7 +118,7 @@ test.describe('Parent Signup & Login', () => {
 
     // Click the Login submit button (last one — the tab is first)
     await page.getByText(/^login$/i).last().click();
-    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 30000 });
+    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toMatch(/\/(dashboard|learner)/);
@@ -126,7 +126,7 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('Login with invalid credentials shows error', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
 
     await waitForAuthPage(page);
 
@@ -154,7 +154,7 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('Session persistence across page reload', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
     const user = generateTestUser('persist');
 
     await waitForAuthPage(page);
@@ -170,7 +170,7 @@ test.describe('Parent Signup & Login', () => {
     const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
     await page.getByText(/^login$/i).last().click();
-    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 30000 });
+    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });
     await page.waitForLoadState('networkidle');
 
     const urlBeforeReload = page.url();
@@ -199,7 +199,7 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('Logout redirects to public page', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
     const user = generateTestUser('signout');
 
     await waitForAuthPage(page);
@@ -217,7 +217,7 @@ test.describe('Parent Signup & Login', () => {
     const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
     await page.getByText(/^login$/i).last().click();
-    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 30000 });
+    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
 

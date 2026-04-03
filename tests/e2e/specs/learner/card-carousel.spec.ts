@@ -60,7 +60,7 @@ test.describe('Learner: Card Carousel Lesson UI', () => {
     await expect(getBackBtn(page)).toBeVisible({ timeout: 5000 });
 
     // LESSON label should be visible on cover card
-    await expect(page.getByText('LESSON')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('LESSON').first()).toBeVisible({ timeout: 5000 });
 
     await screenshot(page, `${TEST_NAME}-02-cover-verified`);
   });

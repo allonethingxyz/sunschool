@@ -19,7 +19,7 @@ const feedbackLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-import { users, lessons } from "../shared/schema";
+import { users, lessons, lessonTemplates } from "../shared/schema";
 // content-generator used by image-generation-router, not directly by routes
 import { pointsService } from "./services/points-service";
 import { activityService } from "./services/activity-service";
@@ -1975,6 +1975,62 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/admin/low-quality-templates", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
     const flagged = await flagLowQualityTemplates();
     return res.json({ count: flagged.length, templates: flagged });
+  }));
+
+  // ── Template management endpoints (admin-only) ──────────────────────────
+
+  // List all templates
+  app.get("/api/admin/templates", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    const allTemplates = await db.select({
+      id: lessonTemplates.id,
+      contentHash: lessonTemplates.contentHash,
+      subject: lessonTemplates.subject,
+      gradeLevel: lessonTemplates.gradeLevel,
+      topic: lessonTemplates.topic,
+      difficulty: lessonTemplates.difficulty,
+      title: lessonTemplates.title,
+      timesServed: lessonTemplates.timesServed,
+      avgScore: lessonTemplates.avgScore,
+      createdAt: lessonTemplates.createdAt,
+      updatedAt: lessonTemplates.updatedAt,
+    }).from(lessonTemplates);
+    return res.json({ count: allTemplates.length, templates: allTemplates });
+  }));
+
+  // Delete a single template by ID
+  app.delete("/api/admin/templates/:id", hasRole(["ADMIN"]), asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    // Check for lessons referencing this template (set null on delete via FK, but good to report)
+    const referencingLessons = await db.select({ id: lessons.id, status: lessons.status })
+      .from(lessons)
+      .where(eq(lessons.templateId, id));
+    // Delete the template (FK is ON DELETE SET NULL, so lessons.templateId will become null)
+    const deleted = await db.delete(lessonTemplates).where(eq(lessonTemplates.id, id)).returning({ id: lessonTemplates.id });
+    if (deleted.length === 0) {
+      return res.status(404).json({ error: "Template not found" });
+    }
+    return res.json({
+      message: "Template deleted",
+      deletedId: id,
+      lessonsAffected: referencingLessons.length,
+      affectedLessons: referencingLessons.map(l => ({ id: l.id, status: l.status })),
+    });
+  }));
+
+  // Delete ALL templates (nuclear option)
+  app.delete("/api/admin/templates", hasRole(["ADMIN"]), asyncHandler(async (_req: Request, res: Response) => {
+    // Count lessons that reference any template
+    const referencingLessons = await db.select({ id: lessons.id, templateId: lessons.templateId, status: lessons.status })
+      .from(lessons)
+      .where(sql`${lessons.templateId} IS NOT NULL`);
+    // Delete all templates
+    const deleted = await db.delete(lessonTemplates).returning({ id: lessonTemplates.id });
+    return res.json({
+      message: "All templates deleted",
+      deletedCount: deleted.length,
+      lessonsAffected: referencingLessons.length,
+      affectedLessons: referencingLessons.map(l => ({ id: l.id, templateId: l.templateId, status: l.status })),
+    });
   }));
 
   app.get("/api/admin/auto-tuner/history", hasRole(["ADMIN"]), (_req: Request, res: Response) => {

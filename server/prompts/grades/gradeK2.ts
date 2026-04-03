@@ -211,18 +211,25 @@ export const GradeK2Prompts = {
     getSVGPrompt: (topic: string, concept: string, gradeLevel: number) => `
   SVG ILLUSTRATION FOR AGES 5-7 (Grade K-2)
 
-  STRICT CONSTRAINTS:
-  - Maximum 5 shapes total
+  Create a simple educational diagram that visually explains the concept for young children.
+
+  WHAT TO DRAW:
+  - Show the actual concept being taught (e.g., for "gravity" draw an apple falling from a tree with a downward arrow; for "fractions" draw a pizza cut into slices with labels)
+  - Use concrete, recognizable objects that children know
+  - Include a clear title at the top (font-size 20px)
+  - Add simple one-word labels pointing to key parts (font-size 18px or larger)
+  - Use arrows to show direction, movement, or relationships
+
+  STYLE CONSTRAINTS:
+  - Maximum 8 shapes total
   - Use only primary colors: red (#FF0000), blue (#0066FF), yellow (#FFD700), green (#00CC00)
   - Large shapes only (minimum 40px radius or 60px width)
-  - One-word labels only, font-size 18px or larger
-  - Simple, friendly, recognizable objects
   - White background
   - viewBox="0 0 400 300"
   - Use rounded corners (rx="10") on rectangles
-  - No complex paths — use basic shapes: circle, rect, ellipse
+  - No complex paths — use basic shapes: circle, rect, ellipse, line, polygon
 
-  Topic: "${topic}"
-  Concept: "${concept}"
+  Lesson: "${topic}"
+  Concept to illustrate: "${concept}"
   `
   };

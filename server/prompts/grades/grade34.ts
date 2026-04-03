@@ -205,9 +205,17 @@ export const Grade34Prompts = {
     getSVGPrompt: (topic: string, concept: string, gradeLevel: number) => `
   SVG ILLUSTRATION FOR AGES 8-10 (Grades 3-4)
 
-  GUIDELINES:
-  - 5-8 elements/shapes
-  - Clear, readable labels (1-2 words each), font-size 14px or larger
+  Create an educational diagram that visually explains the concept with clear labels and structure.
+
+  WHAT TO DRAW:
+  - Illustrate the specific concept being taught — not a generic image
+  - Include a clear title at the top of the diagram (font-size 16px, bold)
+  - Label all important parts with 1-3 word annotations (font-size 14px or larger)
+  - Use arrows to show processes, cause-and-effect, or relationships between parts
+  - Use visual metaphors that make abstract ideas concrete (e.g., a balance scale for equations)
+
+  STYLE GUIDELINES:
+  - 5-10 elements/shapes
   - Use a friendly color palette with good contrast
   - Show parts and wholes — label important components
   - Include simple arrows or lines to connect related items
@@ -215,7 +223,7 @@ export const Grade34Prompts = {
   - Use familiar objects for scale reference
   - White or light background
 
-  Topic: "${topic}"
-  Concept: "${concept}"
+  Lesson: "${topic}"
+  Concept to illustrate: "${concept}"
   `
   };

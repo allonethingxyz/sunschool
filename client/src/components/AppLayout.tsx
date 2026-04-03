@@ -51,6 +51,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    minHeight: '100vh' as any,
     flexDirection: 'column' as const,
     backgroundColor: colors.background,
   },

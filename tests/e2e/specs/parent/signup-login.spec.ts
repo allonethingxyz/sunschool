@@ -221,8 +221,8 @@ test.describe('Parent Signup & Login', () => {
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
 
-    // Click the Logout BUTTON specifically
-    const logoutBtn = page.getByRole('button', { name: 'Logout' });
+    // Click the first Logout button (header — there's also one in the footer)
+    const logoutBtn = page.getByRole('button', { name: 'Logout' }).first();
     await expect(logoutBtn).toBeVisible({ timeout: 10000 });
     await logoutBtn.click();
 

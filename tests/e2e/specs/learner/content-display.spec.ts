@@ -9,30 +9,38 @@
  * - Quiz questions have visual elements (image-based questions, option SVGs)
  *
  * All assertions are structural — AI-generated content varies per request.
+ *
+ * Session is created once and reused across tests (serial mode)
+ * to avoid 30-60s registration overhead per test in headed mode.
  */
 import { test, expect } from '@playwright/test';
 import {
   setupLearnerSession,
+  reuseSession,
   screenshot,
   generateAndWaitForLesson,
   apiCall,
   waitForLessonLoaded,
-
   enterLearnerContext,
+  SetupResult,
 } from '../../helpers/learner-setup';
 
-test.describe('Learner: Content Display', () => {
+test.describe.serial('Learner: Content Display', () => {
   test.describe.configure({ retries: 2 });
+
+  let shared: SetupResult;
+  let sharedLessonId: number;
+
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
   });
 
   test('lesson content renders text sections with headings and paragraphs', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'content');
+    shared = await setupLearnerSession(page, 'content');
 
-    const lessonId = await generateAndWaitForLesson(page, 'Science');
-    expect(lessonId).toBeTruthy();
+    sharedLessonId = await generateAndWaitForLesson(page, 'Science');
+    expect(sharedLessonId).toBeTruthy();
 
     // Navigate directly to lesson page via full page load
     await page.goto('/lesson');
@@ -62,10 +70,13 @@ test.describe('Learner: Content Display', () => {
 
   test('lesson page displays SVG illustrations or images', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'content_img');
+    await reuseSession(page, shared.token, shared.learnerId);
 
-    const lessonId = await generateAndWaitForLesson(page, 'Math');
-    expect(lessonId).toBeTruthy();
+    // Reuse the lesson generated in the first test; generate a new one only if needed
+    if (!sharedLessonId) {
+      sharedLessonId = await generateAndWaitForLesson(page, 'Math');
+    }
+    expect(sharedLessonId).toBeTruthy();
 
     await page.goto('/lesson');
     await page.waitForLoadState('networkidle');
@@ -105,13 +116,16 @@ test.describe('Learner: Content Display', () => {
 
   test('lesson content is rendered at appropriate grade level', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'content_grade');
+    await reuseSession(page, shared.token, shared.learnerId);
 
-    const lessonId = await generateAndWaitForLesson(page, 'Science');
-    expect(lessonId).toBeTruthy();
+    // Reuse existing lesson
+    if (!sharedLessonId) {
+      sharedLessonId = await generateAndWaitForLesson(page, 'Science');
+    }
+    expect(sharedLessonId).toBeTruthy();
 
     // Get lesson spec via API to check grade level
-    const lessonResult = await apiCall(page, 'GET', `/api/lessons/${lessonId}`);
+    const lessonResult = await apiCall(page, 'GET', `/api/lessons/${sharedLessonId}`);
     const lessonSpec = lessonResult.data?.spec;
 
     if (lessonSpec) {
@@ -157,16 +171,19 @@ test.describe('Learner: Content Display', () => {
 
   test('quiz questions render with answer options and visual elements', async ({ page }) => {
     test.setTimeout(600_000);
-    await setupLearnerSession(page, 'content_quiz');
+    await reuseSession(page, shared.token, shared.learnerId);
 
-    const lessonId = await generateAndWaitForLesson(page, 'Science');
-    expect(lessonId).toBeTruthy();
+    // Reuse existing lesson
+    if (!sharedLessonId) {
+      sharedLessonId = await generateAndWaitForLesson(page, 'Science');
+    }
+    expect(sharedLessonId).toBeTruthy();
 
     // Enter learner context (required for quiz route)
     await enterLearnerContext(page);
 
     // Navigate to quiz page via full page load
-    await page.goto(`/quiz/${lessonId}`);
+    await page.goto(`/quiz/${sharedLessonId}`);
     await page.waitForLoadState('networkidle');
 
     // Click Start Quiz if pre-quiz screen appears
@@ -206,12 +223,15 @@ test.describe('Learner: Content Display', () => {
 
   test('learner home displays knowledge graph or learning overview', async ({ page }) => {
     test.setTimeout(600_000);
-    const ctx = await setupLearnerSession(page, 'content_graph');
+    await reuseSession(page, shared.token, shared.learnerId);
 
-    await generateAndWaitForLesson(page, 'Science');
+    // Generate a fresh lesson if needed (the shared one may have been consumed by quiz)
+    if (!sharedLessonId) {
+      await generateAndWaitForLesson(page, 'Science');
+    }
 
     // Enter the learner context via the dashboard
-    await enterLearnerContext(page, ctx.childName);
+    await enterLearnerContext(page, shared.childName);
     await screenshot(page, 'content-05-knowledge-graph');
 
     // The learner home or dashboard should show child info and lesson/progress sections

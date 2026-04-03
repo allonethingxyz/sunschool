@@ -8,21 +8,30 @@
  *   4. Complete lesson by navigating to quiz entry point
  *
  * AI content is variable — assertions are structural, not textual.
+ *
+ * Session is created once and reused across tests (serial mode)
+ * to avoid 30-60s registration overhead per test in headed mode.
  */
 import { test, expect } from '@playwright/test';
 import { selfHealingLocator, captureFailureArtifacts } from '../../helpers/self-healing';
 import {
   setupLearnerSession,
+  reuseSession,
   screenshot,
   generateAndWaitForLesson,
   enterLearnerContext,
   waitForLessonLoaded,
+  SetupResult,
 } from '../../helpers/learner-setup';
 
 const TEST_NAME = 'lesson-flow';
 
-test.describe('Learner: Lesson Flow', () => {
+test.describe.serial('Learner: Lesson Flow', () => {
   test.describe.configure({ retries: 2 });
+
+  let shared: SetupResult;
+  let sharedLessonId: number;
+
   test.beforeEach(async ({ page }) => {
     page.setDefaultTimeout(120000);
   });
@@ -30,25 +39,25 @@ test.describe('Learner: Lesson Flow', () => {
   test('start a new lesson and navigate through content', async ({ page }) => {
     test.setTimeout(600000);
 
-    const ctx = await setupLearnerSession(page, 'lf');
+    shared = await setupLearnerSession(page, 'lf');
 
     // Generate a lesson via API (reliable, avoids UI button flakiness)
-    const lessonId = await generateAndWaitForLesson(page, 'Science');
-    expect(lessonId).toBeTruthy();
+    sharedLessonId = await generateAndWaitForLesson(page, 'Science');
+    expect(sharedLessonId).toBeTruthy();
 
     // Enter the learner context (click "START LEARNING AS" on dashboard)
-    await enterLearnerContext(page, ctx.childName);
+    await enterLearnerContext(page, shared.childName);
     await screenshot(page, `${TEST_NAME}-01-learner-home`);
 
     // Check for learner home content — may show "Current Lesson" or "SELECT A SUBJECT"
-    const hasLearnerContent = await page.getByText(/Current Lesson|SELECT A SUBJECT|Hello/i)
+    const hasLearnerHome = await page.getByText(/Current Lesson|SELECT A SUBJECT|Hello/i)
       .first().isVisible({ timeout: 30000 }).catch(() => false);
-    expect(hasLearnerContent).toBeTruthy();
+    expect(hasLearnerHome).toBeTruthy();
 
     await screenshot(page, `${TEST_NAME}-03-lesson-ready`);
 
     // Set the active lesson in localStorage before navigating
-    await page.evaluate((id) => localStorage.setItem('activeLessonId', id), lessonId);
+    await page.evaluate((id) => localStorage.setItem('activeLessonId', id), sharedLessonId);
 
     // Navigate to lesson page
     await page.goto('/lesson');
@@ -93,14 +102,16 @@ test.describe('Learner: Lesson Flow', () => {
   test('lesson card displays subject and topic information', async ({ page }) => {
     test.setTimeout(600000);
 
-    const ctx = await setupLearnerSession(page, 'lf_card');
+    await reuseSession(page, shared.token, shared.learnerId);
 
-    // Generate a lesson via API and wait for it to be active
-    const lessonId = await generateAndWaitForLesson(page, 'Science');
-    expect(lessonId).toBeTruthy();
+    // Reuse the lesson from the first test; generate a new one only if needed
+    if (!sharedLessonId) {
+      sharedLessonId = await generateAndWaitForLesson(page, 'Science');
+    }
+    expect(sharedLessonId).toBeTruthy();
 
     // Enter the learner context
-    await enterLearnerContext(page, ctx.childName);
+    await enterLearnerContext(page, shared.childName);
     await screenshot(page, `${TEST_NAME}-08-lesson-card-info`);
 
     // The page should contain learner home content (child name, lesson section, or subject selector)

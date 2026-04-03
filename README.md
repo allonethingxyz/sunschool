@@ -79,7 +79,7 @@ tests/           Playwright e2e tests (learner, parent, chaos)
 ### Key Features
 
 - **AI-Generated Lessons** — Grade-specific prompts (K-2, 3-4, 5-6, 7-8, 9+) with validation that rejects placeholder content
-- **SVG Illustrations** — LLM-generated educational graphics via Gemini 3.1 with model fallback chains
+- **SVG Illustrations** — LLM-generated educational graphics (configurable model via `OPENROUTER_SVG_MODEL`) with fallback chain and programmatic fallback
 - **Parent-as-Learner Mode** — Parents switch to learner view to see what their kids see
 - **Concept Mastery** — Track performance across specific concepts with spaced repetition
 - **Gamification** — Points economy, parent-managed rewards shop, goal setting, redemption approval workflow
@@ -159,6 +159,7 @@ Push to `main` triggers auto-deploy. Health check at `/api/healthcheck`.
 - `POST /login` — User login
 - `POST /register` — User registration
 - `POST /logout` — User logout
+- `POST /api/change-password` — Change password (authenticated)
 - `GET /user` — Current user info
 </details>
 
@@ -204,6 +205,13 @@ Push to `main` triggers auto-deploy. Health check at `/api/healthcheck`.
 - `DELETE /api/rewards/:id` — Delete reward (Parent)
 - `GET /api/rewards/redemptions` — Pending redemptions (Parent)
 - `POST /api/rewards/redemptions/:id/approve` — Approve redemption (Parent)
+</details>
+
+<details>
+<summary>Admin</summary>
+
+- `GET /api/admin/templates` — List lesson templates (Admin)
+- `DELETE /api/admin/templates/:id` — Delete lesson template (Admin)
 </details>
 
 <details>

@@ -20,7 +20,7 @@ server/              Express.js backend
   config/            Environment vars (env.ts) and feature flags (flags.ts)
   bittensor.ts       Bittensor Subnet 1 client
 shared/              TypeScript schemas and types (schema.ts)
-drizzle/migrations/  Database migration SQL files (0000-0011)
+drizzle/migrations/  Database migration SQL files (0000-0014)
 scripts/             Admin onboarding, password reset, migrations
 tests/e2e/           Playwright end-to-end tests
 ```
@@ -35,7 +35,9 @@ users (id, email, username, name, role, password, parent_id, created_at)
 
 -- Learner academic profiles
 learner_profiles (id, user_id, grade_level, graph, subjects, subject_performance,
-                  recommended_subjects, struggling_areas, created_at)
+                  recommended_subjects, struggling_areas,
+                  parent_prompt_guidelines, content_restrictions, require_lesson_approval,
+                  created_at)
 
 -- AI-generated lessons (single unified spec column)
 lessons (id, learner_id, module_id, status[QUEUED|ACTIVE|DONE], subject, category,
@@ -49,6 +51,16 @@ quiz_answers (id, learner_id, lesson_id, question_index, question_text, question
 
 -- Achievements with token rewards
 achievements (id, learner_id, type, payload, token_reward, is_repeatable, awarded_at)
+
+-- Shared lesson content library (deduplication by content hash)
+lesson_templates (id, content_hash, subject, grade_level, topic, difficulty, spec,
+                  title, times_served, avg_score, created_at, updated_at)
+-- Indexes: content_hash, (subject, grade_level, difficulty), topic
+
+-- Prompt transparency log — tracks every LLM prompt for parent audit
+prompt_log (id, lesson_id, learner_id, prompt_type, system_message, user_message,
+            model, temperature, response_preview, tokens_used, created_at)
+-- prompt_type: lesson_generation, quiz_generation, image_generation, svg_generation, feedback, knowledge_graph
 
 -- Sessions and DB sync
 sessions (sid, sess, expire)
@@ -108,11 +120,13 @@ Provider selection is handled by `server/services/ai.ts` with automatic fallback
 
 | Value | Behavior |
 |-------|----------|
-| `svg-llm` (default) | Generate SVG illustrations via LLM (Gemini 3.1) |
+| `svg-llm` (default) | Generate SVG illustrations via LLM (configurable via `OPENROUTER_SVG_MODEL` env var) |
 | `openrouter` | Generate raster images via OpenRouter multimodal models |
 | `stability` | Use Stability AI API |
 
 Model fallback chain: primary model (`OPENROUTER_SVG_MODEL`) → fallbacks from `SVG_MODEL_FALLBACKS` env → built-in defaults (`gemini-3.1-flash-lite-preview`, `gemini-3-flash-preview`). Models returning 402 (insufficient credits) or 404 are automatically skipped.
+
+SVG prompts include lesson context (title, section content snippet capped at 300 chars, grade level) so illustrations are specific to what the student is reading. Labels and annotations are grade-appropriate. When all LLM models fail, a programmatic fallback (`server/services/programmatic-svg.ts`) produces topic-relevant SVGs with labeled diagrams based on keyword matching — not generic shapes.
 
 ### Lesson Generation Pipeline
 
@@ -197,10 +211,18 @@ BITTENSOR_WALLET_HOTKEY=...
 - Neon serverless PostgreSQL with WebSocket connections
 - Connection pooling (max 10), keep-alive pings every 2 min
 - Migrations auto-run on startup; failures don't block server start
-- Migration folder: `drizzle/migrations/` (0000-0011)
+- Migration folder: `drizzle/migrations/` (0000-0014)
 - First registered user auto-promoted to ADMIN
 
-## Security Notes
+## Security
+
+- **JWT auth**: `JWT_SECRET` loaded from env var — never hardcoded. Tokens issued on login/register.
+- **Password policy**: Minimum 8 characters enforced on both registration and `/api/change-password`.
+- **Admin credentials**: Must be provided via env vars only (`E2E_ADMIN_USERNAME`, `E2E_ADMIN_PASSWORD` for tests). Never hardcode admin credentials in source code.
+- **Rate limiting**: Applied on auth endpoints (`/api/login`, `/api/register`, `/api/change-password`) via express rate limiter.
+- **First-user promotion**: First registered user is auto-promoted to ADMIN role.
+
+## Security Notes (SAST)
 
 From SAST scan (Bandit + Semgrep, Feb 2026 — updated Mar 2026):
 
@@ -251,7 +273,7 @@ Tests live in `tests/e2e/specs/` organized by persona:
 
 Centralized in `tests/e2e/helpers/`:
 
-- **`learner-setup.ts`** — `setupLearnerSession()`, `setupParentSession()`, `navigateAsLearner()`, `navigateAsParent()`, `generateAndWaitForLesson()`, `completeOneLesson()`, `apiCall()`, `createRewardGoal()`
+- **`learner-setup.ts`** — `setupLearnerSession()`, `setupParentSession()`, `setupAdminSession()`, `navigateAsLearner()`, `navigateAsParent()`, `generateAndWaitForLesson()`, `completeOneLesson()`, `apiCall()`, `createRewardGoal()`
 - **`self-healing.ts`** — `selfHealingLocator()` (AX-tree introspection + locator cascade), `captureFailureArtifacts()` (screenshot + AX dump on failure)
 
 ### Key Patterns

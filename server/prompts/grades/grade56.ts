@@ -181,17 +181,24 @@ export const Grade56Prompts = {
     getSVGPrompt: (topic: string, concept: string, gradeLevel: number) => `
   SVG ILLUSTRATION FOR AGES 10-12 (Grades 5-6)
 
-  GUIDELINES:
-  - 8-12 elements/shapes
+  Create a detailed educational diagram that visually explains the concept with annotations and structure.
+
+  WHAT TO DRAW:
+  - Illustrate the specific concept with a clear visual explanation — not a generic picture
+  - Include a bold title at the top (font-size 16px)
+  - Label all components with descriptive annotations (2-4 words each, font-size 12px or larger)
+  - Use arrows to show processes, cause-and-effect chains, or directional relationships
+  - Show steps in a process with numbered labels or a logical flow
+  - Include a brief key/legend if using color to represent categories
+
+  STYLE GUIDELINES:
+  - 8-15 elements/shapes
   - Include arrows and connections showing relationships
-  - Labels with brief descriptions (2-4 words), font-size 12px or larger
-  - Show cause-and-effect or process steps
   - Use a professional but accessible color scheme
   - viewBox="0 0 600 400"
-  - Include a title text element at the top
   - Add scale markers or measurement indicators where relevant
 
-  Topic: "${topic}"
-  Concept: "${concept}"
+  Lesson: "${topic}"
+  Concept to illustrate: "${concept}"
   `
   };

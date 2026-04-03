@@ -153,19 +153,27 @@ export const Grade9PlusPrompts = {
     getSVGPrompt: (topic: string, concept: string, gradeLevel: number) => `
   SVG ILLUSTRATION FOR HIGH SCHOOL / ADVANCED (Grade 9+)
 
-  GUIDELINES:
+  Create a publication-quality educational diagram with thorough annotations and academic styling.
+
+  WHAT TO DRAW:
+  - Create a comprehensive diagram specific to the concept being taught
+  - Include a clear title (font-size 14px+, bold) and optional subtitle
+  - Annotate all components with precise labels and brief descriptions
+  - Use arrows, connector lines, and flow indicators to show relationships
+  - Include mathematical notation, formulas, or equations where relevant
+  - Add a detailed legend/key explaining symbols and color coding
+  - Show data representations (charts, graphs, scales) where applicable
+
+  STYLE GUIDELINES:
   - Complex, multi-layer diagrams with 15-30+ elements
   - Publication-quality styling with precise labeling
-  - Include mathematical notation where relevant
   - Use multi-panel layouts for comparing models or showing transformations
   - Font-size 10px or larger for annotations, 14px+ for titles
   - viewBox="0 0 800 600"
   - Include detailed legends, axes, and scales
-  - Support statistical visualizations (bar charts, scatter plots)
-  - Show derivations, formulas, or proof steps inline
   - Use professional academic color schemes (muted, high-contrast)
 
-  Topic: "${topic}"
-  Concept: "${concept}"
+  Lesson: "${topic}"
+  Concept to illustrate: "${concept}"
   `
   };

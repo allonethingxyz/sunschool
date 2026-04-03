@@ -31,7 +31,7 @@ export async function generateImage(
   prompt: string,
   description: string,
   gradeLevel: number,
-  options: { subject?: string } = {}
+  options: { subject?: string; lessonTitle?: string; sectionTitle?: string; sectionContent?: string } = {}
 ): Promise<ImageResult | null> {
   const provider = IMAGE_PROVIDER;
 
@@ -50,8 +50,12 @@ export async function generateImage(
 
   // Try SVG LLM generation
   if (ENABLE_SVG_LLM) {
-    const topic = options.subject || 'education';
-    const svgResult = await generateEducationalSVG(topic, description, gradeLevel);
+    // Use the lesson title as the topic (not just the subject category)
+    const topic = options.lessonTitle || options.subject || 'education';
+    const svgResult = await generateEducationalSVG(topic, description, gradeLevel, {
+      sectionTitle: options.sectionTitle,
+      sectionContent: options.sectionContent,
+    });
     if (svgResult) {
       return {
         id: svgResult.id,

@@ -870,42 +870,66 @@ function bookSVG(topic: string): string {
 </svg>`;
 }
 
+/** Pick a subject-relevant emoji based on topic keywords */
+function getTopicEmoji(topic: string): string {
+  const t = topic.toLowerCase();
+  if (t.includes('math') || t.includes('number') || t.includes('algebra') || t.includes('geometry') || t.includes('fraction')) return '📐';
+  if (t.includes('science') || t.includes('experiment') || t.includes('chemistry')) return '🔬';
+  if (t.includes('biology') || t.includes('cell') || t.includes('animal') || t.includes('plant') || t.includes('life')) return '🌿';
+  if (t.includes('physics') || t.includes('gravity') || t.includes('force') || t.includes('energy') || t.includes('motion')) return '⚡';
+  if (t.includes('earth') || t.includes('geology') || t.includes('rock') || t.includes('volcano')) return '🌍';
+  if (t.includes('space') || t.includes('planet') || t.includes('star') || t.includes('solar') || t.includes('moon')) return '🚀';
+  if (t.includes('water') || t.includes('ocean') || t.includes('river') || t.includes('rain')) return '💧';
+  if (t.includes('weather') || t.includes('climate') || t.includes('cloud') || t.includes('storm')) return '🌤';
+  if (t.includes('history') || t.includes('ancient') || t.includes('war') || t.includes('civilization')) return '📜';
+  if (t.includes('geograph') || t.includes('map') || t.includes('continent')) return '🗺';
+  if (t.includes('read') || t.includes('writ') || t.includes('english') || t.includes('language') || t.includes('book') || t.includes('story')) return '📖';
+  if (t.includes('music') || t.includes('instrument') || t.includes('rhythm')) return '🎵';
+  if (t.includes('art') || t.includes('paint') || t.includes('draw') || t.includes('color')) return '🎨';
+  if (t.includes('computer') || t.includes('coding') || t.includes('program') || t.includes('technology')) return '💻';
+  if (t.includes('health') || t.includes('body') || t.includes('food') || t.includes('nutrition')) return '🏥';
+  return '📚';
+}
+
+/** Wrap topic text across multiple lines if too long */
+function wrapTopicText(topic: string, maxChars: number): string[] {
+  if (topic.length <= maxChars) return [topic];
+  const words = topic.split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    if (current.length + word.length + 1 > maxChars && current.length > 0) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = current ? `${current} ${word}` : word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.slice(0, 3); // max 3 lines
+}
+
 function genericEducationSVG(topic: string): string {
-  const shortTopic = topic.length > 28 ? topic.substring(0, 28) + '...' : topic;
+  const emoji = getTopicEmoji(topic);
+  const titleLines = wrapTopicText(topic, 35);
+  const titleElements = titleLines.map((line, i) => {
+    const escapedLine = line.length > 38 ? line.substring(0, 38) + '...' : line;
+    return `<text x="250" y="${130 + i * 28}" font-family="Arial, sans-serif" font-size="22" text-anchor="middle" fill="#1A237E" font-weight="bold">${escapedLine}</text>`;
+  }).join('\n  ');
+  const emojiY = 130 + titleLines.length * 28 + 30;
+
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 350">
-  <defs>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#E3F2FD"/>
-      <stop offset="100%" stop-color="#F3E5F5"/>
-    </linearGradient>
-  </defs>
-  <rect width="500" height="350" fill="url(#bgGrad)"/>
-  <!-- Central topic badge -->
-  <circle cx="250" cy="155" r="90" fill="#1565C0" opacity="0.1"/>
-  <circle cx="250" cy="155" r="72" fill="#1565C0" opacity="0.15"/>
-  <circle cx="250" cy="155" r="54" fill="#1A237E" opacity="0.85"/>
-  <text x="250" y="145" font-family="Arial" font-size="13" text-anchor="middle" fill="white" font-weight="bold">📚</text>
-  <text x="250" y="163" font-family="Arial" font-size="11" text-anchor="middle" fill="#90CAF9" font-weight="bold">${shortTopic}</text>
-  <!-- Orbiting concept nodes -->
-  ${[
-    {angle:0, label:'Explore', color:'#EF5350'},
-    {angle:60, label:'Discover', color:'#FF9800'},
-    {angle:120, label:'Learn', color:'#4CAF50'},
-    {angle:180, label:'Practice', color:'#2196F3'},
-    {angle:240, label:'Connect', color:'#9C27B0'},
-    {angle:300, label:'Create', color:'#F44336'},
-  ].map(({angle, label, color}) => {
-    const rad = angle * Math.PI / 180;
-    const cx = 250 + 115 * Math.cos(rad);
-    const cy = 155 + 90 * Math.sin(rad);
-    return `
-    <line x1="250" y1="155" x2="${cx}" y2="${cy}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>
-    <circle cx="${cx}" cy="${cy}" r="24" fill="${color}" opacity="0.15"/>
-    <circle cx="${cx}" cy="${cy}" r="18" fill="${color}" opacity="0.9"/>
-    <text x="${cx}" y="${cy + 4}" font-family="Arial" font-size="8" text-anchor="middle" fill="white" font-weight="bold">${label}</text>
-    `;
-  }).join('')}
-  <text x="250" y="310" font-family="Arial" font-size="14" text-anchor="middle" fill="#1A237E" font-weight="bold">${shortTopic}</text>
-  <text x="250" y="330" font-family="Arial" font-size="11" text-anchor="middle" fill="#5C6BC0">Learning is an adventure — keep exploring!</text>
+  <!-- Clean educational background -->
+  <rect width="500" height="350" fill="#FAFBFC"/>
+  <rect x="20" y="20" width="460" height="310" rx="16" fill="white" stroke="#E0E4E8" stroke-width="1.5"/>
+  <!-- Decorative header bar -->
+  <rect x="20" y="20" width="460" height="8" rx="4" fill="#1565C0"/>
+  <!-- Subject emoji -->
+  <text x="250" y="${emojiY}" font-family="Arial" font-size="48" text-anchor="middle">${emoji}</text>
+  <!-- Topic title -->
+  ${titleElements}
+  <!-- Illustration unavailable notice -->
+  <text x="250" y="290" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#90A4AE">Illustration could not be generated</text>
+  <text x="250" y="310" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#B0BEC5">The lesson content above covers this topic in detail</text>
 </svg>`;
 }

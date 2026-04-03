@@ -173,11 +173,12 @@ ${mathRules}${parentAddendum}
 
 7. IMAGE DESCRIPTIONS
    Each section's imageDescription must be a specific, concrete visual prompt — NOT a generic label.
+   Describe what the illustration should show as an educational diagram with labels.
    BAD: "Main illustration for fractions"
    BAD: "Image showing the concept"
-   GOOD: "A circular pizza cut into 4 equal slices with 1 slice pulled away, on a white background. No text or numbers overlaid on the image."
-   GOOD: "Three identical rectangular chocolate bars, each divided into different numbers of equal pieces (2, 3, and 4 pieces), on a white background. No text or numbers overlaid on the image."
-   Every imageDescription MUST end with "No text or numbers overlaid on the image."
+   GOOD: "A labeled diagram showing a circular pizza cut into 4 equal slices, with one slice separated. Labels point to '1 slice = 1/4' and 'whole pizza = 4/4'. Clean white background."
+   GOOD: "A step-by-step visual showing three identical rectangular bars divided into 2, 3, and 4 equal pieces respectively. Each bar is labeled with the fraction it represents (1/2, 1/3, 1/4). Arrows indicate the relationship between number of pieces and fraction size."
+   The imageDescription should focus on making the concept visually clear with labels, arrows, and annotations.
 
 === OUTPUT FORMAT ===
 
@@ -208,20 +209,20 @@ Respond with ONLY valid JSON — no markdown, no code fences, no explanations.
 }
 
 /**
- * Build a grade-appropriate image generation prompt with strict rules
+ * Build a grade-appropriate image generation prompt with educational focus
  */
 function buildImagePrompt(description: string, topic: string, gradeLevel: number): string {
   return `${description}
 
-Style: Simple, clean, flat illustration. Bright colors appropriate for grade ${gradeLevel} students. White background.
+Create an educational illustration that visually explains this concept for grade ${gradeLevel} students.
 
-STRICT RULES:
-- NO text, letters, words, or labels anywhere in the image
-- NO numbers, fractions, mathematical notation, or symbols
-- NO annotations, callouts, or speech bubbles
-- Simple clean shapes and objects only
-- Bright, friendly colors
-- White or very light background`;
+Style guidelines:
+- Clean, well-organized layout with clear visual hierarchy
+- Bright, friendly colors appropriate for grade ${gradeLevel} students
+- White or very light background
+- Include helpful labels and annotations to identify key parts
+- Use arrows or connectors to show relationships or processes
+- Use visual metaphors that make the concept concrete and understandable`;
 }
 
 /**
@@ -325,25 +326,27 @@ export async function generateEnhancedLesson(
     };
     
     // 2. Add sections and generate image placeholders
-    const allImagePrompts: { id: string, description: string, prompt: string }[] = [];
-    
+    const allImagePrompts: { id: string; description: string; prompt: string; sectionTitle?: string; sectionContent?: string }[] = [];
+
     for (const section of content.sections) {
       const sectionImageIds: string[] = [];
-      
+
       // If the section has an image description, create a placeholder
       if (section.imageDescription) {
         const imageId = generateId(10);
         allImagePrompts.push({
           id: imageId,
           description: section.imageDescription,
-          prompt: buildImagePrompt(section.imageDescription, topic, gradeLevel)
+          prompt: buildImagePrompt(section.imageDescription, topic, gradeLevel),
+          sectionTitle: section.title,
+          sectionContent: section.content,
         });
         sectionImageIds.push(imageId);
       }
-      
+
       // Map the section type to one of the allowed types in our schema
       const validSectionType = mapSectionType(section.type || 'content');
-      
+
       // Add the section to our enhanced lesson
       enhancedLesson.sections.push({
         title: section.title,
@@ -353,10 +356,10 @@ export async function generateEnhancedLesson(
         imageDescription: section.imageDescription || undefined,
       });
     }
-    
+
     // 3. Generate a featured image for the lesson
     const featuredImageId = generateId(10);
-    const featuredDescription = `A colorful illustration representing ${topic} for young students. No text or numbers overlaid on the image.`;
+    const featuredDescription = `An educational illustration for a lesson about ${topic}, showing the key concepts visually for grade ${gradeLevel} students.`;
     allImagePrompts.push({
       id: featuredImageId,
       description: featuredDescription,
@@ -375,7 +378,12 @@ export async function generateEnhancedLesson(
           imagePrompt.prompt,
           imagePrompt.description,
           gradeLevel,
-          { subject: subject || topic }
+          {
+            subject: subject || topic,
+            lessonTitle: enhancedLesson.title || topic,
+            sectionTitle: imagePrompt.sectionTitle,
+            sectionContent: imagePrompt.sectionContent,
+          }
         );
 
         if (result) {
@@ -645,7 +653,7 @@ export async function generateLessonImages(
   gradeLevel: number,
   subject?: string
 ): Promise<{ images: LessonImage[]; diagrams: LessonDiagram[] }> {
-  const allImagePrompts: { id: string; description: string; prompt: string }[] = [];
+  const allImagePrompts: { id: string; description: string; prompt: string; sectionTitle?: string; sectionContent?: string }[] = [];
 
   // Collect image prompts from each section's imageDescription
   for (const section of enhancedSpec.sections) {
@@ -655,6 +663,8 @@ export async function generateLessonImages(
           id: imageId,
           description: section.imageDescription,
           prompt: buildImagePrompt(section.imageDescription, topic, gradeLevel),
+          sectionTitle: section.title,
+          sectionContent: section.content,
         });
       }
     }
@@ -662,7 +672,7 @@ export async function generateLessonImages(
 
   // Featured image
   if (enhancedSpec.featuredImage) {
-    const featuredDescription = `A colorful illustration representing ${topic} for young students. No text or numbers overlaid on the image.`;
+    const featuredDescription = `An educational illustration for a lesson about ${topic}, showing the key concepts visually for grade ${gradeLevel} students.`;
     allImagePrompts.push({
       id: enhancedSpec.featuredImage,
       description: featuredDescription,
@@ -679,7 +689,12 @@ export async function generateLessonImages(
         imagePrompt.prompt,
         imagePrompt.description,
         gradeLevel,
-        { subject: subject || topic }
+        {
+          subject: subject || topic,
+          lessonTitle: enhancedSpec.title || topic,
+          sectionTitle: imagePrompt.sectionTitle,
+          sectionContent: imagePrompt.sectionContent,
+        }
       );
 
       if (result) {

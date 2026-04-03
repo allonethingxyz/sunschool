@@ -145,18 +145,25 @@ export const Grade78Prompts = {
     getSVGPrompt: (topic: string, concept: string, gradeLevel: number) => `
   SVG ILLUSTRATION FOR AGES 12-14 (Grades 7-8)
 
-  GUIDELINES:
+  Create a detailed, academically-styled diagram that visually explains the concept with full annotations.
+
+  WHAT TO DRAW:
+  - Create an informative scientific or academic diagram specific to the concept
+  - Include a clear title at the top (font-size 14px+, bold)
+  - Add detailed callout labels with brief descriptions for all key components
+  - Use arrows with labels to show processes, forces, flows, or causal chains
+  - Show quantitative relationships where applicable (scales, proportions, data)
+  - Include a legend/key if using multiple colors or symbols
+
+  STYLE GUIDELINES:
   - Detailed diagrams with 12-20 elements
-  - Include annotations and callout labels
-  - Show quantitative relationships and data representations
   - Use scientific/academic styling with clear typography
   - Font-size 11px or larger for labels, 14px+ for titles
   - viewBox="0 0 700 500"
-  - Include legends or keys where appropriate
   - Use subtle gridlines or axes for data-oriented diagrams
   - Support multiple interconnected systems
 
-  Topic: "${topic}"
-  Concept: "${concept}"
+  Lesson: "${topic}"
+  Concept to illustrate: "${concept}"
   `
   };

@@ -59,7 +59,7 @@ test.describe('Parent Signup & Login', () => {
     }
 
     // Age disclaimer should be visible — click to accept
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 3000 }).catch(() => false)) {
       await disclaimer.click();
     }
@@ -117,7 +117,7 @@ test.describe('Parent Signup & Login', () => {
     await passwordField.click();
     await passwordField.fill(user.password);
 
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
 
     // Click the Login submit button (last one — the tab is first)
@@ -144,7 +144,7 @@ test.describe('Parent Signup & Login', () => {
     await page.getByPlaceholder('Enter your username').fill('nonexistent_user');
     await page.getByPlaceholder('Enter your password').fill('WrongPassword!');
 
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
 
     await page.getByText(/^login$/i).last().click();
@@ -175,7 +175,7 @@ test.describe('Parent Signup & Login', () => {
     const pf = page.getByPlaceholder('Enter your password');
     await pf.click();
     await pf.fill(user.password);
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
     await page.getByText(/^login$/i).last().click();
     await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });
@@ -226,7 +226,7 @@ test.describe('Parent Signup & Login', () => {
     const pf = page.getByPlaceholder('Enter your password');
     await pf.click();
     await pf.fill(user.password);
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
     await page.getByText(/^login$/i).last().click();
     await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });

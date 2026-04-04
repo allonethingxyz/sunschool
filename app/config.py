@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -7,8 +8,15 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql://postgres:postgres@localhost:5432/sunschool"
 
-    # CORS
+    # CORS — accepts JSON list or comma-separated string
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8000"]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: object) -> object:
+        if isinstance(v, str) and not v.startswith("["):
+            return [s.strip() for s in v.split(",") if s.strip()]
+        return v
 
     # Environment
     environment: str = "development"

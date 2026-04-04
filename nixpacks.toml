@@ -1,0 +1,4 @@
+providers = ["node"]
+
+[start]
+cmd = "node server.js"

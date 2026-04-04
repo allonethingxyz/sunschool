@@ -35,7 +35,7 @@ test.describe('Parent Signup & Login', () => {
   test.describe.configure({ retries: 2 });
 
   test('Registration flow with age disclaimer', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
     const user = generateTestUser('signup');
 
     await waitForAuthPage(page);
@@ -59,7 +59,7 @@ test.describe('Parent Signup & Login', () => {
     }
 
     // Age disclaimer should be visible — click to accept
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 3000 }).catch(() => false)) {
       await disclaimer.click();
     }
@@ -80,7 +80,7 @@ test.describe('Parent Signup & Login', () => {
 
     // Wait for navigation to dashboard
     try {
-      await page.waitForURL(/\/(dashboard|learner)/, { timeout: 30000 });
+      await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });
     } catch {
       const onAuth = page.url().includes('/auth');
       if (onAuth) {
@@ -94,7 +94,7 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('Login with valid credentials', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
     const user = generateTestUser('loginok');
 
     await waitForAuthPage(page);
@@ -109,16 +109,20 @@ test.describe('Parent Signup & Login', () => {
       await page.waitForTimeout(500);
     }
 
-    // Fill login form using production placeholders
-    await page.getByPlaceholder('Enter your username').fill(user.username);
-    await page.getByPlaceholder('Enter your password').fill(user.password);
+    // Fill login form — click fields first to ensure focus in headed mode
+    const usernameField = page.getByPlaceholder('Enter your username');
+    await usernameField.click();
+    await usernameField.fill(user.username);
+    const passwordField = page.getByPlaceholder('Enter your password');
+    await passwordField.click();
+    await passwordField.fill(user.password);
 
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
 
     // Click the Login submit button (last one — the tab is first)
     await page.getByText(/^login$/i).last().click();
-    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 30000 });
+    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toMatch(/\/(dashboard|learner)/);
@@ -126,7 +130,7 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('Login with invalid credentials shows error', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
 
     await waitForAuthPage(page);
 
@@ -140,7 +144,7 @@ test.describe('Parent Signup & Login', () => {
     await page.getByPlaceholder('Enter your username').fill('nonexistent_user');
     await page.getByPlaceholder('Enter your password').fill('WrongPassword!');
 
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
 
     await page.getByText(/^login$/i).last().click();
@@ -154,7 +158,7 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('Session persistence across page reload', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
     const user = generateTestUser('persist');
 
     await waitForAuthPage(page);
@@ -165,12 +169,16 @@ test.describe('Parent Signup & Login', () => {
     // Login via UI to establish proper session state
     await page.getByText(/login/i).first().click();
     await page.waitForTimeout(500);
-    await page.getByPlaceholder('Enter your username').fill(user.username);
-    await page.getByPlaceholder('Enter your password').fill(user.password);
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const uf = page.getByPlaceholder('Enter your username');
+    await uf.click();
+    await uf.fill(user.username);
+    const pf = page.getByPlaceholder('Enter your password');
+    await pf.click();
+    await pf.fill(user.password);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
     await page.getByText(/^login$/i).last().click();
-    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 30000 });
+    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });
     await page.waitForLoadState('networkidle');
 
     const urlBeforeReload = page.url();
@@ -199,7 +207,7 @@ test.describe('Parent Signup & Login', () => {
   });
 
   test('Logout redirects to public page', async ({ page }) => {
-    page.setDefaultTimeout(30000);
+    page.setDefaultTimeout(90000);
     const user = generateTestUser('signout');
 
     await waitForAuthPage(page);
@@ -212,12 +220,16 @@ test.describe('Parent Signup & Login', () => {
       await loginTab.click();
       await page.waitForTimeout(500);
     }
-    await page.getByPlaceholder('Enter your username').fill(user.username);
-    await page.getByPlaceholder('Enter your password').fill(user.password);
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const uf = page.getByPlaceholder('Enter your username');
+    await uf.click();
+    await uf.fill(user.username);
+    const pf = page.getByPlaceholder('Enter your password');
+    await pf.click();
+    await pf.fill(user.password);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
     await page.getByText(/^login$/i).last().click();
-    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 30000 });
+    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 90000 });
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
 

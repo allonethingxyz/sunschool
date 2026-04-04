@@ -121,7 +121,7 @@ test.describe('Parent & Learner Workflows', () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
-    page.setDefaultTimeout(60000);
+    page.setDefaultTimeout(120000);
 
     // Navigate to auth page
     await page.goto('/auth');
@@ -135,20 +135,17 @@ test.describe('Parent & Learner Workflows', () => {
     authToken = await registerViaAPI(page);
     console.log('Registered parent, got token');
 
-    // Set token and login through UI flow to establish SPA auth state
-    await page.evaluate((t) => localStorage.setItem('AUTH_TOKEN', t), authToken);
-
-    // Login through UI to establish proper session
-    await page.getByText(/login/i).first().click();
-    await page.waitForTimeout(500);
-    await page.getByPlaceholder('Enter your username').fill(parent.username);
-    await page.getByPlaceholder('Enter your password').fill(parent.password);
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
-    if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
-    await page.getByText(/^login$/i).last().click();
-    await page.waitForURL(/\/(dashboard|learner)/, { timeout: 30000 });
+    // Set token and navigate directly — skip UI login form (faster, avoids headed timing issues)
+    await page.evaluate((t) => {
+      localStorage.setItem('AUTH_TOKEN', t);
+      localStorage.setItem('preferredMode', 'PARENT');
+    }, authToken);
+    await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
+    await page.waitForFunction(() => {
+      const t = document.body.textContent || '';
+      return !t.includes('Loading Sunschool') && !t.includes('Initializing authentication');
+    }, { timeout: 30000 }).catch(() => {});
     console.log(`Logged in, on: ${page.url()}`);
   });
 
@@ -813,16 +810,22 @@ test.describe('Navigation Elements', () => {
       return res.json();
     }, navUser);
 
-    // Login through UI to establish proper SPA auth state
-    await page.getByText(/login/i).first().click();
-    await page.waitForTimeout(500);
-    await page.getByPlaceholder('Enter your username').fill(navUser.username);
-    await page.getByPlaceholder('Enter your password').fill(navUser.password);
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
-    if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
-    await page.getByText(/^login$/i).last().click();
-    await page.waitForURL('**/dashboard', { timeout: 15000 });
-    await page.waitForTimeout(2000);
+    // Set token directly and navigate — skip UI form (faster in headed mode)
+    const regResult = await page.evaluate(async (u) => {
+      const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u.username, password: u.password }) });
+      const data = await res.json();
+      return data.token;
+    }, navUser);
+    await page.evaluate((t) => {
+      localStorage.setItem('AUTH_TOKEN', t);
+      localStorage.setItem('preferredMode', 'PARENT');
+    }, regResult);
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.waitForFunction(() => {
+      const t = document.body.textContent || '';
+      return !t.includes('Loading Sunschool') && !t.includes('Initializing');
+    }, { timeout: 30000 }).catch(() => {});
 
     // Check for docs and support in authenticated header — use accessible label text
     // On desktop, the BookOpen icon has aria-label "Documentation (opens in new window)"

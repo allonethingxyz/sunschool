@@ -60,7 +60,7 @@ test.describe('Parent: Authentication', () => {
     await page.getByPlaceholder('Enter your password').fill('invalidpassword');
 
     // Accept disclaimer if visible
-    const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
+    const disclaimer = page.getByText(/I confirm I.*18/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) {
       await disclaimer.click();
     }

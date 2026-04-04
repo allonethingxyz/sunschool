@@ -1,72 +1,14 @@
-# Stoneforge workspace
-.stoneforge/
-
-# Sibling repos are independent git repos
-sunschool/*
-!sunschool/.env.test.example
-!sunschool/tests/
-sunschool/tests/*
-!sunschool/tests/e2e/
-sunschool-deployed-private/
-sunschool-docs/
-docs/
-
-# Dependencies
 node_modules/
-
-# Environment files
-.env
-.env.local
-.env.production
-.env.claude
-
-# Build output
 dist/
-client/dist/
-
-# Source maps
-*.map
-
-# OS
+.env
+.env.*
+!.env.example
 .DS_Store
-Thumbs.db
-
-# Editor
 *.swp
 *.swo
 *~
 .idea/
 .vscode/
-
-# Security scan results
-semgrep_results.json
-
-# Backup files
-*.backup
-
-# Admin credentials
-admin-credentials.txt
-
-# AI tooling (local only)
 .claude/
 CLAUDE.md
-
-# Replit config
-.replit
-
-# Scan results / generated artifacts
-bandit_results.json
-uv.lock
-generated-icon.png
-
-# E2E test artifacts (screenshots, reports, traces)
-tests/e2e/screenshots/
-tests/e2e/report/
-test-results/
-
-# Local tooling / scratch files
-ecosystem-dashboard.html
-scripts/dashboard.sh
-scripts/ecosystem-dashboard.ts
-SUNSCHOOL-TIMEPOINT.md
-aot-marketplace/
+admin-credentials.txt

@@ -109,9 +109,13 @@ test.describe('Parent Signup & Login', () => {
       await page.waitForTimeout(500);
     }
 
-    // Fill login form using production placeholders
-    await page.getByPlaceholder('Enter your username').fill(user.username);
-    await page.getByPlaceholder('Enter your password').fill(user.password);
+    // Fill login form — click fields first to ensure focus in headed mode
+    const usernameField = page.getByPlaceholder('Enter your username');
+    await usernameField.click();
+    await usernameField.fill(user.username);
+    const passwordField = page.getByPlaceholder('Enter your password');
+    await passwordField.click();
+    await passwordField.fill(user.password);
 
     const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
@@ -165,8 +169,12 @@ test.describe('Parent Signup & Login', () => {
     // Login via UI to establish proper session state
     await page.getByText(/login/i).first().click();
     await page.waitForTimeout(500);
-    await page.getByPlaceholder('Enter your username').fill(user.username);
-    await page.getByPlaceholder('Enter your password').fill(user.password);
+    const uf = page.getByPlaceholder('Enter your username');
+    await uf.click();
+    await uf.fill(user.username);
+    const pf = page.getByPlaceholder('Enter your password');
+    await pf.click();
+    await pf.fill(user.password);
     const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
     await page.getByText(/^login$/i).last().click();
@@ -212,8 +220,12 @@ test.describe('Parent Signup & Login', () => {
       await loginTab.click();
       await page.waitForTimeout(500);
     }
-    await page.getByPlaceholder('Enter your username').fill(user.username);
-    await page.getByPlaceholder('Enter your password').fill(user.password);
+    const uf = page.getByPlaceholder('Enter your username');
+    await uf.click();
+    await uf.fill(user.username);
+    const pf = page.getByPlaceholder('Enter your password');
+    await pf.click();
+    await pf.fill(user.password);
     const disclaimer = page.getByText(/I confirm I am at least 18 years old/);
     if (await disclaimer.isVisible({ timeout: 2000 }).catch(() => false)) await disclaimer.click();
     await page.getByText(/^login$/i).last().click();

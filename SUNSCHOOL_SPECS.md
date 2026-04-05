@@ -1,516 +1,561 @@
-# SUNSCHOOL — Product Specification
+# SUNSCHOOL v2 — Architecture & Flywheel Plan
 
-Platform-agnostic specification for a ground-up rebuild. Describes WHAT the system does, not HOW it's built.
-
----
-
-## 1. User Personas
-
-### 1.1 Parent
-A non-technical adult managing one or more children's education. Needs transparency into what the AI teaches, control over content, and visibility into progress. May access from phone, tablet, or desktop.
-
-### 1.2 Learner (Child)
-A K-12 student, age 5-18. Interacts with lessons, quizzes, and a reward system. Needs a distraction-free, age-appropriate interface. Should not be able to accidentally (or intentionally) exit learner mode, access adult controls, or manipulate prompts.
-
-### 1.3 Admin
-A system operator who manages users, monitors AI output quality, maintains data integrity, and resolves issues. May be the same person as a Parent.
+**Date:** 2026-04-04  
+**Status:** Draft for founder review  
+**Thesis:** An AI tutor is a graph of conversations with characters, backed by a growing library of validated content. Ship the tutor first. Let the library emerge.
 
 ---
 
-## 2. User Flows
+## 1. The Flywheel
 
-### 2.1 First-Time Parent
-1. Arrive at public landing page
-2. Navigate to registration
-3. Create account (username, email, name, password 8+ chars)
-4. Accept age/terms disclaimer
-5. Redirected to dashboard (empty state)
-6. Add first child (name, grade level K-12)
-7. See child card appear on dashboard
-8. Click "Start Learning as [child]" → enter learner mode
+This is the core design. Everything else serves it.
 
-### 2.2 Returning Parent
-1. Login (username + password + disclaimer)
-2. See dashboard with child card(s): lesson count, average score, achievement count
-3. View reports (progress analytics, lesson history, subject breakdown)
-4. Review prompt transparency logs (every AI instruction visible)
-5. Set custom guidelines ("focus on multiplication", "avoid dinosaur topics")
-6. Set content restrictions ("no violence", "secular only")
-7. Enable/disable lesson approval (manual review before child sees lesson)
-8. Manage rewards catalog (create, edit, deactivate, delete)
-9. Approve or reject redemption requests from children
-10. Export child's data as structured download
-11. Optionally sync data to external database
+```
+┌─────────────────────────────────────────────────────────┐
+│                    THE SUNSCHOOL FLYWHEEL                │
+│                                                         │
+│   Kid chats with AI tutor                               │
+│        │                                                │
+│        ▼                                                │
+│   Conversation generates content                        │
+│   (lessons, questions, knowledge graph nodes, media)    │
+│        │                                                │
+│        ▼                                                │
+│   Content is validated + scored                         │
+│   (readability, accuracy, quiz performance)             │
+│        │                                                │
+│        ├──► Good content enters SHARED LIBRARY          │
+│        │         │                                      │
+│        │         ▼                                      │
+│        │    Next kid gets faster, richer experience     │
+│        │    (cache hits, proven content, pre-built      │
+│        │     assets, known-good quiz questions)         │
+│        │         │                                      │
+│        │         ▼                                      │
+│        │    More kids ──► more data ──► better          │
+│        │    mastery models ──► better adaptation        │
+│        │         │                                      │
+│        │         ▼                                      │
+│        │    Better outcomes ──► more parents ──► ♻️      │
+│        │                                                │
+│        └──► Bad content flagged + recycled              │
+│             (fed back as negative examples to           │
+│              generator agents)                          │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
 
-### 2.3 Learner Starting a Lesson
-1. Enter learner mode (parent clicks "Start Learning" or child opens app)
-2. See learner home with subject options and active lesson (if any)
-3. Select subject or tap "New Lesson"
-4. Loading state while lesson generates (10-30s typical)
-5. Lesson cover card: title, description, estimated duration, difficulty, grade
-6. Navigate through content cards (sections with text + illustrations)
-7. Reach recap card with key vocabulary
-8. Begin quiz (3+ multiple-choice questions)
-9. Optionally double-down on questions for 2x points (risk: lose 1 point if wrong)
-10. Submit answers → see score, correct/incorrect breakdown, explanations
-11. Points awarded. Achievement unlocked if criteria met
-12. Return to learner home. Next lesson may be pre-loaded
-
-### 2.4 Learner Managing Rewards
-1. Navigate to Goals page via footer
-2. See parent-created reward goals with token cost and savings progress
-3. Delegate earned points toward a specific goal
-4. When savings >= cost, request redemption
-5. Wait for parent approval
-6. See approval/rejection status in redemption history
-
-### 2.5 Parent-to-Learner Mode Switch
-1. Parent taps "Start Learning as [child]" on dashboard
-2. App switches to learner UI — simplified navigation, child-friendly design
-3. To return: triple-tap a lock icon in footer (1.5s window) — prevents accidental child exit
-4. Brief discoverable hint on first visit ("Tap 🔒 3× for parent mode")
-
-### 2.6 Session Lifecycle
-1. JWT token issued at login/registration, expires after 7 days
-2. Token persisted client-side across page reloads
-3. On expiry: parent sees login page; child sees friendly "Time to get a grown-up!" screen
-4. Logout clears token and redirects to public page
-5. Password change requires current password. Minimum 8 characters
-6. Forgot password generates reset link (logged to console — no email delivery implemented)
+**Critical insight:** The flywheel works from day 1 with ZERO pre-built content. The first kid's experience is 100% generated. The second kid's experience is ~5% cached. By kid 1,000 the library is substantial. By kid 100,000 it's comprehensive. The library is a *consequence* of usage, not a prerequisite.
 
 ---
 
-## 3. Feature Specifications
+## 2. What Ships Day 1 (MVP)
 
-### 3.1 Authentication & Authorization
+The minimum viable tutor. A kid can learn something real.
 
-**Registration:**
-- Required: username (unique), email (unique, valid format), name, password (8+ chars), role (PARENT default)
-- First registered user auto-promoted to ADMIN
-- Client-side + server-side password minimum enforcement
-- Duplicate username/email: 409 error
+**Parent:**
+- Create account (Google Identity Platform)
+- Add child (name, grade level)
+- See every prompt sent to the AI (prompt audit log)
+- Set guidelines ("focus on math", "avoid violence")
+- View conversation history
 
-**Login:**
-- Username + password
-- Age/terms disclaimer checkbox required
-- Rate limited: 20 attempts per 15-minute window
+**Learner:**
+- Chat-based interface with a friendly default tutor character
+- "Teach me about [anything]" → tutor generates a conversational lesson
+- Inline quizzes (multiple choice as chat buttons, natural language answers scored by AI)
+- Points for correct answers
+- Progress tracking (what concepts mastered, what needs work)
 
-**Roles & Permissions:**
+**Engine:**
+- FastAPI backend
+- PostgreSQL + Apache AGE on Railway (custom Docker container, persistent volume)
+- Backup cron: daily pg_dump to Cloudflare R2
+- Lesson generation via OpenRouter (free/cheap models)
+- Content validation (grade-appropriate, safe)
+- Mastery tracking via Bayesian graph in AGE
+- Prompt audit table (every LLM call logged with parent read access)
 
-| Capability | Admin | Parent | Learner |
-|---|:---:|:---:|:---:|
-| Create/delete child accounts | ✓ | Own children | — |
-| View/edit child profiles | Any | Own children | Own profile |
-| Create lessons | Any learner | Own children | Self only |
-| Submit quiz answers | ✓ | Own children | Self only |
-| View reports/achievements | Any | Own children | Own data |
-| Manage rewards | ✓ | Own catalog | View + save + redeem |
-| Approve/reject redemptions | ✓ | Own children's | — |
-| Set prompt guidelines/restrictions | ✓ | Own children | — |
-| Enable lesson approval mode | ✓ | Own children | — |
-| View prompt audit logs | ✓ | Own children | — |
-| Export learner data | ✓ | Own children | — |
-| Manage sync configs | ✓ | Own configs | — |
-| Admin panel (users, templates, analytics) | ✓ | — | — |
-| Manage lesson templates | ✓ | — | — |
-| Maintenance (orphans, reconciliation) | ✓ | — | — |
-
-### 3.2 Lesson Generation
-
-**Inputs:**
-- Subject (from learner profile or explicit)
-- Grade level (K-12, numeric 0-12)
-- Topic (optional — auto-derived from subject if omitted)
-- Difficulty (beginner / intermediate / advanced)
-- Learner ID
-
-**Processing:**
-1. Input safety validation: regex whitelist (letters, numbers, basic punctuation, max 200 chars) + 20+ injection pattern checks + optional guardrails service
-2. Template deduplication: content hash of (subject, grade, topic, difficulty). If match exists, reuse cached spec
-3. If no template: AI generates lesson with grade-appropriate constraints:
-   - Word limits by grade band: K-2: 75, 3-4: 200, 5-6: 400, 7-8: 700, 9-12: 1200
-   - Sentence length caps: K-2: 5 words, 3-4: 8, 5-6: 12, 7-8: 15
-   - Vocabulary restrictions by grade (banned complex words for younger learners)
-   - Parent guidelines and content restrictions injected into prompt
-4. Structural validation: non-empty title, 2+ sections, 2+ questions, no placeholder patterns, 10+ chars per section
-5. Failed validation logged with rejection reason
-6. If lesson approval enabled: status QUEUED (parent must approve). Otherwise: ACTIVE
-7. Previous active lesson auto-retired (scored 0) before new one activates
-8. Stale active lessons (>30 min, no quiz answers) auto-retired
-
-**Outputs (Lesson Spec):**
-- Title, subtitle, summary, target grade level
-- Sections (5 typical): introduction, key_concepts, examples, practice, summary — each with heading, content, type
-- Images: per-section illustrations with description, alt text, SVG/base64 data
-- Diagrams: concept maps, flowcharts, comparisons, cycles
-- Questions (3 typical): text, 4 options, correct index, explanation, optional difficulty/type
-- Keywords, related topics, estimated duration, difficulty level
-- Knowledge graph: nodes (concepts) and edges (relationships)
-
-**Image Generation (background, after lesson response):**
-- Fallback chain: AI image → AI SVG → Deterministic fallback
-- AI SVG prompts include lesson title, section content, grade level — not just subject category
-- Prompts encourage labeled diagrams, annotations, arrows, visual metaphors
-- Deterministic fallback shows topic title, subject-relevant emoji, "illustration unavailable" notice
-- Max images per lesson configurable (default 2)
-
-**Template Library:**
-- Successful lessons stored as reusable templates
-- Deduplication by content hash
-- Serve count and average score tracked
-- Admin can list, delete individual, or purge all templates
-
-### 3.3 Quiz System
-
-**Inputs:**
-- Answers: array of selected option indices (plain integers)
-- Optional: double-or-loss flag (per-question or whole-quiz)
-- Optional: indices of "doubled" questions
-
-**Processing:**
-1. Score = (correct count / total questions) × 100, rounded
-2. Lesson status updated to DONE with score
-3. Individual answers stored with concept tags for mastery tracking
-4. Question hashes stored for deduplication (avoid repeats for 30 days)
-5. Concept mastery updated per concept: correct/total count, 0-100 mastery level, needsReinforcement below 70%
-6. Achievement check: FIRST_LESSON (1 done), FIVE_LESSONS (5 done), PERFECT_SCORE (100%)
-7. Points awarded: 1 per correct (2 if doubled), -1 per wrong doubled (clamped to 0)
-8. Template average score updated if lesson was from cache
-9. Background: next lesson pre-generated for learner
-
-**Outputs:**
-- Score percentage, correct/total counts
-- Points awarded/deducted, new balance
-- New achievements (if any)
-- Double-or-loss summary
-
-**Question Types:**
-- Multiple choice (4 options)
-- True/false
-- Image-based (question references an illustration)
-- Sequence ordering
-
-### 3.4 Points & Rewards
-
-**Points Earning:**
-| Source | Amount |
-|---|---|
-| Correct quiz answer | +1 |
-| Correct answer (doubled) | +2 |
-| Wrong answer (doubled) | -1 (floor 0) |
-| Achievement unlock | Configurable |
-| Admin adjustment | ±N |
-
-**Reward Lifecycle:**
-1. Parent creates reward: title, description, token cost, emoji, color, optional max redemptions
-2. Learner views available rewards with savings progress
-3. Learner delegates points from balance → specific goal (atomic: debit balance, credit savings)
-4. When savings ≥ cost: learner requests redemption → PENDING
-5. Only one pending redemption per reward per learner
-6. Parent approves → savings zeroed, redemption count incremented. If max reached: reward auto-deactivated, other learners refunded
-7. Parent rejects → savings preserved, learner can re-request
-8. Parent deactivates/deletes reward → all learners' savings refunded
-
-**Starter Rewards:** 3 created automatically when a new learner is added:
-- Extra Recess (10 tokens)
-- Pick a Movie (25 tokens)
-- Special Outing (50 tokens)
-
-**Double-or-Loss Mode:**
-- Enabled per learner by parent
-- Supports per-question or whole-quiz doubling
-- Every 3rd question can be doubled (UI convention)
-
-### 3.5 Prompt Transparency
-
-**What Parents See:**
-- Full system prompt and user message for every AI call
-- Filterable by type: lesson generation, quiz generation, SVG generation, feedback, knowledge graph
-- Model name, temperature setting, response preview (first 500 chars), token usage
-- Per-learner or per-lesson views
-
-**What Parents Control:**
-- Custom guidelines (max 500 chars) injected into lesson generation prompts
-- Content restrictions (max 500 chars) injected as avoidance instructions
-- Lesson approval toggle: when enabled, new lessons are QUEUED until parent approves/rejects
-- All parent inputs validated through same safety checks as student inputs
-
-### 3.6 Data Export
-
-**Trigger:** Parent or admin requests export for a specific learner
-**Format:** JSON file download
-**Contents:** Learner profile, all lessons (up to 1000), all achievements, all prompt log entries, export metadata
-**Privacy:** Password field stripped from learner data
-
-### 3.7 Database Sync
-
-**Purpose:** One-way push replication to parent's own PostgreSQL database
-**Flow:**
-1. Parent configures target DB URL (validated PostgreSQL connection string)
-2. Manual push or continuous sync flag
-3. Syncs: parent user, child users, learner profiles, lessons (up to 1000 per child), achievements
-4. Creates/updates schema on target automatically
-5. Status tracking: IDLE → IN_PROGRESS → COMPLETED/FAILED with error messages
-
-### 3.8 Safety & Guardrails
-
-**Input Validation:**
-- Topic/subject: alphanumeric + common punctuation, max 200 chars
-- 20+ injection pattern detections (prompt injection, jailbreak, env exfiltration, XSS, eval, sudo, etc.)
-- User inputs wrapped in delimiters with explicit "treat as topic label" instruction in LLM prompts
-- Optional AI-based guardrails service (heuristic mode, configurable threshold)
-
-**Content Validation:**
-- Flesch-Kincaid readability scoring
-- Grade-appropriate vocabulary enforcement (banned complex words by grade band)
-- Sentence length limits by grade
-- Structural validation (no empty sections, no placeholder text)
-
-**Rate Limiting:**
-- Auth endpoints: 20 per 15 minutes per IP
-- Feedback: 10 per hour per IP
-
-**Password Security:**
-- Scrypt hashing with random salt
-- Timing-safe comparison
-- 8-character minimum enforced client + server
-
-### 3.9 Admin Operations
-
-**User Management:**
-- List all parents
-- Purge test users (email matching pattern, non-admin)
-
-**Template Management:**
-- List all templates with metadata (subject, grade, topic, serve count, avg score)
-- Delete individual templates
-- Bulk delete all templates
-
-**Analytics:**
-- Total lessons, templates, average scores
-- Top/low-performing templates
-- Validation rejection rates
-- Subject distribution breakdown
-
-**Maintenance:**
-- Detect/fix orphaned images (lessons with broken image arrays)
-- Detect partial quizzes (fewer answers than questions)
-- Detect/fix points balance mismatches (ledger sum vs recorded balance)
-- Circuit breaker status for all external services
-
-**Auto-Tuner:**
-- Analyzes validation rejection patterns by model and subject
-- Identifies high-rejection combinations
-- Manual trigger or scheduled (15-minute interval)
-
-### 3.10 Achievement System
-
-| Achievement | Trigger | Icon |
-|---|---|---|
-| First Steps | First lesson completed | award |
-| Learning Explorer | 5 lessons completed | book-open |
-| Perfect Score! | 100% quiz score | star |
-
-- Checked after every quiz submission
-- Deduplicated (each type earned once)
-- Displayed with title, description, icon
-
-### 3.11 Subject & Mastery System
-
-**Grade-Appropriate Subjects (K-12):**
-- K: Alphabet, Numbers, Colors, Shapes, Animals, Seasons
-- 3-4: Multiplication, Fractions, Earth Science, US Geography, Paragraph Writing
-- 7-8: Algebra, Biology, World History, Literary Analysis, Research Skills
-- 9-12: Calculus, Chemistry, Government, Economics, Literary Criticism
-- 8 categories: Language Arts, Mathematics, Science, Social Studies, Arts, Life Skills, World Languages, Technology
-
-**Mastery Tracking:**
-- Per-concept: correct/total counts, 0-100 mastery score
-- Needs reinforcement below 70%
-- Subject performance: per-subject average score, lesson count, mastery level (beginner/intermediate/advanced)
-- Mastery thresholds: ≥85% score + 5 lessons = advanced; ≥70% + 3 = intermediate
-
-**Question Deduplication:**
-- Question content hashed and stored per learner per topic
-- LLM receives avoidance instructions with recent hashes (30 days, up to 50)
-- Hashes expire after 90 days (spaced repetition)
+**What is NOT in day 1:** Characters, Timepoint, Ouro, photo learning, modules, Stripe, paid tiers, localization, pre-built curriculum. All of these plug in later. The tutor works without them.
 
 ---
 
-## 4. UI Structure
+## 3. The Expansion Sequence
 
-### 4.1 Public Pages
-- **Landing/Welcome:** Product overview, feature highlights, call to action
-- **Auth:** Login/register forms with age disclaimer, forgot/reset password
-- **Privacy Policy:** Static legal content
-- **Terms of Service:** Static legal content
+Each phase adds a ring to the flywheel. Order matters — each depends on the one before.
 
-### 4.2 Parent/Admin Pages
-- **Dashboard:** Child cards (name, grade, stats), add/remove children, mode switch
-- **Reports:** Per-learner analytics (lessons completed, score trends, subject distribution, concept mastery)
-- **Rewards:** CRUD reward catalog, pending redemption approvals
-- **Prompts:** Audit log of all AI interactions, filterable
-- **Prompt Settings (per child):** Guidelines, restrictions, approval toggle
-- **Database Sync:** Configure external DB, trigger push
-- **Data Export:** Download learner data
-- **Admin Panel:** Users, templates, analytics, maintenance, circuit breakers
+### Phase 1: Core Tutor (weeks 1-3)
+- FastAPI + AGE + Identity Platform
+- Single chat tutor, conversation-based lessons
+- Quiz inline in chat, points, basic mastery
+- Parent dashboard: prompt audit, guidelines, progress
+- Deploy on Railway
+- **Result:** Kids can learn. Parents can see everything.
 
-### 4.3 Learner Pages
-- **Learner Home:** Active lesson, subject picker, recent achievements, token balance, progress summary
-- **Lesson View:** Card-based content navigation (cover → sections → recap → quiz)
-- **Quiz:** Question cards with options, double-or-loss toggle, submit, results with score/confetti
-- **Progress:** Mastery breakdown, lesson history, subject performance
-- **Goals:** Reward list with savings progress, delegate points, request redemption, history
+### Phase 2: Shared Library (weeks 3-5)
+- Content that scores well gets promoted to shared library
+- Library nodes in AGE: lesson fragments, quiz questions, media assets, knowledge graph nodes
+- Tutor checks library before generating fresh: "do we already have a good explanation of photosynthesis for grade 3?"
+- Library deduplication via content hashing (TDF-style SHA-256)
+- Background agents: validator (quality), fixer (improve rejected content), updater (refresh stale content)
+- **Result:** Experience improves for every subsequent learner. Costs drop (cache hits vs generation).
 
-### 4.4 Navigation
-- **Parent mode:** Header with logo, Dashboard, Prompts, Logout. Footer with nav links + social
-- **Learner mode:** Simplified header (child name only). Footer with Home, Progress, Goals, Lock (triple-tap exit)
-- **404:** Mode-aware (kid-friendly "page got lost" vs standard "not found")
+### Phase 3: Characters (weeks 5-7)
+- Character nodes in the graph: personality prompt, knowledge bounds, era, expertise
+- Timepoint integration: historical characters grounded in Clockchain data
+- George Washington can quiz you using real historical context
+- The botanist, the mathematician, the astronaut — each a node with edges to concepts they teach
+- Character handoffs: "My friend Dr. Franklin knows more about electricity"
+- **Result:** Learning becomes storytelling. Engagement goes up. Differentiation from every other AI tutor.
 
-### 4.5 Responsive Requirements
-- Must work at phone viewport (390px wide) through desktop (1280px+)
-- Layout responds to rotation/resize (not static at load time)
-- Touch-friendly targets for child users
+### Phase 4: Modules + Stripe (weeks 7-9)
+- Module system: a module = a FastAPI router that mounts into the engine
+- Ouro as first module: upload Minecraft data → AI credential assessment
+  - Free: 3 screenshot uploads
+  - Paid: JSON files, bulk API, teacher admin, Minecraft scoring
+- Stripe integration (test keys already exist)
+- Tier structure:
+  - **Free forever:** Pre-built curriculum from shared library, cheap models, basic tutor
+  - **~$1/mo:** Custom topic generation, more conversations, basic Ouro
+  - **~$20/mo:** Frontier models, Timepoint characters, full Ouro, photo learning, video (when available)
+- **Result:** Revenue. Module extensibility proven.
 
----
+### Phase 5: Rich Input (weeks 9-11)
+- Photo upload → vision model identifies subject → specialist character teaches about it
+- Location-aware lessons: "teach me about where I am" → geo + weather + local history
+- Weather-aware, time-aware context injection (free LLM calls)
+- **Result:** The "school anywhere under the sun" promise delivered literally.
 
-## 5. Test Requirements
+### Phase 6: Standards Mapping (weeks 11-13)
+- AI agents create partial coverage maps against Common Core
+- Dynamic middleware: given a lesson, map it to standards it touches
+- Not "we guarantee Common Core compliance" but "here's what standards this covers"
+- Parent view: "your child has touched 47% of Grade 3 Math standards"
+- **Result:** Institutional credibility. Homeschool parents can report to districts.
 
-### 5.1 E2E Test Coverage
-
-**Journeys (end-to-end user flows):**
-- First-time parent: register → add child → start learning → generate lesson → quiz → score → done
-- Returning learner: login → resume lesson → quiz → progress check
-- Parent oversight: login → view reports → review prompts → set guidelines → approve lesson
-- Session & errors: 404 handling, expired session, mode guards, admin redirect
-
-**Parent persona:**
-- Dashboard loads, child cards render
-- Add/edit/remove child
-- Update subjects, grade level
-- Navigate reports, rewards, prompts
-- Password recovery flow
-- Login, logout, session persistence
-- Data export integrity
-- Database sync CRUD
-- Lesson approval workflow (enable, queue, approve, reject)
-- Prompt settings (guidelines, restrictions, approval toggle)
-
-**Learner persona:**
-- Lesson generation and content display
-- Card carousel navigation (cover, sections, recap)
-- Quiz flow (answer, submit, score, points)
-- Input safety (injection attempts rejected, normal topics allowed)
-- Points and rewards (earn, view balance, save toward goal, see progress)
-- Achievements (first lesson, five lessons, perfect score)
-- SVG rendering quality (real illustrations, not placeholders)
-- Stress tests: spam-click, refresh during generation, rapid navigation, error recovery
-
-**Admin persona:**
-- Navigate admin pages (users, lessons, settings)
-- Access analytics, circuit breakers
-- Clean up test users
-- Template management
-
-**Public persona:**
-- Welcome page loads
-- Auth page shows login/register
-- Privacy/terms pages load
-- Unauthenticated access redirects properly
-
-### 5.2 Test Principles
-- No mocks — real database, real APIs, real services
-- Tests run against production deployment
-- Each test either uses full session setup or lightweight session reuse (for speed)
-- Tests handle AI service unavailability gracefully (skip, not fail)
-- Tests handle billing limits gracefully (skip SVG assertions on 402/403)
-- Admin tests use env-var credentials (never hardcoded)
-- Headed mode must work (all timeouts account for visual rendering latency)
-- Answer format must match server expectation (plain indices, not objects)
-
-### 5.3 Quality Gates
-- Lesson spec validation: title, 2+ sections, 2+ questions, no placeholders, 10+ chars per section
-- SVG quality: images include lesson topic context, labeled diagrams, not generic shapes
-- Points integrity: ledger sum matches recorded balance (reconciliation check)
-- Data isolation: parents cannot access other parents' children
-- Rate limits enforced on auth and feedback endpoints
-- Password minimum enforced client-side and server-side
+### Phase 7: Clockchain Deep Integration (weeks 13+)
+- Lessons contribute back to the Clockchain as nodes with `source: "sunschool"` provenance
+- Historical lessons pull full Flash-rendered scenes
+- Time-travel curriculum: "walk through the signing of the Declaration of Independence"
+- Pro SNAG simulations for social studies: "what would have happened if..."
+- **Result:** Two-way data flywheel between Timepoint and Sunschool.
 
 ---
 
-## 6. Data Model (Logical)
+## 4. Architecture
 
-### 6.1 Entities
+### 4.1 Stack
 
-**User:** id, username (unique), email (unique), name, role (ADMIN/PARENT/LEARNER), password (hashed), parentId (self-ref), createdAt
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| API | FastAPI (Python 3.11+) | Async, typed, OpenAPI auto-docs, easy to OSS |
+| DB | PostgreSQL 16 + Apache AGE (Docker) | Graph + relational in one DB, openCypher queries. Runs as `apache/age` container on Railway, not managed Postgres. |
+| Graph (compute) | NetworkX | In-memory traversal, gate evaluation, pathfinding |
+| Graph (persist) | Apache AGE | Persistent graph, Cypher queries, ACID transactions |
+| Auth | Google Identity Platform | gcloud CLI setup, Firebase SDK client, Admin SDK server |
+| Billing | Stripe | Already have test keys, sandboxing, agent-friendly dev setup |
+| AI | OpenRouter (primary) | Model routing, free tier models, fallback chains |
+| AI (history) | Timepoint API | Clockchain for grounded historical content |
+| Data format | TDF | SHA-256 content addressing, provenance tracking |
+| Hosting | Railway | CLI deploy, auto-scaling. AGE runs as custom Docker container (apache/age image), not Railway's managed Postgres. Persistent volume at /var/lib/postgresql/data. |
+| Backups | pg_dump cron → Cloudflare R2 | No managed backups with custom container; add your own backup job (daily pg_dump, weekly full) |
+| Frontend | Thin client (React or just HTML) | Chat-first UX, minimal surface area |
 
-**Learner Profile:** id, userId (FK User), gradeLevel (0-12), subjects (list), subjectPerformance (per-subject stats), recommendedSubjects, strugglingAreas, parentPromptGuidelines, contentRestrictions, requireLessonApproval, knowledgeGraph, doubleOrLossEnabled, createdAt
+### 4.2 Graph Schema (AGE)
 
-**Lesson Template:** id, contentHash, subject, gradeLevel, topic, difficulty, spec (structured content), title, timesServed, avgScore, createdAt
+**Nodes:**
 
-**Lesson:** id, learnerId (FK User), templateId (FK Template, nullable), status (QUEUED/ACTIVE/DONE), subject, category, difficulty, spec (structured content), images (inline), score, createdAt, completedAt
+```cypher
+-- Characters (AI personas that teach)
+(:Character {id, name, era, expertise[], personality_prompt, 
+             knowledge_bounds, clockchain_refs[], active})
 
-**Quiz Answer:** id, learnerId, lessonId, questionIndex, questionText, questionHash, userAnswer, correctAnswer, isCorrect, conceptTags (list), answeredAt
+-- Conversations (stateful chat sessions)
+(:Conversation {id, learner_id, started_at, last_active, 
+                state_json, summary, message_count, status})
 
-**Concept Mastery:** id, learnerId, conceptName, subject, correctCount, totalCount, masteryLevel (0-100), lastTested, needsReinforcement, createdAt
+-- Lessons (content units, generated or from library)
+(:Lesson {id, title, subject, grade_level, content_hash, 
+          spec_json, validation_status, times_served, avg_score})
 
-**Achievement:** id, learnerId, type, payload (title/description/icon), awardedAt
+-- Concepts (knowledge graph nodes)
+(:Concept {id, name, subject, grade_band, prerequisites[], 
+           common_core_refs[]})
 
-**Reward:** id, parentId, title, description, tokenCost, category, isActive, maxRedemptions, currentRedemptions, emoji, color, createdAt
+-- Quizzes (question sets)
+(:Quiz {id, lesson_id, questions_json, content_hash})
 
-**Reward Goal Savings:** id, learnerId, rewardId, savedPoints (unique per learner+reward)
+-- Media (images, SVGs, audio, video)
+(:Media {id, type, url, alt_text, content_hash, source})
 
-**Reward Redemption:** id, learnerId, rewardId, tokensSpent, status (PENDING/APPROVED/REJECTED), timesRedeemed, requestedAt, approvedAt/rejectedAt/completedAt, parentNotes, learnerNotes
+-- Learner (mastery state per learner)
+(:Learner {id, grade_level, subjects[], mastery_json})
 
-**Points Ledger:** id, learnerId, amount, sourceType, sourceId, description, createdAt
+-- Gate (parent controls)
+(:Gate {id, gate_type, predicate_json, status, parent_id})
+```
 
-**Learner Points (materialized):** learnerId (unique), currentBalance, totalEarned, totalRedeemed
+**Edges:**
 
-**Prompt Log:** id, lessonId, learnerId, promptType, systemMessage, userMessage, model, temperature, responsePreview, tokensUsed, createdAt
+```cypher
+-- Teaching relationships
+(:Character)-[:TEACHES {confidence}]->(:Concept)
+(:Conversation)-[:DISCUSSES]->(:Concept)
+(:Conversation)-[:FEATURES]->(:Character)
+(:Lesson)-[:COVERS]->(:Concept)
+(:Lesson)-[:INCLUDES]->(:Media)
 
-**Feedback Submission:** id, message, email, userId, userAgent, page, createdAt
+-- Mastery & assessment
+(:Learner)-[:MASTERY {level, correct, total, last_tested}]->(:Concept)
+(:Learner)-[:COMPLETED {score, at}]->(:Lesson)
+(:Quiz)-[:ASSESSES]->(:Concept)
 
-**DB Sync Config:** id, parentId, targetDbUrl, lastSyncAt, syncStatus, continuousSync, errorMessage, createdAt
+-- Library provenance  
+(:Lesson)-[:DERIVED_FROM]->(:Lesson)  -- library derivation
+(:Lesson)-[:SOURCED_FROM {clockchain_url}]->(:Concept)  -- Timepoint
+(:Conversation)-[:CONTRIBUTED]->(:Lesson)  -- conversation → library
 
-**Questions History:** id, learnerId, topic, questionHash (unique per learner+topic+hash), createdAt
+-- Gating
+(:Gate)-[:BLOCKS]->(:Lesson|:Conversation|:Character)
+(:Gate)-[:OWNED_BY]->(:Learner)  -- which learner this gate applies to
 
-**Lesson Validation Log:** id, subject, topic, gradeLevel, model, passed, rejectionReason, specSnapshot, createdAt
+-- Curriculum
+(:Concept)-[:PREREQUISITE_OF]->(:Concept)
+(:Concept)-[:MAPS_TO {standard_id, coverage}]->(:Standard)
+```
 
-### 6.2 Key Relationships
-- User → User (parent-child, cascade delete)
-- User → Learner Profile (1:1)
-- User → Lessons (1:many, via learnerId)
-- Lesson → Lesson Template (many:1, nullable, set null on delete)
-- Lesson → Quiz Answers (1:many, cascade delete)
-- User → Achievements (1:many)
-- User → Concept Mastery (1:many)
-- User (Parent) → Rewards (1:many)
-- User (Learner) + Reward → Reward Goal Savings (1:1 per pair)
-- Reward → Reward Redemptions (1:many)
-- Lesson → Prompt Log (1:many, cascade delete)
-- User → Points Ledger (1:many)
-- User (Parent) → DB Sync Configs (1:many, cascade delete)
+### 4.3 Request Flow
+
+```
+Parent/Learner (thin client)
+    │
+    ▼
+FastAPI (auth middleware: verify Firebase JWT, resolve parent→child→learner)
+    │
+    ├── GET /conversations/{id}/messages → retrieve + resume
+    ├── POST /conversations/{id}/message → process learner input
+    │       │
+    │       ▼
+    │   Conductor Agent (per-learner)
+    │       │
+    │       ├── Check mastery graph (NetworkX from AGE)
+    │       ├── Check library for relevant content (AGE Cypher query)
+    │       ├── Check parent gates (predicate evaluation)
+    │       ├── Select/create character for topic
+    │       ├── Generate response (OpenRouter / Timepoint)
+    │       ├── Extract concepts, update mastery graph
+    │       ├── Log prompt to audit table
+    │       ├── If quiz: score, award points, check achievements
+    │       └── Persist conversation state to AGE
+    │
+    ├── GET /audit/prompts → parent reads all LLM calls
+    ├── PUT /learners/{id}/guidelines → parent sets constraints
+    ├── GET /learners/{id}/progress → mastery visualization
+    ├── POST /gates → parent creates approval gate
+    └── PUT /gates/{id} → parent approves/rejects
+```
+
+### 4.4 Module Interface
+
+A module is a Python package that exposes:
+
+```python
+# sunschool_modules/ouro/__init__.py
+
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/modules/ouro", tags=["ouro"])
+
+# Module metadata
+MODULE_INFO = {
+    "id": "ouro",
+    "name": "Ouro Credentialing",
+    "description": "AI credentialing from game data",
+    "tier": "freemium",  # free | freemium | paid
+    "free_limits": {"screenshot_uploads": 3},
+    "paid_price_monthly_cents": 500,
+}
+
+# Routes
+@router.post("/analyze")
+async def analyze_game_data(...): ...
+
+@router.get("/credentials/{learner_id}")
+async def get_credentials(...): ...
+```
+
+The core engine discovers and mounts modules at startup. Stripe checks the learner's subscription tier before allowing paid module access.
+
+### 4.5 OSS Boundary
+
+**Open source (sunschool-engine):**
+- FastAPI routes for lesson generation, quiz, mastery, prompt audit
+- AGE graph schema + migrations
+- NetworkX gate executor
+- Content validation pipeline
+- Library CRUD + dedup
+- TDF integration
+- Module interface spec
+- Grade-specific prompt templates
+- All shared library content (lessons, quizzes, media)
+
+**Private (sunschool-app):**
+- Google Identity Platform auth config
+- Stripe billing integration
+- Parent/learner dashboard UI
+- Conductor agent (the adaptive per-learner orchestrator)
+- Module implementations (Ouro, Timepoint, etc.)
+- Railway deployment config
+- Admin tools
+
+**The line:** If it impacts how the AI teaches or what the parent can see → OSS. If it's business logic, billing, or UX chrome → private.
 
 ---
 
-## 7. External Dependencies
+## 5. Learner Experience (Chat-First)
 
-| Dependency | Purpose | Required |
-|---|---|---|
-| LLM API (text generation) | Lesson content, quiz questions, knowledge graphs | Yes |
-| LLM API (SVG generation) | Educational illustrations | No (deterministic fallback exists) |
-| Image generation API | Raster lesson images | No (SVG or fallback) |
-| PostgreSQL database | Primary data store | Yes |
-| AI guardrails service | Enhanced prompt injection detection | No (regex fallback exists) |
+### 5.1 The SEIAR Loop
+
+Every conversation follows this pattern, but it's invisible to the kid. They're just chatting.
+
+```
+S – Storytelling    │ Character introduces topic through narrative
+E – Examples        │ Concrete examples, visuals, analogies
+I – Interaction     │ Kid responds, asks questions, explores
+A – Assessment      │ Quiz questions woven into conversation
+R – Refinement      │ Correct misconceptions, deepen understanding
+     │
+     └──► Loop back to S with next concept (or rabbit hole deeper)
+```
+
+The conductor agent tracks where in the loop the learner is and adjusts. A kid who gets everything right skips to harder content. A kid who struggles gets more examples before assessment.
+
+### 5.2 Age Adaptation
+
+| Grade Band | Experience |
+|-----------|------------|
+| K-2 | Big buttons, image-heavy, tap-to-answer, simple character (friendly animal), 5-word sentences, parent sits alongside |
+| 3-5 | Chat with short messages, multiple choice as buttons, characters with personality, vocabulary scaffolding |
+| 6-8 | Full chat, natural language answers scored by AI, character handoffs, deeper rabbit holes, double-or-loss points |
+| 9-12 | Conversation-first, Socratic method, characters debate each other, essay-style responses, primary source analysis |
+
+The frontend is one codebase. The conductor agent adjusts message length, vocabulary, interaction style, and character selection based on grade level.
+
+### 5.3 "Teach Me About Where I Am"
+
+```
+Learner taps "Teach me about where I am"
+    │
+    ├── Geo lookup → San Jose, California
+    ├── Weather API → 72°F, sunny
+    ├── Clockchain query → local historical events
+    ├── Grade-appropriate character selected
+    │
+    ▼
+Character: "Hey! You're in San Jose — did you know this used to be
+the biggest city in California before San Francisco? The Ohlone 
+people lived here for thousands of years before that. Want to 
+learn about the Ohlone, or about how San Jose became the tech 
+capital of the world?"
+    │
+    ▼
+Kid picks → rabbit hole begins → mastery graph grows
+```
 
 ---
 
-## 8. Non-Functional Requirements
+## 6. Parent Control (Non-Negotiable)
 
-- **Latency:** Lesson generation 10-30s typical. Quiz submission <2s. Page navigation <1s
-- **Resilience:** Circuit breaker on external APIs (3 failures → OPEN, 60s cooldown). Template cache serves during outages. All image generation has deterministic fallback
-- **Data ownership:** Parents can export all child data. Parents can delete child accounts (cascade). Parents can sync to their own database
-- **Security:** Passwords scrypt-hashed. JWTs with env-var secret. No admin credentials in source code. Rate limiting on auth. Input validation on all user-supplied text. Timing-safe password comparison
-- **Privacy:** No analytics beyond optional Plausible. No data sold or used for training. Password fields stripped from all API responses and exports
-- **Concurrency:** Atomic point operations. Unique constraints prevent duplicate saves. Retry logic for DB conflicts
-- **Observability:** Prompt logging for all AI calls. Validation logging for all generated content. Circuit breaker state visible to admin. Maintenance checks for data integrity
+### 6.1 Prompt Audit
+
+Every LLM call stored:
+
+```sql
+CREATE TABLE prompt_audit (
+    id UUID PRIMARY KEY,
+    learner_id UUID REFERENCES users(id),
+    conversation_id UUID,
+    prompt_type TEXT,        -- lesson_gen | quiz_gen | assessment | character_dialog
+    system_message TEXT,     -- full system prompt
+    user_message TEXT,       -- what was sent as user turn
+    model TEXT,              -- which model was used
+    response_preview TEXT,   -- first 500 chars of response
+    tokens_used INT,
+    cost_estimate DECIMAL,
+    created_at TIMESTAMPTZ
+);
+```
+
+Parent sees: every instruction the AI received before talking to their kid. Filterable by type, date, conversation.
+
+### 6.2 Gates
+
+Parent can create gates that block specific content or require approval:
+
+- `APPROVAL_REQUIRED` — lesson is queued, parent must approve before kid sees it
+- `TOPIC_BLOCKED` — "no content about [X]"
+- `MODEL_RESTRICTED` — "only use [specific model]"
+- `TIME_LIMITED` — "max 30 min/day"
+- `CONCEPT_GATE` — "don't advance past [concept] until I say so"
+
+Gates are edges in the AGE graph. The conductor agent checks them on every turn.
+
+### 6.3 Data Ownership
+
+- Export all child data as JSON (one click)
+- Delete child account (cascade delete, AGE nodes included)
+- Optional: sync to parent's own Postgres (one-way push replication)
+
+---
+
+## 7. Cost Model
+
+### 7.1 Per-Learner Economics
+
+| Activity | Model | Cost/call | Calls/session | Sessions/day |
+|----------|-------|-----------|---------------|-------------|
+| Lesson generation | gemini-2.0-flash (free) | $0.00 | 1 | 1 |
+| Quiz scoring | gemini-2.0-flash (free) | $0.00 | 3-5 | 1 |
+| Character dialog | gemini-2.0-flash (free) | $0.00 | 10-20 | 1 |
+| Mastery update | local (NetworkX) | $0.00 | per-answer | — |
+| SVG generation | gemini-flash | ~$0.001 | 2 | 1 |
+
+**Free tier cost per learner:** ~$0.002/day = ~$0.06/month. At 10K learners = $600/mo.
+
+| Activity | Model | Cost/call |
+|----------|-------|-----------|
+| Frontier dialog | claude-sonnet-4 | ~$0.01 |
+| Photo analysis | claude-sonnet-4 vision | ~$0.02 |
+| Timepoint Flash scene | Timepoint API | credits |
+
+**Paid tier cost per learner:** ~$0.30-1.00/day = $9-30/month. $20/mo price point works.
+
+### 7.2 Infrastructure
+
+| Service | Cost |
+|---------|------|
+| Railway (app + DB) | ~$20-50/mo at low scale |
+| Google Identity Platform | Free under 50K MAU |
+| Stripe | 2.9% + $0.30 per transaction |
+| Domain + DNS | ~$20/yr |
+
+**Break-even:** ~30 paid subscribers at $20/mo covers infrastructure + API costs with margin.
+
+---
+
+## 8. Ground Truth & Migration Strategy
+
+### 8.1 Current State (as of 2026-04-04)
+
+| Asset | State | Action |
+|-------|-------|--------|
+| `sunschool` repo (OSS) | Clean slate ("coming soon" placeholder) | Scaffold v2 directly |
+| `sunschool-deployed-private` | Clean slate | Scaffold v2 private layer directly |
+| Railway project | 2 environments (prod/dev), web service + managed Postgres, `sunschool.xyz` domain working | Keep project. Replace managed Postgres with AGE Docker container. Keep domain. |
+| Railway Postgres (prod) | Empty (0 MB) | Nothing to migrate. Remove after AGE container is up. |
+| Railway Postgres (dev) | 1.1 GB (v1 data) | Archive if desired, then remove. Not needed for v2. |
+| GitHub CI/CD | Zero workflows, zero secrets | Rebuild from scratch for v2 |
+| CLAUDE.md | Describes v1 Express/React patterns | **Replace first** — must reflect FastAPI/AGE/Python before any agent touches code |
+| Stoneforge workspace | Fresh, 4 default agents | Reconfigure to 6 agents (see below) |
+| sunschool-docs (Mintlify) | v1 docs, stale | Freeze until v2 API is stable |
+| sunschool-dev-management | Default branch set to old agent branch, not main | Fix immediately |
+
+### 8.2 Migration
+
+**This is a rebuild, not a migration.** v1 (Node/Express/React/Neon) is a prototype. Learnings carried forward:
+
+- Grade-specific prompt templates → port to Python
+- Content validation logic → port to Python
+- E2E test patterns → rewrite for new API (Playwright against FastAPI)
+- Gamification design (points, achievements, rewards) → same logic, new schema
+
+**No data migration needed.** Production DB is empty. Dev DB is v1 artifacts only. Clean start.
+
+**Repo strategy:** Scaffold directly into existing repos (they're empty). `sunschool` = OSS engine. `sunschool-deployed-private` = private app layer, Railway config, auth, billing.
+
+### 8.3 Stoneforge Agent Configuration (v2)
+
+6 agents, down from 16 in v1. Build phase needs fewer, broader workers.
+
+| Agent | Role | Scope |
+|-------|------|-------|
+| **director** | Strategic planning, task breakdown, priority | Does NOT write code |
+| **steward** | Code review, branch merging, doc scanning | Persistent, handles merges |
+| **python-backend** | FastAPI routes, AGE schema, services, prompt templates, validation | Primary builder |
+| **frontend-client** | Thin chat UI, parent dashboard, learner interface | React or HTML |
+| **infra-ops** | Railway deployment, AGE Docker, backup cron, CI/CD, Identity Platform | DevOps |
+| **e2e-testing** | Playwright tests against FastAPI, persona-based (parent, learner, admin) | Quality gate |
+
+Workers are ephemeral (git worktrees, one task at a time). Steward is persistent.
+
+### 8.4 First Stoneforge Plan: "v2 Foundation"
+
+Execution order (dependencies respected):
+
+```
+1. Replace CLAUDE.md with v2 conventions (FastAPI, Python, AGE, no mocks)
+2. Scaffold FastAPI project structure in sunschool repo
+3. CI workflow: lint, type-check, test (GitHub Actions)
+4. AGE Docker container on Railway (replace managed Postgres)
+5. Google Identity Platform setup (gcloud CLI)
+6. AGE graph schema (nodes + edges from Section 4.2)
+7. Auth middleware (Firebase JWT verification)
+8. First endpoint: POST /conversations → create chat session
+9. Sync workflow: push to main → Railway auto-deploy
+```
+
+---
+
+## 9. Day-1 Implementation Checklist
+
+```
+PREREQUISITES (before any code):
+[ ] Fix sunschool-dev-management default branch → main
+[ ] Replace CLAUDE.md with v2 conventions (FastAPI, Python, AGE, no mocks)
+[ ] Archive/remove Railway managed Postgres (prod is empty, dev is v1 artifacts)
+
+INFRASTRUCTURE:
+[ ] Railway: deploy apache/age Docker template (or custom Dockerfile), verify persistent volume
+[ ] Railway: deploy FastAPI app as separate service, connect to AGE via internal networking
+[ ] Backup job: pg_dump cron to R2 (daily), since custom container has no managed backups
+[ ] Google Identity Platform: enable API, configure Google sign-in via gcloud CLI
+[ ] GitHub Actions: lint + type-check + test workflow
+
+CORE ENGINE:
+[ ] AGE schema: Character, Conversation, Lesson, Concept, Learner nodes + edges
+[ ] FastAPI auth middleware: verify Firebase JWT, resolve parent→child→learner roles
+[ ] POST /conversations — create new chat session
+[ ] POST /conversations/{id}/message — send message, get AI response
+[ ] GET /conversations/{id}/messages — retrieve history
+[ ] Conductor agent: generate lesson content, score answers, update mastery
+[ ] Grade-specific prompt templates (K-2, 3-5, 6-8, 9-12)
+[ ] Content validation: readability, safety, grade-appropriateness
+[ ] Prompt audit table + GET /audit/prompts endpoint
+
+PARENT + LEARNER:
+[ ] Parent: add child, set guidelines, view progress
+[ ] Learner: chat interface, points display, mastery summary
+
+SHIP:
+[ ] Deploy to Railway, smoke test against sunschool.xyz
+```
+
+---
+
+## 10. Open Questions
+
+1. **~~AGE on Railway~~ RESOLVED:** Community template exists at `railway.com/deploy/apache-age` (by `umbrella.coop`, Feb 2026, `apache/age` Docker Hub image, 100% deploy success rate). It's a custom Docker container, not Railway's managed Postgres. Persistent volume at `/var/lib/postgresql/data`. You manage Postgres config, upgrades, and connection pooling yourself inside the container. Railway provides networking, SSL via TCP proxy, auto-restart, and scaling. **You must add your own backup job** (pg_dump cron to R2 or S3) since managed backups don't apply to custom containers. Standard Postgres drivers (psycopg2, SQLAlchemy) connect normally. Every connection must run `LOAD 'age';` and `SET search_path = ag_catalog, "$user", public;` — handle this in a connection pool init hook. Alternative: skip the template and write a 3-line Dockerfile pulling `apache/age` — identical result, more control over Postgres version.
+
+2. **NetworkX ↔ AGE sync:** NetworkX operates in-memory for fast traversal/gate-checking. AGE is the persistence layer. Need a clean pattern for loading subgraphs into NetworkX and writing back. Likely: load learner's local neighborhood on session start, write back on session end.
+
+3. **Conversation context window:** A semester of chatting = enormous context. Strategy: store full transcript in DB, inject only (a) last N messages + (b) compressed summary + (c) relevant mastery state into each LLM call. The conductor agent manages this compression.
+
+4. **K-2 UX:** Chat doesn't work for 5-year-olds. Day-1 can target grade 3+ and add a tap/visual mode for younger kids in Phase 5. Or: the parent reads the chat to the kid and taps answers. Test with real families.
+
+5. **Timepoint API key management:** Sunschool backend calls Timepoint API on behalf of learners. One service account key, not per-user keys. Credits charged to the Sunschool account, billed through to paid subscribers.
+
+6. **GitHub branch hygiene:** `sunschool-dev-management` default branch is set to an old agent branch, not main. Fix before any v2 work begins — agents will push to the wrong target otherwise.
+
+---
+
+*Ship the tutor. Let the library grow. Add modules. Collect revenue. The rest follows.*

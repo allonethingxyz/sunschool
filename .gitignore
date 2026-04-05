@@ -12,3 +12,6 @@ dist/
 .claude/
 CLAUDE.md
 admin-credentials.txt
+__pycache__/
+*.pyc
+.pytest_cache/

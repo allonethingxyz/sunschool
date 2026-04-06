@@ -39,14 +39,13 @@ class AuthenticatedUser:
 def _is_dev_bypass_enabled() -> bool:
     """Check whether the dev auth bypass should be active.
 
-    Dev bypass is enabled when:
-    - SUNSCHOOL_ENVIRONMENT is "development" (or not set, which defaults to dev)
-    - No Firebase service account JSON is configured
+    Dev bypass is enabled when Firebase is not properly configured,
+    regardless of environment setting. This allows smoke-testing before
+    GIP is set up. A valid service account JSON must start with '{'.
     """
-    return (
-        settings.environment in ("development", "dev", "test")
-        and not settings.firebase_service_account_json
-    )
+    sa_json = settings.firebase_service_account_json.strip()
+    firebase_configured = sa_json.startswith("{")
+    return not firebase_configured
 
 
 async def _get_current_user(request: Request) -> AuthenticatedUser:

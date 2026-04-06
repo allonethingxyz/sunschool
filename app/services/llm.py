@@ -49,7 +49,7 @@ PAID_TIER_MODELS = [
     ModelConfig("google/gemini-2.0-flash-lite-001", 0.0, 0.0),
 ]
 
-# Status codes that indicate billing/auth issues — abort, don't retry
+# Status codes that indicate billing/auth issues -- abort, don't retry
 ABORT_STATUS_CODES = {402, 403}
 
 
@@ -203,7 +203,7 @@ class LLMService:
                     response_format=response_format,
                 )
             except LLMAbortError:
-                # 402/403 — billing/auth issue, don't try other models
+                # 402/403 -- billing/auth issue, don't try other models
                 raise
             except LLMError as e:
                 last_error = e
@@ -364,77 +364,6 @@ class LLMService:
             raise LLMParseError(f"Failed to parse validation response: {e}")
 
 
-# --- Convenience functions ---
-
-
-async def generate_lesson(
-    llm: LLMService,
-    system_prompt: str,
-    user_prompt: str,
-    tier: Tier = Tier.FREE,
-) -> tuple[LLMResponse, ParsedLesson]:
-    """Generate a lesson and return both raw response and parsed data."""
-    response = await llm.chat(
-        system_message=system_prompt,
-        user_message=user_prompt,
-        tier=tier,
-        response_format={"type": "json_object"},
-    )
-    parsed = llm.parse_lesson(response)
-    return response, parsed
-
-
-async def generate_quiz(
-    llm: LLMService,
-    system_prompt: str,
-    user_prompt: str,
-    tier: Tier = Tier.FREE,
-) -> tuple[LLMResponse, ParsedQuiz]:
-    """Generate a quiz and return both raw response and parsed data."""
-    response = await llm.chat(
-        system_message=system_prompt,
-        user_message=user_prompt,
-        tier=tier,
-        response_format={"type": "json_object"},
-    )
-    parsed = llm.parse_quiz(response)
-    return response, parsed
-
-
-async def score_answer(
-    llm: LLMService,
-    system_prompt: str,
-    user_prompt: str,
-    tier: Tier = Tier.FREE,
-) -> tuple[LLMResponse, AnswerScore]:
-    """Score an answer and return both raw response and parsed data."""
-    response = await llm.chat(
-        system_message=system_prompt,
-        user_message=user_prompt,
-        tier=tier,
-        response_format={"type": "json_object"},
-    )
-    parsed = llm.parse_score(response)
-    return response, parsed
-
-
-async def validate_content(
-    llm: LLMService,
-    system_prompt: str,
-    content: str,
-    tier: Tier = Tier.FREE,
-) -> tuple[LLMResponse, ContentValidation]:
-    """Validate content safety/appropriateness and return results."""
-    response = await llm.chat(
-        system_message=system_prompt,
-        user_message=content,
-        tier=tier,
-        response_format={"type": "json_object"},
-    )
-    parsed = llm.parse_validation(response)
-    return response, parsed
-
-
 # --- Exceptions ---
 
 
@@ -443,7 +372,7 @@ class LLMError(Exception):
 
 
 class LLMAbortError(LLMError):
-    """Raised on 402/403 — billing/auth issue, do not retry."""
+    """Raised on 402/403 -- billing/auth issue, do not retry."""
 
 
 class LLMParseError(LLMError):

@@ -69,7 +69,7 @@ GRADE_BAND_STYLE: dict[GradeBand, dict[str, str]] = {
     GradeBand.GRADE_6_8: {
         "tone": "respectful, intellectually engaging, and conversational",
         "vocabulary": "Use academic vocabulary with natural explanations. Introduce domain-specific terms. Write at a middle-school reading level.",
-        "interaction": "Use Socratic questioning — guide students to discover answers themselves. Ask 'why' and 'how' questions. Challenge assumptions gently.",
+        "interaction": "Use Socratic questioning -- guide students to discover answers themselves. Ask 'why' and 'how' questions. Challenge assumptions gently.",
         "storytelling": "Use real-world case studies and historical examples. Create thought experiments. Connect concepts across subjects.",
         "assessment": "Include analysis and application questions, not just recall. Use scenarios that require applying knowledge. Provide detailed explanations.",
         "examples": "Use current events, technology, and real-world applications. Show how concepts connect to careers and everyday decisions.",
@@ -126,11 +126,7 @@ def _build_seiar_instructions(style: dict[str, str]) -> str:
 
 
 def build_system_prompt(ctx: PromptContext) -> str:
-    """Build a complete system prompt for tutoring, adapted to grade band.
-
-    Includes: character personality, grade band adjustments, concept focus,
-    SEIAR loop instructions, and conversation history summary.
-    """
+    """Build a complete system prompt for tutoring, adapted to grade band."""
     style = GRADE_BAND_STYLE[ctx.grade_band]
     character_block = _build_character_block(ctx)
     context_block = _build_context_block(ctx)
@@ -153,94 +149,13 @@ def build_system_prompt(ctx: PromptContext) -> str:
     )
 
 
-# --- Specific prompt templates ---
-
-
-def lesson_generation_prompt(ctx: PromptContext) -> tuple[str, str]:
-    """Generate system and user prompts for lesson creation.
-
-    Returns:
-        (system_message, user_message) tuple.
-    """
-    style = GRADE_BAND_STYLE[ctx.grade_band]
-
-    system = (
-        "You are a curriculum designer creating engaging lesson content.\n\n"
-        f"## Grade Band: {ctx.grade_band.value}\n"
-        f"**Tone**: {style['tone']}\n"
-        f"**Language**: {style['vocabulary']}\n"
-        f"**Examples**: {style['examples']}\n\n"
-        "## Output Format\n"
-        "Respond with a JSON object containing:\n"
-        "- title: Engaging lesson title\n"
-        "- content: The full lesson text following the SEIAR structure "
-        "(Storytelling hook, Examples, Interactive prompts, Assessment preview, Refinement notes)\n"
-        "- key_concepts: List of 3-5 key concepts covered\n"
-        "- vocabulary: List of new vocabulary words introduced\n"
-        "- suggested_activities: List of 2-3 hands-on activities\n\n"
-        "Make the content grade-appropriate and engaging."
-    )
-
-    subject_part = f" in {ctx.subject}" if ctx.subject else ""
-    user = (
-        f"Create a lesson about {ctx.concept}{subject_part} "
-        f"for a {ctx.grade_band.value} grade student."
-    )
-
-    return system, user
-
-
-def quiz_generation_prompt(
-    ctx: PromptContext,
-    num_questions: int = 5,
-    lesson_content: str = "",
-) -> tuple[str, str]:
-    """Generate system and user prompts for quiz creation.
-
-    Returns:
-        (system_message, user_message) tuple.
-    """
-    style = GRADE_BAND_STYLE[ctx.grade_band]
-
-    system = (
-        "You are an assessment designer creating quiz questions.\n\n"
-        f"## Grade Band: {ctx.grade_band.value}\n"
-        f"**Assessment style**: {style['assessment']}\n"
-        f"**Language**: {style['vocabulary']}\n\n"
-        "## Output Format\n"
-        "Respond with a JSON object containing:\n"
-        "- questions: Array of question objects, each with:\n"
-        "  - question: The question text\n"
-        "  - options: Array of 3-4 answer choices\n"
-        "  - correct_index: Index (0-based) of the correct answer\n"
-        "  - explanation: Why the correct answer is right\n\n"
-        "Make questions progressively harder. Test understanding, not memorization."
-    )
-
-    lesson_ref = ""
-    if lesson_content:
-        lesson_ref = f"\n\nBase the quiz on this lesson content:\n{lesson_content}"
-
-    subject_part = f" in {ctx.subject}" if ctx.subject else ""
-    user = (
-        f"Create {num_questions} quiz questions about {ctx.concept}{subject_part} "
-        f"for a {ctx.grade_band.value} grade student.{lesson_ref}"
-    )
-
-    return system, user
-
-
 def answer_scoring_prompt(
     ctx: PromptContext,
     question: str,
     expected_answer: str,
     student_answer: str,
 ) -> tuple[str, str]:
-    """Generate system and user prompts for scoring a student's answer.
-
-    Returns:
-        (system_message, user_message) tuple.
-    """
+    """Generate system and user prompts for scoring a student's answer."""
     style = GRADE_BAND_STYLE[ctx.grade_band]
 
     system = (
@@ -250,7 +165,7 @@ def answer_scoring_prompt(
         "## Scoring Guidelines\n"
         "- Score on a 0.0 to 1.0 scale (0 = completely wrong, 1 = perfect)\n"
         "- Give partial credit for partially correct answers\n"
-        "- Consider the grade level when evaluating — be age-appropriate in expectations\n"
+        "- Consider the grade level when evaluating\n"
         "- Focus on understanding over exact wording\n\n"
         "## Output Format\n"
         "Respond with a JSON object containing:\n"
@@ -270,52 +185,6 @@ def answer_scoring_prompt(
     return system, user
 
 
-def content_validation_prompt(
-    ctx: PromptContext,
-    content: str,
-) -> tuple[str, str]:
-    """Generate system and user prompts for content validation.
-
-    Checks readability, safety, and grade-appropriateness.
-
-    Returns:
-        (system_message, user_message) tuple.
-    """
-    system = (
-        "You are a content safety and quality reviewer for educational materials.\n\n"
-        f"## Target Grade Band: {ctx.grade_band.value}\n\n"
-        "## Review Criteria\n"
-        "1. **Safety**: No violence, inappropriate content, bias, or harmful material\n"
-        "2. **Grade appropriateness**: Language complexity, concept difficulty, and "
-        "examples match the target grade band\n"
-        "3. **Readability**: Text is clear, well-structured, and engaging for the age group\n"
-        "4. **Accuracy**: Content is factually correct\n\n"
-        "## Output Format\n"
-        "Respond with a JSON object containing:\n"
-        "- is_safe: Boolean — true if content passes safety review\n"
-        "- is_grade_appropriate: Boolean — true if appropriate for the grade band\n"
-        "- readability_score: Float 0.0-1.0 (1.0 = perfectly readable for grade)\n"
-        "- issues: Array of strings describing any problems found (empty if none)\n"
-    )
-
-    subject_part = f" ({ctx.subject})" if ctx.subject else ""
-    user = (
-        f"Review the following educational content intended for "
-        f"{ctx.grade_band.value} grade students{subject_part}:\n\n"
-        f"---\n{content}\n---"
-    )
-
-    return system, user
-
-
 def tutoring_prompt(ctx: PromptContext) -> str:
-    """Build a tutoring system prompt for the conversation loop.
-
-    This is the main system prompt used during live tutoring conversations.
-    It combines character personality, grade band adjustments, SEIAR methodology,
-    concept focus, and conversation history.
-
-    Returns:
-        Complete system prompt string.
-    """
+    """Build a tutoring system prompt for the conversation loop."""
     return build_system_prompt(ctx)

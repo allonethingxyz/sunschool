@@ -20,17 +20,19 @@ from app.routes import audit, conversations, mastery
 
 logger = logging.getLogger("sunschool")
 
-# DEBUG: log the actual database URL at startup
-import os as _os
-print(f"[STARTUP] SUNSCHOOL_DATABASE_URL env = {_os.environ.get('SUNSCHOOL_DATABASE_URL', 'NOT SET')}")
-print(f"[STARTUP] settings.database_url = {settings.database_url}")
-print(f"[STARTUP] DATABASE_URL env = {_os.environ.get('DATABASE_URL', 'NOT SET')}")
 
 app = FastAPI(
     title="Sunschool",
     description="AI tutoring platform for kids",
-    version="0.1.0",
+    version="0.2.0",
 )
+
+
+@app.get("/health")
+async def health() -> dict:
+    """Health check for Railway."""
+    return {"status": "ok", "version": "0.2.0"}
+
 
 # ---------------------------------------------------------------------------
 # CORS

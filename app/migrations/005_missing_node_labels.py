@@ -42,18 +42,26 @@ MISSING_LABELS = [
     "Standard",
 ]
 
-# Default Character node for MVP
-DEFAULT_CHARACTER_CYPHER = f"""
+# Default Character node for MVP — check then create (AGE doesn't support MERGE ON CREATE SET)
+CHECK_CHARACTER_CYPHER = f"""
 SELECT * FROM cypher('{GRAPH_NAME}', $$
-    MERGE (c:Character {{id: 'sunny'}})
-    ON CREATE SET
-        c.name = 'Sunny',
-        c.era = 'modern',
-        c.expertise = '["general"]',
-        c.personality_prompt = 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
-        c.knowledge_bounds = '[]',
-        c.clockchain_refs = '[]',
-        c.active = true
+    MATCH (c:Character {{id: 'sunny'}})
+    RETURN c
+$$) AS (v agtype);
+"""
+
+CREATE_CHARACTER_CYPHER = f"""
+SELECT * FROM cypher('{GRAPH_NAME}', $$
+    CREATE (c:Character {{
+        id: 'sunny',
+        name: 'Sunny',
+        era: 'modern',
+        expertise: '["general"]',
+        personality_prompt: 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
+        knowledge_bounds: '[]',
+        clockchain_refs: '[]',
+        active: true
+    }})
     RETURN c
 $$) AS (v agtype);
 """
@@ -116,10 +124,14 @@ def run_migration():
 
             logger.info("All 10 node labels ensured.")
 
-            # 5. Create default 'Sunny' Character node
+            # 5. Create default 'Sunny' Character node if not exists
             logger.info("=== Creating default 'Sunny' Character node ===")
-            cur.execute(DEFAULT_CHARACTER_CYPHER)
-            logger.info("Default 'Sunny' character (id='sunny') ensured.")
+            cur.execute(CHECK_CHARACTER_CYPHER)
+            if not cur.fetchone():
+                cur.execute(CREATE_CHARACTER_CYPHER)
+                logger.info("Default 'Sunny' character (id='sunny') created.")
+            else:
+                logger.info("Default 'Sunny' character (id='sunny') already exists.")
 
             logger.info("=== Migration 005 complete ===")
     finally:

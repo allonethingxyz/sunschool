@@ -86,16 +86,24 @@ PROMPT_AUDIT_INDEXES = [
 
 # -- Step 6: Default Character node (MVP tutor) ---------------------------
 
-DEFAULT_CHARACTER_CYPHER = """
+CHECK_CHARACTER_CYPHER = """
 SELECT * FROM cypher('sunschool_graph', $$
-    MERGE (c:Character {id: 'sunny'})
-    ON CREATE SET
-        c.name = 'Sunny',
-        c.era = 'modern',
-        c.expertise = '["general"]',
-        c.personality_prompt = 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
-        c.knowledge_bounds = '[]',
-        c.active = true
+    MATCH (c:Character {id: 'sunny'})
+    RETURN c
+$$) AS (v agtype);
+"""
+
+CREATE_CHARACTER_CYPHER = """
+SELECT * FROM cypher('sunschool_graph', $$
+    CREATE (c:Character {
+        id: 'sunny',
+        name: 'Sunny',
+        era: 'modern',
+        expertise: '["general"]',
+        personality_prompt: 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
+        knowledge_bounds: '[]',
+        active: true
+    })
     RETURN c
 $$) AS (v agtype);
 """
@@ -162,10 +170,14 @@ def run_migration():
                 cur.execute(idx_sql)
             logger.info("prompt_audit table and indexes ensured.")
 
-            # 6. Create default Character node
+            # 6. Create default Character node if not exists
             logger.info("=== Step 6: Creating default Character node ===")
-            cur.execute(DEFAULT_CHARACTER_CYPHER)
-            logger.info("Default 'Sunny' tutor character ensured.")
+            cur.execute(CHECK_CHARACTER_CYPHER)
+            if not cur.fetchone():
+                cur.execute(CREATE_CHARACTER_CYPHER)
+                logger.info("Default 'Sunny' tutor character created.")
+            else:
+                logger.info("Default 'Sunny' tutor character already exists.")
 
             logger.info("=== Migration 004 complete ===")
     finally:

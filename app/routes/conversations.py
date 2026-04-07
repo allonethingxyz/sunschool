@@ -535,7 +535,6 @@ async def list_conversations(
 
     async with get_connection() as conn:
         with conn.cursor() as cur:
-
             # Fetch all conversations for the learner
             cur.execute(
                 f"""

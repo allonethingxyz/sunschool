@@ -37,6 +37,11 @@ GRAPH_NAME = "sunschool_graph"
 CONTEXT_WINDOW_SIZE = 20  # Last N messages to include in context
 
 
+def _escape_cypher_string(value: str) -> str:
+    """Escape a string for safe inclusion in AGE cypher literals."""
+    return value.replace("\\", "\\\\").replace("'", "\\'").replace('"', '\\"')
+
+
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
@@ -221,7 +226,7 @@ class ConductorService:
             quiz_data=quiz_data,
             mastery_updates=mastery_updates,
             model=llm_response.model,
-            tokens_used=llm_response.total_tokens,
+            tokens_used=llm_response.tokens_used,
             cost_estimate=llm_response.cost_estimate,
         )
 
@@ -388,14 +393,14 @@ class ConductorService:
     def _query_learner(self, cur: Any, learner_id: str) -> dict[str, Any]:
         """Query learner profile from AGE graph."""
         try:
+            esc_id = _escape_cypher_string(learner_id)
             cur.execute(
-                """
-                SELECT * FROM cypher(%s, $$
-                    MATCH (l:Learner {id: %s})
+                f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (l:Learner {{id: '{esc_id}'}})
                     RETURN l
                 $$) AS (learner agtype);
-                """,
-                (GRAPH_NAME, learner_id),
+                """
             )
             row = cur.fetchone()
             if row:
@@ -408,14 +413,14 @@ class ConductorService:
     def _query_conversation(self, cur: Any, conversation_id: str) -> dict[str, Any]:
         """Query conversation metadata from AGE graph."""
         try:
+            esc_id = _escape_cypher_string(conversation_id)
             cur.execute(
-                """
-                SELECT * FROM cypher(%s, $$
-                    MATCH (c:Conversation {id: %s})
+                f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (c:Conversation {{id: '{esc_id}'}})
                     RETURN c
                 $$) AS (conversation agtype);
-                """,
-                (GRAPH_NAME, conversation_id),
+                """
             )
             row = cur.fetchone()
             if row:
@@ -470,13 +475,15 @@ class ConductorService:
         """Query mastery levels for relevant concepts and format as context string."""
         mastery_items = []
         try:
-            query = """
-                SELECT * FROM cypher(%s, $$
-                    MATCH (l:Learner {id: %s})-[m:MASTERY]->(c:Concept)
+            esc_id = _escape_cypher_string(learner_id)
+            cur.execute(
+                f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (l:Learner {{id: '{esc_id}'}})-[m:MASTERY]->(c:Concept)
                     RETURN c.name AS concept, m.confidence AS confidence, m.level AS level
                 $$) AS (concept agtype, confidence agtype, level agtype);
-            """
-            cur.execute(query, (GRAPH_NAME, learner_id))
+                """
+            )
             rows = cur.fetchall()
             for row in rows:
                 concept_name = _parse_agtype(row[0])
@@ -496,14 +503,14 @@ class ConductorService:
     def _query_parent_guidelines(self, cur: Any, learner_id: str) -> str:
         """Query parent-set guidelines for this learner."""
         try:
+            esc_id = _escape_cypher_string(learner_id)
             cur.execute(
-                """
-                SELECT * FROM cypher(%s, $$
-                    MATCH (l:Learner {id: %s})
+                f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (l:Learner {{id: '{esc_id}'}})
                     RETURN l.parent_guidelines AS guidelines
                 $$) AS (guidelines agtype);
-                """,
-                (GRAPH_NAME, learner_id),
+                """
             )
             row = cur.fetchone()
             if row:
@@ -688,8 +695,8 @@ class ConductorService:
                             system_message,
                             user_message,
                             llm_response.model,
-                            llm_response.response_preview,
-                            llm_response.total_tokens,
+                            llm_response.content[:500],
+                            llm_response.tokens_used,
                             llm_response.cost_estimate,
                         ),
                     )
@@ -740,25 +747,25 @@ class ConductorService:
             with conn.cursor() as cur:
                 try:
                     # Ensure concept node exists
+                    esc_concept = _escape_cypher_string(concept_name)
+                    esc_lid = _escape_cypher_string(learner_id)
                     cur.execute(
-                        """
-                        SELECT * FROM cypher(%s, $$
-                            MERGE (c:Concept {name: %s})
+                        f"""
+                        SELECT * FROM cypher('{GRAPH_NAME}', $$
+                            MERGE (c:Concept {{name: '{esc_concept}'}})
                             RETURN c
                         $$) AS (concept agtype);
-                        """,
-                        (GRAPH_NAME, concept_name),
+                        """
                     )
 
                     # Check existing mastery edge
                     cur.execute(
-                        """
-                        SELECT * FROM cypher(%s, $$
-                            MATCH (l:Learner {id: %s})-[m:MASTERY]->(c:Concept {name: %s})
+                        f"""
+                        SELECT * FROM cypher('{GRAPH_NAME}', $$
+                            MATCH (l:Learner {{id: '{esc_lid}'}})-[m:MASTERY]->(c:Concept {{name: '{esc_concept}'}})
                             RETURN m.confidence AS confidence, m.attempts AS attempts
                         $$) AS (confidence agtype, attempts agtype);
-                        """,
-                        (GRAPH_NAME, learner_id, concept_name),
+                        """
                     )
                     row = cur.fetchone()
 
@@ -777,49 +784,34 @@ class ConductorService:
                     new_attempts = old_attempts + 1
                     new_level = _mastery_label(new_confidence)
 
+                    esc_ts = _escape_cypher_string(datetime.now(timezone.utc).isoformat())
+                    esc_level = _escape_cypher_string(new_level)
+
                     if row:
                         # Update existing edge
                         cur.execute(
-                            """
-                            SELECT * FROM cypher(%s, $$
-                                MATCH (l:Learner {id: %s})-[m:MASTERY]->(c:Concept {name: %s})
-                                SET m.confidence = %s, m.attempts = %s,
-                                    m.level = %s, m.last_updated = %s
+                            f"""
+                            SELECT * FROM cypher('{GRAPH_NAME}', $$
+                                MATCH (l:Learner {{id: '{esc_lid}'}})-[m:MASTERY]->(c:Concept {{name: '{esc_concept}'}})
+                                SET m.confidence = {new_confidence}, m.attempts = {new_attempts},
+                                    m.level = '{esc_level}', m.last_updated = '{esc_ts}'
                                 RETURN m
                             $$) AS (mastery agtype);
-                            """,
-                            (
-                                GRAPH_NAME,
-                                learner_id,
-                                concept_name,
-                                new_confidence,
-                                new_attempts,
-                                new_level,
-                                datetime.now(timezone.utc).isoformat(),
-                            ),
+                            """
                         )
                     else:
                         # Create new mastery edge
                         cur.execute(
-                            """
-                            SELECT * FROM cypher(%s, $$
-                                MATCH (l:Learner {id: %s}), (c:Concept {name: %s})
-                                CREATE (l)-[m:MASTERY {
-                                    confidence: %s, attempts: %s,
-                                    level: %s, last_updated: %s
-                                }]->(c)
+                            f"""
+                            SELECT * FROM cypher('{GRAPH_NAME}', $$
+                                MATCH (l:Learner {{id: '{esc_lid}'}}), (c:Concept {{name: '{esc_concept}'}})
+                                CREATE (l)-[m:MASTERY {{
+                                    confidence: {new_confidence}, attempts: {new_attempts},
+                                    level: '{esc_level}', last_updated: '{esc_ts}'
+                                }}]->(c)
                                 RETURN m
                             $$) AS (mastery agtype);
-                            """,
-                            (
-                                GRAPH_NAME,
-                                learner_id,
-                                concept_name,
-                                new_confidence,
-                                new_attempts,
-                                new_level,
-                                datetime.now(timezone.utc).isoformat(),
-                            ),
+                            """
                         )
 
                     conn.commit()
@@ -856,28 +848,27 @@ class ConductorService:
             with conn.cursor() as cur:
                 try:
                     # Get current points
+                    esc_lid = _escape_cypher_string(learner_id)
                     cur.execute(
-                        """
-                        SELECT * FROM cypher(%s, $$
-                            MATCH (l:Learner {id: %s})
+                        f"""
+                        SELECT * FROM cypher('{GRAPH_NAME}', $$
+                            MATCH (l:Learner {{id: '{esc_lid}'}})
                             RETURN l.points AS points
                         $$) AS (points agtype);
-                        """,
-                        (GRAPH_NAME, learner_id),
+                        """
                     )
                     row = cur.fetchone()
                     current_points = int(_parse_agtype(row[0]) or 0) if row else 0
 
                     new_points = current_points + points
                     cur.execute(
-                        """
-                        SELECT * FROM cypher(%s, $$
-                            MATCH (l:Learner {id: %s})
-                            SET l.points = %s
+                        f"""
+                        SELECT * FROM cypher('{GRAPH_NAME}', $$
+                            MATCH (l:Learner {{id: '{esc_lid}'}})
+                            SET l.points = {new_points}
                             RETURN l
                         $$) AS (learner agtype);
-                        """,
-                        (GRAPH_NAME, learner_id, new_points),
+                        """
                     )
                     conn.commit()
                     logger.info(
@@ -948,15 +939,16 @@ class ConductorService:
             # Store summary on conversation node
             async with get_connection() as conn:
                 with conn.cursor() as cur:
+                    esc_cid = _escape_cypher_string(conversation_id)
+                    esc_summary = _escape_cypher_string(new_summary)
                     cur.execute(
-                        """
-                        SELECT * FROM cypher(%s, $$
-                            MATCH (c:Conversation {id: %s})
-                            SET c.summary = %s
+                        f"""
+                        SELECT * FROM cypher('{GRAPH_NAME}', $$
+                            MATCH (c:Conversation {{id: '{esc_cid}'}})
+                            SET c.summary = '{esc_summary}'
                             RETURN c
                         $$) AS (conversation agtype);
-                        """,
-                        (GRAPH_NAME, conversation_id, new_summary),
+                        """
                     )
                     conn.commit()
 
@@ -1051,14 +1043,14 @@ def get_mastery_context(cur: Any, learner_id: str, subject: str = "") -> str:
     """
     mastery_items = []
     try:
+        esc_id = _escape_cypher_string(learner_id)
         cur.execute(
-            """
-            SELECT * FROM cypher(%s, $$
-                MATCH (l:Learner {id: %s})-[m:MASTERY]->(c:Concept)
+            f"""
+            SELECT * FROM cypher('{GRAPH_NAME}', $$
+                MATCH (l:Learner {{id: '{esc_id}'}})-[m:MASTERY]->(c:Concept)
                 RETURN c.name AS concept, m.confidence AS confidence, m.level AS level
             $$) AS (concept agtype, confidence agtype, level agtype);
-            """,
-            (GRAPH_NAME, learner_id),
+            """
         )
         rows = cur.fetchall()
         for row in rows:
@@ -1099,25 +1091,25 @@ def update_mastery_sync(
     """
     try:
         # Ensure concept exists
+        esc_concept = _escape_cypher_string(concept_name)
+        esc_lid = _escape_cypher_string(learner_id)
         cur.execute(
-            """
-            SELECT * FROM cypher(%s, $$
-                MERGE (c:Concept {name: %s})
+            f"""
+            SELECT * FROM cypher('{GRAPH_NAME}', $$
+                MERGE (c:Concept {{name: '{esc_concept}'}})
                 RETURN c
             $$) AS (concept agtype);
-            """,
-            (GRAPH_NAME, concept_name),
+            """
         )
 
         # Check existing mastery
         cur.execute(
-            """
-            SELECT * FROM cypher(%s, $$
-                MATCH (l:Learner {id: %s})-[m:MASTERY]->(c:Concept {name: %s})
+            f"""
+            SELECT * FROM cypher('{GRAPH_NAME}', $$
+                MATCH (l:Learner {{id: '{esc_lid}'}})-[m:MASTERY]->(c:Concept {{name: '{esc_concept}'}})
                 RETURN m.confidence AS confidence, m.attempts AS attempts
             $$) AS (confidence agtype, attempts agtype);
-            """,
-            (GRAPH_NAME, learner_id, concept_name),
+            """
         )
         row = cur.fetchone()
 
@@ -1133,47 +1125,32 @@ def update_mastery_sync(
         new_attempts = old_attempts + 1
         new_level = _mastery_label(new_confidence)
 
+        esc_ts = _escape_cypher_string(datetime.now(timezone.utc).isoformat())
+        esc_level = _escape_cypher_string(new_level)
+
         if row:
             cur.execute(
-                """
-                SELECT * FROM cypher(%s, $$
-                    MATCH (l:Learner {id: %s})-[m:MASTERY]->(c:Concept {name: %s})
-                    SET m.confidence = %s, m.attempts = %s,
-                        m.level = %s, m.last_updated = %s
+                f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (l:Learner {{id: '{esc_lid}'}})-[m:MASTERY]->(c:Concept {{name: '{esc_concept}'}})
+                    SET m.confidence = {new_confidence}, m.attempts = {new_attempts},
+                        m.level = '{esc_level}', m.last_updated = '{esc_ts}'
                     RETURN m
                 $$) AS (mastery agtype);
-                """,
-                (
-                    GRAPH_NAME,
-                    learner_id,
-                    concept_name,
-                    new_confidence,
-                    new_attempts,
-                    new_level,
-                    datetime.now(timezone.utc).isoformat(),
-                ),
+                """
             )
         else:
             cur.execute(
-                """
-                SELECT * FROM cypher(%s, $$
-                    MATCH (l:Learner {id: %s}), (c:Concept {name: %s})
-                    CREATE (l)-[m:MASTERY {
-                        confidence: %s, attempts: %s,
-                        level: %s, last_updated: %s
-                    }]->(c)
+                f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (l:Learner {{id: '{esc_lid}'}}), (c:Concept {{name: '{esc_concept}'}})
+                    CREATE (l)-[m:MASTERY {{
+                        confidence: {new_confidence}, attempts: {new_attempts},
+                        level: '{esc_level}', last_updated: '{esc_ts}'
+                    }}]->(c)
                     RETURN m
                 $$) AS (mastery agtype);
-                """,
-                (
-                    GRAPH_NAME,
-                    learner_id,
-                    concept_name,
-                    new_confidence,
-                    new_attempts,
-                    new_level,
-                    datetime.now(timezone.utc).isoformat(),
-                ),
+                """
             )
 
         return {

@@ -221,14 +221,3 @@ async def index():
     """Serve the SPA index.html for the root path."""
     return FileResponse("static/index.html")
 
-
-# Catch-all for SPA client-side routing (non-API paths)
-@app.get("/{path:path}")
-async def spa_catchall(path: str):
-    """Serve index.html for any non-API, non-static path to support SPA routing."""
-    if path.startswith("api/") or path.startswith("static/"):
-        # Let FastAPI handle these normally (will 404 if not found)
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail="Not found")
-    return FileResponse("static/index.html")

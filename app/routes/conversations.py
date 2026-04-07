@@ -39,6 +39,8 @@ async def _ensure_user_and_learner(user) -> str:
     """Ensure a User node and Learner node exist for the authenticated user.
 
     Creates them if they don't exist. Returns the learner_id (same as user.uid).
+    AGE 1.5 does not support MERGE ... ON CREATE SET, so we use
+    MATCH-then-CREATE logic instead.
     """
     uid = _escape_cypher_string(user.uid)
     email = _escape_cypher_string(user.email or "")
@@ -54,22 +56,48 @@ async def _ensure_user_and_learner(user) -> str:
                     RETURN u.uid
                 $$) AS (uid agtype);
             """)
-            # MERGE Learner node (learner_id = user uid for self-learning)
+
+            # Check if Learner exists
             cur.execute(f"""
                 SELECT * FROM cypher('{GRAPH_NAME}', $$
-                    MERGE (l:Learner {{id: '{uid}'}})
-                    ON CREATE SET l.name = '{name}', l.grade_level = 5, l.points = 0
+                    MATCH (l:Learner {{id: '{uid}'}})
                     RETURN l.id
                 $$) AS (id agtype);
             """)
-            # MERGE parent→learner edge
+            learner_row = cur.fetchone()
+
+            if not learner_row:
+                # Create Learner node with defaults
+                cur.execute(f"""
+                    SELECT * FROM cypher('{GRAPH_NAME}', $$
+                        CREATE (l:Learner {{
+                            id: '{uid}',
+                            name: '{name}',
+                            grade_level: 5,
+                            points: 0
+                        }})
+                        RETURN l.id
+                    $$) AS (id agtype);
+                """)
+
+            # Ensure parent→learner edge exists
             cur.execute(f"""
                 SELECT * FROM cypher('{GRAPH_NAME}', $$
-                    MATCH (u:User {{uid: '{uid}'}}), (l:Learner {{id: '{uid}'}})
-                    MERGE (u)-[:HAS_CHILD]->(l)
-                    RETURN u.uid
-                $$) AS (uid agtype);
+                    MATCH (u:User {{uid: '{uid}'}})-[r:HAS_CHILD]->(l:Learner {{id: '{uid}'}})
+                    RETURN r
+                $$) AS (rel agtype);
             """)
+            edge_row = cur.fetchone()
+
+            if not edge_row:
+                cur.execute(f"""
+                    SELECT * FROM cypher('{GRAPH_NAME}', $$
+                        MATCH (u:User {{uid: '{uid}'}}), (l:Learner {{id: '{uid}'}})
+                        CREATE (u)-[:HAS_CHILD]->(l)
+                        RETURN u.uid
+                    $$) AS (uid agtype);
+                """)
+
         conn.commit()
     return user.uid
 

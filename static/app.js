@@ -1,33 +1,64 @@
 /* ═══════════════════════════════════════════════════════════════
    Sunschool — Thin Chat UI Client
-   Vanilla JS SPA with hash-based routing, Firebase Auth,
+   Vanilla JS SPA with hash-based routing, Google Sign-In,
    and calls to the FastAPI backend.
    ═══════════════════════════════════════════════════════════════ */
 
 // ---------------------------------------------------------------------------
-// Config — Firebase config is fetched from the server at /api/config/firebase
+// Config — Auth config is fetched from the server at /api/config/auth
 // ---------------------------------------------------------------------------
 const API = '';  // same origin
 
-let firebaseConfig = null;
-let firebaseReady = false;
+let googleClientId = null;
+let authReady = false;
 
-async function initFirebase() {
-  if (firebaseReady) return;
+// Parsed user info from the Google ID token (JWT)
+let _currentUser = null;
+
+async function initAuth() {
+  if (authReady) return;
   try {
-    const res = await fetch(`${API}/api/config/firebase`);
+    const res = await fetch(`${API}/api/config/auth`);
     if (!res.ok) {
-      console.warn('Firebase config endpoint unavailable, using placeholder');
-      firebaseConfig = {};
+      console.warn('Auth config endpoint unavailable');
       return;
     }
-    firebaseConfig = await res.json();
-    if (firebaseConfig.apiKey) {
-      firebase.initializeApp(firebaseConfig);
-      firebaseReady = true;
+    const config = await res.json();
+    googleClientId = config.clientId || config.client_id;
+    if (!googleClientId) {
+      console.warn('No Google client ID returned from /api/config/auth');
+      return;
+    }
+    authReady = true;
+
+    // Restore session from sessionStorage if available
+    const storedToken = sessionStorage.getItem('id_token');
+    if (storedToken) {
+      _currentUser = parseJwt(storedToken);
+      // Check if token is expired
+      if (_currentUser && _currentUser.exp && _currentUser.exp * 1000 < Date.now()) {
+        // Token expired — clear and force re-login
+        sessionStorage.removeItem('id_token');
+        _currentUser = null;
+      }
     }
   } catch (err) {
-    console.warn('Could not init Firebase:', err);
+    console.warn('Could not init auth:', err);
+  }
+}
+
+function parseJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64).split('').map(c =>
+        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+      ).join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
   }
 }
 
@@ -35,14 +66,11 @@ async function initFirebase() {
 // Auth helpers
 // ---------------------------------------------------------------------------
 function currentUser() {
-  if (!firebaseReady) return null;
-  return firebase.auth().currentUser;
+  return _currentUser;
 }
 
 async function getIdToken() {
-  const user = currentUser();
-  if (!user) return null;
-  return user.getIdToken();
+  return sessionStorage.getItem('id_token');
 }
 
 async function authHeaders() {
@@ -52,25 +80,33 @@ async function authHeaders() {
   return headers;
 }
 
-async function signInWithGoogle() {
-  if (!firebaseReady) {
-    console.error('Firebase not initialized');
+function handleCredentialResponse(response) {
+  if (!response.credential) {
+    console.error('No credential in Google response');
     return;
   }
-  const provider = new firebase.auth.GoogleAuthProvider();
-  try {
-    await firebase.auth().signInWithPopup(provider);
-    navigate('#/chat');
-  } catch (err) {
-    console.error('Sign-in error:', err);
-    alert('Sign-in failed. Please try again.');
+  // Store the ID token (JWT) in sessionStorage
+  sessionStorage.setItem('id_token', response.credential);
+  _currentUser = parseJwt(response.credential);
+  navigate('#/chat');
+}
+
+function signInWithGoogle() {
+  if (!authReady || !googleClientId) {
+    console.error('Google Sign-In not initialized');
+    alert('Sign-in is not available yet. Please refresh and try again.');
+    return;
   }
+  // Use One Tap prompt as a fallback trigger
+  google.accounts.id.prompt();
 }
 
 function signOut() {
-  if (firebaseReady) firebase.auth().signOut();
-  // Clear any locally stored state
+  if (authReady) {
+    google.accounts.id.disableAutoSelect();
+  }
   sessionStorage.clear();
+  _currentUser = null;
   navigate('#/');
 }
 
@@ -94,9 +130,22 @@ const state = {
 // ---------------------------------------------------------------------------
 // API calls
 // ---------------------------------------------------------------------------
+function handleAuthError(res) {
+  if (res.status === 401) {
+    // Token expired or invalid — prompt re-login
+    sessionStorage.removeItem('id_token');
+    _currentUser = null;
+    alert('Your session has expired. Please sign in again.');
+    navigate('#/');
+    return true;
+  }
+  return false;
+}
+
 async function apiGet(path) {
   const headers = await authHeaders();
   const res = await fetch(`${API}${path}`, { headers });
+  if (handleAuthError(res)) return;
   if (!res.ok) throw new Error(`GET ${path}: ${res.status}`);
   return res.json();
 }
@@ -108,6 +157,7 @@ async function apiPost(path, body) {
     headers,
     body: JSON.stringify(body),
   });
+  if (handleAuthError(res)) return;
   if (!res.ok) throw new Error(`POST ${path}: ${res.status}`);
   return res.json();
 }
@@ -119,6 +169,7 @@ async function apiPut(path, body) {
     headers,
     body: JSON.stringify(body),
   });
+  if (handleAuthError(res)) return;
   if (!res.ok) throw new Error(`PUT ${path}: ${res.status}`);
   return res.json();
 }
@@ -295,12 +346,26 @@ function googleIcon() {
 }
 
 function renderLogin() {
+  // Render the Google Sign-In button into the container after DOM update
+  requestAnimationFrame(() => {
+    const btnContainer = document.getElementById('g-signin-btn');
+    if (btnContainer && authReady && typeof google !== 'undefined') {
+      google.accounts.id.renderButton(btnContainer, {
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        shape: 'rectangular',
+      });
+    }
+  });
+
   return `
     <div class="login-page">
       <div class="login-card">
         <h1>Sunschool</h1>
         <p>Learn anything with your AI tutor</p>
-        <button class="google-btn" onclick="signInWithGoogle()">
+        <div id="g-signin-btn" style="display:flex;justify-content:center;margin-top:1rem;"></div>
+        <button class="google-btn" onclick="signInWithGoogle()" style="margin-top:0.5rem;">
           ${googleIcon()}
           Sign in with Google
         </button>
@@ -311,7 +376,7 @@ function renderLogin() {
 
 function renderNavbar(activeRoute) {
   const user = currentUser();
-  const displayName = user?.displayName || user?.email || 'User';
+  const displayName = user?.name || user?.email || 'User';
   return `
     <nav class="navbar">
       <a href="#/chat" class="navbar-brand">Sunschool</a>
@@ -661,10 +726,9 @@ async function onRouteChange() {
     return;
   }
 
-  // Determine learner ID (stored after first fetch, or from user claims)
+  // Determine learner ID from Google JWT sub claim (unique user ID)
   if (!state.currentLearnerId) {
-    // Try to get from user's custom claims or default
-    state.currentLearnerId = user.uid;
+    state.currentLearnerId = user.sub || user.email;
   }
 
   if (route === '/chat') {
@@ -722,14 +786,22 @@ async function onRouteChange() {
 // Init
 // ---------------------------------------------------------------------------
 async function init() {
-  await initFirebase();
+  await initAuth();
 
-  // Listen for auth state changes
-  if (firebaseReady) {
-    firebase.auth().onAuthStateChanged(() => {
-      onRouteChange();
-    });
+  // Initialize Google Sign-In once the GSI library is loaded
+  function initGoogleSignIn() {
+    if (typeof google !== 'undefined' && google.accounts && authReady) {
+      google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleCredentialResponse,
+        auto_select: true,
+      });
+    } else {
+      // GSI library not yet loaded, retry shortly
+      setTimeout(initGoogleSignIn, 100);
+    }
   }
+  initGoogleSignIn();
 
   // Hash-based routing
   window.addEventListener('hashchange', onRouteChange);
@@ -737,6 +809,9 @@ async function init() {
   // Initial render
   onRouteChange();
 }
+
+// Expose handlers globally
+window.handleCredentialResponse = handleCredentialResponse;
 
 // Start
 init();

@@ -1,117 +1,163 @@
-"""Authentication middleware for Sunschool API.
+"""Google OAuth2 authentication middleware for FastAPI.
 
-Provides Firebase/GIP JWT verification with a dev-mode bypass.
-When SUNSCHOOL_ENVIRONMENT=development and no Firebase service account is
-configured, requests are authenticated with a synthetic dev user so the
-API can be smoke-tested without a full identity-provider setup.
+Verifies Google ID tokens from the Authorization header and provides
+the authenticated user as a FastAPI dependency via ``CurrentUser``.
 
-Usage in routes:
-    from app.middleware.auth import CurrentUser
-
-    @router.get("/protected")
-    async def protected(user: CurrentUser):
-        ...
+In development mode (SUNSCHOOL_ENVIRONMENT=development), a dev bypass allows
+setting user identity via X-Dev-User-* headers for local testing.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
 
 from app.config import settings
 
 logger = logging.getLogger("sunschool.auth")
 
+# ---------------------------------------------------------------------------
+# Google OAuth2 token verification
+# ---------------------------------------------------------------------------
 
-@dataclass
-class AuthenticatedUser:
-    """Represents an authenticated user extracted from the request."""
+GOOGLE_CLIENT_ID = settings.google_oauth_client_id
+
+
+def verify_google_token(token: str) -> dict:
+    """Verify a Google OAuth2 ID token and return the decoded claims.
+
+    Raises ValueError if the token is invalid or not issued for our client.
+    """
+    idinfo = id_token.verify_oauth2_token(
+        token,
+        google_requests.Request(),
+        GOOGLE_CLIENT_ID,
+    )
+    return idinfo  # has 'sub', 'email', 'name', 'picture'
+
+
+def _is_dev_mode() -> bool:
+    """Return True if running in development mode (auth bypass allowed)."""
+    return settings.environment == "development"
+
+
+# ---------------------------------------------------------------------------
+# User dataclass
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class User:
+    """Authenticated user information extracted from a Google ID token."""
 
     uid: str
-    email: str = ""
-    name: str = ""
-    role: str = "learner"
+    email: str | None = None
+    role: str = "parent"
+    display_name: str | None = None
+    extra: dict = field(default_factory=dict)
 
 
-def _is_dev_bypass_enabled() -> bool:
-    """Check whether the dev auth bypass should be active.
+# ---------------------------------------------------------------------------
+# FastAPI dependency
+# ---------------------------------------------------------------------------
 
-    Dev bypass is enabled when Firebase is not properly configured,
-    regardless of environment setting. This allows smoke-testing before
-    GIP is set up. A valid service account JSON must start with '{'.
+
+async def _get_current_user(request: Request) -> User:
+    """FastAPI dependency that extracts and verifies the authenticated user.
+
+    1. Extracts Bearer token from the Authorization header.
+    2. Verifies the token with Google OAuth2.
+    3. Returns a ``User`` with uid, email, role, and display_name.
+
+    In development mode (SUNSCHOOL_ENVIRONMENT=development), accepts
+    ``X-Dev-User-*`` headers as a bypass for local testing.
+
+    Raises:
+        HTTPException 401: Missing or invalid token.
     """
-    sa_json = settings.firebase_service_account_json.strip()
-    firebase_configured = sa_json.startswith("{")
-    return not firebase_configured
+    # ------------------------------------------------------------------
+    # Dev bypass: only when environment is development
+    # ------------------------------------------------------------------
+    if _is_dev_mode():
+        dev_uid = request.headers.get("X-Dev-User-Id")
+        if dev_uid:
+            logger.debug("Dev bypass: authenticating as uid=%s", dev_uid)
+            return User(
+                uid=dev_uid,
+                email=request.headers.get("X-Dev-User-Email", "dev@sunschool.test"),
+                role=request.headers.get("X-Dev-User-Role", "parent"),
+                display_name=request.headers.get("X-Dev-User-Name", "Dev User"),
+            )
 
-
-async def _get_current_user(request: Request) -> AuthenticatedUser:
-    """Extract and verify the current user from the request.
-
-    In dev bypass mode, returns a synthetic user without checking tokens.
-    In production mode, verifies the Firebase JWT from the Authorization header.
-    """
-    # --- Dev bypass ---
-    if _is_dev_bypass_enabled():
-        # Allow callers to optionally specify a dev user via headers
-        dev_uid = request.headers.get("X-Dev-User-Id", "dev-user-001")
-        dev_email = request.headers.get("X-Dev-User-Email", "dev@sunschool.test")
-        dev_name = request.headers.get("X-Dev-User-Name", "Dev User")
-        dev_role = request.headers.get("X-Dev-User-Role", "parent")
-        logger.debug(
-            "Dev auth bypass: uid=%s email=%s role=%s", dev_uid, dev_email, dev_role
-        )
-        return AuthenticatedUser(
-            uid=dev_uid, email=dev_email, name=dev_name, role=dev_role
-        )
-
-    # --- Production: Firebase JWT verification ---
+    # ------------------------------------------------------------------
+    # Production path: verify Google ID token
+    # ------------------------------------------------------------------
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+    if not auth_header:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header",
+            detail="Missing Authorization header",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = auth_header.split("Bearer ", 1)[1]
-
-    try:
-        import firebase_admin
-        from firebase_admin import auth as firebase_auth
-
-        # Initialize Firebase app if not already done
-        if not firebase_admin._apps:
-            import json
-
-            cred_data = json.loads(settings.firebase_service_account_json)
-            cred = firebase_admin.credentials.Certificate(cred_data)
-            firebase_admin.initialize_app(cred)
-
-        decoded = firebase_auth.verify_id_token(token)
-        return AuthenticatedUser(
-            uid=decoded["uid"],
-            email=decoded.get("email", ""),
-            name=decoded.get("name", ""),
-            role=decoded.get("role", "learner"),
+    # Expect "Bearer <token>"
+    parts = auth_header.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Authorization header format. Expected: Bearer <token>",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    except ImportError:
-        logger.error("firebase-admin not installed but production auth required")
+
+    token = parts[1]
+
+    if not GOOGLE_CLIENT_ID:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Authentication service misconfigured",
+            detail="Google OAuth client ID not configured",
         )
-    except Exception as exc:
-        logger.warning("JWT verification failed: %s", exc)
+
+    try:
+        idinfo = verify_google_token(token)
+    except ValueError as exc:
+        logger.warning("Google token verification failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    uid: str = idinfo.get("sub", "")
+    if not uid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token missing sub claim",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-# Type alias for FastAPI dependency injection
-CurrentUser = Annotated[AuthenticatedUser, Depends(_get_current_user)]
+    email: str | None = idinfo.get("email")
+    display_name: str | None = idinfo.get("name")
+
+    # Default role — no custom claims in plain Google tokens
+    role = "parent"
+
+    return User(
+        uid=uid,
+        email=email,
+        role=role,
+        display_name=display_name,
+        extra={
+            "email_verified": idinfo.get("email_verified", False),
+            "picture": idinfo.get("picture"),
+        },
+    )
+
+
+# Annotated dependency — use as a type hint in route handlers:
+#   async def my_route(user: CurrentUser): ...
+CurrentUser = Annotated[User, Depends(_get_current_user)]

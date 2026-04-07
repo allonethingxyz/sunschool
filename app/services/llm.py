@@ -1,237 +1,142 @@
-"""OpenRouter LLM service for Sunschool AI tutoring.
+"""OpenRouter LLM client for Sunschool AI tutoring.
 
-Handles model routing, fallback chains, structured response parsing,
-and token/cost tracking for prompt audit logging.
+Provides an async interface to OpenRouter's chat completions API with
+tier-based model selection, retry logic, and cost tracking.
+
+Exports:
+    LLMService  — async client; call .chat() for completions, .close() to teardown
+    LLMResponse — dataclass returned by .chat()
+    LLMError    — raised on non-retryable failures
+    Tier        — FREE / PAID enum controlling model selection
 """
 
 from __future__ import annotations
 
-import json
+import enum
 import logging
-import time
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
 from app.config import settings
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("sunschool.llm")
 
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-OPENROUTER_CHAT_ENDPOINT = f"{OPENROUTER_BASE_URL}/chat/completions"
+# ---------------------------------------------------------------------------
+# Public types
+# ---------------------------------------------------------------------------
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# Retry-eligible HTTP status codes
+_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+
+# Maximum number of retry attempts for retryable errors
+_MAX_RETRIES = 1
 
 
-class Tier(str, Enum):
+class Tier(str, enum.Enum):
+    """Billing tier that determines which model is used."""
+
     FREE = "free"
     PAID = "paid"
 
 
-# Model definitions with cost-per-token estimates (USD)
-@dataclass(frozen=True)
-class ModelConfig:
-    model_id: str
-    input_cost_per_token: float = 0.0
-    output_cost_per_token: float = 0.0
+# Model slugs per tier
+_TIER_MODELS: dict[Tier, str] = {
+    Tier.FREE: "google/gemini-2.0-flash-exp:free",
+    Tier.PAID: "anthropic/claude-sonnet-4-20250514",
+}
 
 
-# Free tier: gemini-2.0-flash is free via OpenRouter
-FREE_TIER_MODELS = [
-    ModelConfig("google/gemini-2.0-flash-001", 0.0, 0.0),
-    ModelConfig("google/gemini-2.0-flash-lite-001", 0.0, 0.0),
-    ModelConfig("google/gemini-2.0-flash-thinking-exp:free", 0.0, 0.0),
-]
-
-PAID_TIER_MODELS = [
-    ModelConfig("anthropic/claude-sonnet-4", 0.000003, 0.000015),
-    ModelConfig("google/gemini-2.0-flash-001", 0.0, 0.0),
-    ModelConfig("google/gemini-2.0-flash-lite-001", 0.0, 0.0),
-]
-
-# Status codes that indicate billing/auth issues -- abort, don't retry
-ABORT_STATUS_CODES = {402, 403}
-
-
-@dataclass
+@dataclass(frozen=True, slots=True)
 class LLMResponse:
     """Structured response from an LLM call."""
 
     content: str
     model: str
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-    cost_estimate: float = 0.0
-    latency_ms: float = 0.0
-    raw_response: dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def response_preview(self) -> str:
-        """First 500 chars of response for audit logging."""
-        return self.content[:500]
+    tokens_used: int
+    cost_estimate: float
 
 
-@dataclass
-class ParsedLesson:
-    """Parsed lesson content from LLM response."""
-
-    title: str
-    content: str
-    key_concepts: list[str]
-    vocabulary: list[str]
-    suggested_activities: list[str]
+class LLMError(Exception):
+    """Raised when an LLM call fails in a non-retryable way."""
 
 
-@dataclass
-class ParsedQuiz:
-    """Parsed quiz from LLM response."""
-
-    questions: list[QuizQuestion]
-
-
-@dataclass
-class QuizQuestion:
-    """A single quiz question."""
-
-    question: str
-    options: list[str]
-    correct_index: int
-    explanation: str
-
-
-@dataclass
-class AnswerScore:
-    """Scored answer from LLM."""
-
-    score: float  # 0.0 to 1.0
-    feedback: str
-    concepts_demonstrated: list[str]
-    points_awarded: int
-
-
-@dataclass
-class ContentValidation:
-    """Content validation result."""
-
-    is_safe: bool
-    is_grade_appropriate: bool
-    readability_score: float  # 0.0 to 1.0
-    issues: list[str]
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
 
 
 class LLMService:
-    """OpenRouter API integration with model routing and fallback chains."""
+    """Async OpenRouter LLM client.
 
-    def __init__(self, api_key: str | None = None):
-        self.api_key = api_key or settings.openrouter_api_key
-        self._client: httpx.AsyncClient | None = None
+    Usage::
 
-    async def _get_client(self) -> httpx.AsyncClient:
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(60.0, connect=10.0),
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://sunschool.xyz",
-                    "X-Title": "Sunschool",
-                },
-            )
-        return self._client
-
-    async def close(self) -> None:
-        """Close the underlying HTTP client."""
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
-            self._client = None
-
-    def _get_model_chain(self, tier: Tier) -> list[ModelConfig]:
-        """Get the fallback chain for the given tier."""
-        if tier == Tier.PAID:
-            return PAID_TIER_MODELS
-        return FREE_TIER_MODELS
-
-    def _estimate_cost(
-        self, model: ModelConfig, prompt_tokens: int, completion_tokens: int
-    ) -> float:
-        """Estimate cost for a call based on token counts."""
-        return (
-            model.input_cost_per_token * prompt_tokens
-            + model.output_cost_per_token * completion_tokens
+        svc = LLMService()
+        resp = await svc.chat(
+            system_message="You are a helpful tutor.",
+            user_message="What is photosynthesis?",
+            tier=Tier.FREE,
         )
+        print(resp.content)
+        await svc.close()
+    """
+
+    def __init__(self) -> None:
+        api_key = settings.openrouter_api_key
+        if not api_key:
+            raise LLMError(
+                "SUNSCHOOL_OPENROUTER_API_KEY is not set. "
+                "Configure it in the environment or .env file."
+            )
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://sunschool.xyz",
+                "X-Title": "Sunschool",
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     async def chat(
         self,
+        *,
         system_message: str,
         user_message: str,
         tier: Tier = Tier.FREE,
+        model_override: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
         response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
-        """Send a chat completion request with automatic fallback.
-
-        Tries each model in the fallback chain. On 402/403, aborts immediately
-        (billing/auth issue). On other errors, falls back to next model.
+        """Send a chat completion request via OpenRouter.
 
         Args:
-            system_message: System prompt for the model.
-            user_message: User message content.
-            tier: FREE or PAID tier for model selection.
-            temperature: Sampling temperature (0.0-2.0).
-            max_tokens: Maximum tokens in response.
-            response_format: Optional JSON schema for structured output.
+            system_message: The system/instruction prompt.
+            user_message: The user/learner prompt.
+            tier: Billing tier (FREE or PAID) — determines the model.
+            model_override: Explicit model slug; overrides tier-based selection.
+            temperature: Sampling temperature (0.0–2.0).
+            max_tokens: Maximum tokens in the completion.
+            response_format: Optional response format spec (e.g. ``{"type": "json_object"}``).
 
         Returns:
-            LLMResponse with content, token counts, and cost estimate.
+            An :class:`LLMResponse` with the completion text and metadata.
 
         Raises:
-            LLMError: If all models in the chain fail.
+            LLMError: On non-retryable HTTP or API errors.
         """
-        chain = self._get_model_chain(tier)
-        last_error: Exception | None = None
-
-        for model_config in chain:
-            try:
-                return await self._call_model(
-                    model_config=model_config,
-                    system_message=system_message,
-                    user_message=user_message,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    response_format=response_format,
-                )
-            except LLMAbortError:
-                # 402/403 -- billing/auth issue, don't try other models
-                raise
-            except LLMError as e:
-                last_error = e
-                logger.warning(
-                    "Model %s failed, trying next in chain: %s",
-                    model_config.model_id,
-                    e,
-                )
-                continue
-
-        raise LLMError(
-            f"All models in {tier.value} chain failed. Last error: {last_error}"
-        )
-
-    async def _call_model(
-        self,
-        model_config: ModelConfig,
-        system_message: str,
-        user_message: str,
-        temperature: float,
-        max_tokens: int,
-        response_format: dict[str, Any] | None = None,
-    ) -> LLMResponse:
-        """Make a single API call to OpenRouter."""
-        client = await self._get_client()
+        model = model_override or _TIER_MODELS[tier]
 
         payload: dict[str, Any] = {
-            "model": model_config.model_id,
+            "model": model,
             "messages": [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},
@@ -239,141 +144,156 @@ class LLMService:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-
-        if response_format:
+        if response_format is not None:
             payload["response_format"] = response_format
 
-        start_time = time.monotonic()
+        return await self._request_with_retry(payload, model)
 
-        try:
-            response = await client.post(OPENROUTER_CHAT_ENDPOINT, json=payload)
-        except httpx.RequestError as e:
-            raise LLMError(f"HTTP request failed for {model_config.model_id}: {e}")
+    async def close(self) -> None:
+        """Shut down the underlying HTTP client."""
+        await self._client.aclose()
 
-        latency_ms = (time.monotonic() - start_time) * 1000
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
-        if response.status_code in ABORT_STATUS_CODES:
-            raise LLMAbortError(
-                f"Billing/auth error ({response.status_code}) for "
-                f"{model_config.model_id}: {response.text}"
-            )
+    async def _request_with_retry(
+        self,
+        payload: dict[str, Any],
+        model: str,
+    ) -> LLMResponse:
+        """Execute the HTTP request with a single retry on transient errors."""
+        last_exc: Exception | None = None
 
-        if response.status_code != 200:
-            raise LLMError(
-                f"API error ({response.status_code}) for "
-                f"{model_config.model_id}: {response.text}"
-            )
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                response = await self._client.post(OPENROUTER_BASE_URL, json=payload)
 
+                if response.status_code in _RETRYABLE_STATUSES and attempt < _MAX_RETRIES:
+                    logger.warning(
+                        "Retryable status %d from OpenRouter (attempt %d/%d, model=%s)",
+                        response.status_code,
+                        attempt + 1,
+                        _MAX_RETRIES + 1,
+                        model,
+                    )
+                    continue
+
+                if response.status_code != 200:
+                    body = response.text
+                    raise LLMError(
+                        f"OpenRouter API error {response.status_code}: {body[:500]}"
+                    )
+
+                return self._parse_response(response, model)
+
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in _RETRYABLE_STATUSES and attempt < _MAX_RETRIES:
+                    logger.warning(
+                        "Retryable HTTP error (attempt %d/%d, model=%s): %s",
+                        attempt + 1,
+                        _MAX_RETRIES + 1,
+                        model,
+                        exc,
+                    )
+                    last_exc = exc
+                    continue
+                raise LLMError(f"OpenRouter HTTP error: {exc}") from exc
+
+            except httpx.TimeoutException as exc:
+                if attempt < _MAX_RETRIES:
+                    logger.warning(
+                        "Timeout on OpenRouter call (attempt %d/%d, model=%s)",
+                        attempt + 1,
+                        _MAX_RETRIES + 1,
+                        model,
+                    )
+                    last_exc = exc
+                    continue
+                raise LLMError(f"OpenRouter request timed out: {exc}") from exc
+
+            except httpx.RequestError as exc:
+                raise LLMError(f"OpenRouter request failed: {exc}") from exc
+
+        # Should not reach here, but safety net
+        raise LLMError(f"OpenRouter request failed after retries: {last_exc}")
+
+    @staticmethod
+    def _parse_response(response: httpx.Response, requested_model: str) -> LLMResponse:
+        """Extract content and usage metadata from an OpenRouter JSON response."""
         try:
             data = response.json()
-        except json.JSONDecodeError as e:
-            raise LLMError(f"Invalid JSON response from {model_config.model_id}: {e}")
+        except Exception as exc:
+            raise LLMError(f"Failed to parse OpenRouter response JSON: {exc}") from exc
 
-        # Extract content from OpenRouter response
+        # Extract content
         try:
             content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError) as e:
+        except (KeyError, IndexError, TypeError) as exc:
             raise LLMError(
-                f"Unexpected response structure from {model_config.model_id}: {e}"
-            )
+                f"Unexpected OpenRouter response structure: {exc}. "
+                f"Response: {str(data)[:500]}"
+            ) from exc
+
+        # Extract model actually used (may differ from requested)
+        model = data.get("model", requested_model)
 
         # Extract token usage
         usage = data.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+        tokens_used = usage.get("total_tokens", 0)
 
-        cost = self._estimate_cost(model_config, prompt_tokens, completion_tokens)
+        # Cost estimate — OpenRouter may include generation cost in response
+        # Fall back to a rough estimate based on token counts
+        cost_estimate = _estimate_cost(data, usage, model)
 
         return LLMResponse(
             content=content,
-            model=model_config.model_id,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
-            cost_estimate=cost,
-            latency_ms=latency_ms,
-            raw_response=data,
+            model=model,
+            tokens_used=tokens_used,
+            cost_estimate=cost_estimate,
         )
 
-    # --- Structured response parsing ---
 
-    def parse_lesson(self, response: LLMResponse) -> ParsedLesson:
-        """Parse a lesson generation response into structured data."""
+# ---------------------------------------------------------------------------
+# Cost estimation helper
+# ---------------------------------------------------------------------------
+
+# Rough per-1M-token pricing for cost estimation when OpenRouter
+# does not include explicit cost data in the response.
+_COST_PER_1M_INPUT: dict[str, float] = {
+    "google/gemini-2.0-flash-exp:free": 0.0,
+    "google/gemini-2.0-flash-001": 0.1,
+    "anthropic/claude-sonnet-4-20250514": 3.0,
+}
+_COST_PER_1M_OUTPUT: dict[str, float] = {
+    "google/gemini-2.0-flash-exp:free": 0.0,
+    "google/gemini-2.0-flash-001": 0.4,
+    "anthropic/claude-sonnet-4-20250514": 15.0,
+}
+
+
+def _estimate_cost(
+    data: dict[str, Any],
+    usage: dict[str, Any],
+    model: str,
+) -> float:
+    """Return a dollar cost estimate for the LLM call.
+
+    Prefers the ``total_cost`` field that OpenRouter may include. Falls back
+    to computing from token counts and known pricing tables.
+    """
+    # OpenRouter sometimes returns cost directly
+    if "total_cost" in data:
         try:
-            data = json.loads(response.content)
-            return ParsedLesson(
-                title=data.get("title", ""),
-                content=data.get("content", ""),
-                key_concepts=data.get("key_concepts", []),
-                vocabulary=data.get("vocabulary", []),
-                suggested_activities=data.get("suggested_activities", []),
-            )
-        except (json.JSONDecodeError, AttributeError):
-            # If not JSON, treat entire content as the lesson
-            return ParsedLesson(
-                title="Lesson",
-                content=response.content,
-                key_concepts=[],
-                vocabulary=[],
-                suggested_activities=[],
-            )
+            return float(data["total_cost"])
+        except (ValueError, TypeError):
+            pass
 
-    def parse_quiz(self, response: LLMResponse) -> ParsedQuiz:
-        """Parse a quiz generation response into structured data."""
-        try:
-            data = json.loads(response.content)
-            questions = []
-            for q in data.get("questions", []):
-                questions.append(
-                    QuizQuestion(
-                        question=q["question"],
-                        options=q.get("options", []),
-                        correct_index=q.get("correct_index", 0),
-                        explanation=q.get("explanation", ""),
-                    )
-                )
-            return ParsedQuiz(questions=questions)
-        except (json.JSONDecodeError, KeyError, AttributeError) as e:
-            raise LLMParseError(f"Failed to parse quiz response: {e}")
+    # Estimate from token counts
+    prompt_tokens = usage.get("prompt_tokens", 0)
+    completion_tokens = usage.get("completion_tokens", 0)
 
-    def parse_score(self, response: LLMResponse) -> AnswerScore:
-        """Parse an answer scoring response into structured data."""
-        try:
-            data = json.loads(response.content)
-            return AnswerScore(
-                score=float(data.get("score", 0.0)),
-                feedback=data.get("feedback", ""),
-                concepts_demonstrated=data.get("concepts_demonstrated", []),
-                points_awarded=int(data.get("points_awarded", 0)),
-            )
-        except (json.JSONDecodeError, KeyError, AttributeError) as e:
-            raise LLMParseError(f"Failed to parse score response: {e}")
+    input_rate = _COST_PER_1M_INPUT.get(model, 1.0)
+    output_rate = _COST_PER_1M_OUTPUT.get(model, 3.0)
 
-    def parse_validation(self, response: LLMResponse) -> ContentValidation:
-        """Parse a content validation response into structured data."""
-        try:
-            data = json.loads(response.content)
-            return ContentValidation(
-                is_safe=bool(data.get("is_safe", True)),
-                is_grade_appropriate=bool(data.get("is_grade_appropriate", True)),
-                readability_score=float(data.get("readability_score", 1.0)),
-                issues=data.get("issues", []),
-            )
-        except (json.JSONDecodeError, KeyError, AttributeError) as e:
-            raise LLMParseError(f"Failed to parse validation response: {e}")
-
-
-# --- Exceptions ---
-
-
-class LLMError(Exception):
-    """Base exception for LLM service errors."""
-
-
-class LLMAbortError(LLMError):
-    """Raised on 402/403 -- billing/auth issue, do not retry."""
-
-
-class LLMParseError(LLMError):
-    """Raised when response parsing fails."""
+    return (prompt_tokens * input_rate + completion_tokens * output_rate) / 1_000_000

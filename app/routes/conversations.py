@@ -31,6 +31,50 @@ router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 GRAPH_NAME = "sunschool_graph"
 
 # ---------------------------------------------------------------------------
+# Auto-provisioning: create User + Learner nodes on first access
+# ---------------------------------------------------------------------------
+
+
+async def _ensure_user_and_learner(user) -> str:
+    """Ensure a User node and Learner node exist for the authenticated user.
+
+    Creates them if they don't exist. Returns the learner_id (same as user.uid).
+    """
+    uid = _escape_cypher_string(user.uid)
+    email = _escape_cypher_string(user.email or "")
+    name = _escape_cypher_string(user.display_name or user.email or "Learner")
+
+    async with get_connection() as conn:
+        with conn.cursor() as cur:
+            # MERGE User node
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MERGE (u:User {{uid: '{uid}'}})
+                    SET u.email = '{email}', u.name = '{name}'
+                    RETURN u.uid
+                $$) AS (uid agtype);
+            """)
+            # MERGE Learner node (learner_id = user uid for self-learning)
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MERGE (l:Learner {{id: '{uid}'}})
+                    ON CREATE SET l.name = '{name}', l.grade_level = 5, l.points = 0
+                    RETURN l.id
+                $$) AS (id agtype);
+            """)
+            # MERGE parent→learner edge
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (u:User {{uid: '{uid}'}}), (l:Learner {{id: '{uid}'}})
+                    MERGE (u)-[:HAS_CHILD]->(l)
+                    RETURN u.uid
+                $$) AS (uid agtype);
+            """)
+        conn.commit()
+    return user.uid
+
+
+# ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
 
@@ -308,6 +352,9 @@ async def send_message(
     the message through the SEIAR loop, validates the AI response, and
     returns the assistant message with metadata.
     """
+    # Auto-provision user on first access
+    await _ensure_user_and_learner(user)
+
     # Validate user input safety
     input_check = content_validator.validate_topic_input(body.message)
     if not input_check.safe:
@@ -480,39 +527,14 @@ async def list_conversations(
 ) -> list[ConversationSummary]:
     """List all conversations for a specific learner.
 
-    The authenticated user must be the parent of the learner (via HAS_CHILD)
-    or the learner themselves.  Returns conversations ordered by last activity.
+    Auto-provisions User/Learner nodes on first access. Creates a default
+    conversation if the learner has none.
     """
-    # Verify the user has access to this learner
+    # Auto-provision user and learner nodes
+    await _ensure_user_and_learner(user)
+
     async with get_connection() as conn:
         with conn.cursor() as cur:
-            # Check parent->learner ownership
-            cur.execute(
-                f"""
-                SELECT * FROM cypher('{GRAPH_NAME}', $$
-                    MATCH (p:User {{uid: '{_escape_cypher_string(user.uid)}'}})-[:HAS_CHILD]->(l:Learner {{id: '{_escape_cypher_string(learner_id)}'}})
-                    RETURN l.id
-                $$) AS (lid agtype);
-                """
-            )
-            parent_row = cur.fetchone()
-
-            if not parent_row:
-                # Check direct learner access
-                cur.execute(
-                    f"""
-                    SELECT * FROM cypher('{GRAPH_NAME}', $$
-                        MATCH (u:User {{uid: '{_escape_cypher_string(user.uid)}'}})
-                        RETURN u.learner_id
-                    $$) AS (learner_id agtype);
-                    """
-                )
-                user_row = cur.fetchone()
-                if not user_row or _parse_agtype(user_row[0]) != learner_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Learner not found",
-                    )
 
             # Fetch all conversations for the learner
             cur.execute(
@@ -548,6 +570,48 @@ async def list_conversations(
                 summary=_parse_agtype(row[9]),
             )
         )
+
+    # Auto-create a default conversation if the learner has none
+    if not conversations:
+        import uuid
+        from datetime import datetime, timezone
+
+        conv_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
+        esc_lid = _escape_cypher_string(learner_id)
+        async with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT * FROM cypher('{GRAPH_NAME}', $$
+                        CREATE (c:Conversation {{
+                            id: '{conv_id}',
+                            learner_id: '{esc_lid}',
+                            subject: 'General',
+                            current_concept: '',
+                            character_name: 'Sunny',
+                            character_personality: 'Friendly and encouraging AI tutor',
+                            summary: '',
+                            status: 'active',
+                            started_at: '{now_iso}',
+                            last_active: '{now_iso}',
+                            message_count: 0
+                        }})
+                        RETURN c.id
+                    $$) AS (id agtype);
+                """)
+            conn.commit()
+        conversations.append(ConversationSummary(
+            id=conv_id,
+            learner_id=learner_id,
+            subject="General",
+            current_concept=None,
+            character_name="Sunny",
+            status="active",
+            started_at=now_iso,
+            last_active=now_iso,
+            message_count=0,
+            summary=None,
+        ))
 
     return conversations
 

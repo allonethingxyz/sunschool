@@ -34,10 +34,13 @@ def get_pool() -> pool.ThreadedConnectionPool:
     """Get or create the connection pool."""
     global _connection_pool
     if _connection_pool is None:
+        dsn = settings.database_url
+        print(f"[DB] Creating connection pool with DSN host: {dsn.split('@')[1].split('/')[0] if '@' in dsn else 'unknown'}")
         _connection_pool = pool.ThreadedConnectionPool(
             minconn=1,
             maxconn=10,
-            dsn=settings.database_url,
+            dsn=dsn,
+            connect_timeout=5,
         )
     return _connection_pool
 

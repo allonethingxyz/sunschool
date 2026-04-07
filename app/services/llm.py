@@ -45,7 +45,7 @@ class Tier(str, enum.Enum):
 
 # Model slugs per tier
 _TIER_MODELS: dict[Tier, str] = {
-    Tier.FREE: "google/gemini-2.0-flash-exp:free",
+    Tier.FREE: "google/gemini-2.0-flash-001",
     Tier.PAID: "anthropic/claude-sonnet-4-20250514",
 }
 
@@ -261,12 +261,10 @@ class LLMService:
 # Rough per-1M-token pricing for cost estimation when OpenRouter
 # does not include explicit cost data in the response.
 _COST_PER_1M_INPUT: dict[str, float] = {
-    "google/gemini-2.0-flash-exp:free": 0.0,
     "google/gemini-2.0-flash-001": 0.1,
     "anthropic/claude-sonnet-4-20250514": 3.0,
 }
 _COST_PER_1M_OUTPUT: dict[str, float] = {
-    "google/gemini-2.0-flash-exp:free": 0.0,
     "google/gemini-2.0-flash-001": 0.4,
     "anthropic/claude-sonnet-4-20250514": 15.0,
 }

@@ -1,0 +1,77 @@
+name: Sync to sunschool-deployed-private
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "static/**"
+      - "tests/**"
+      - "Dockerfile"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - "railway.json"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sunschool (source)
+        uses: actions/checkout@v4
+        with:
+          path: sunschool
+
+      - name: Checkout sunschool-deployed-private (target)
+        uses: actions/checkout@v4
+        with:
+          repository: allonethingxyz/sunschool-deployed-private
+          token: ${{ secrets.DEPLOYED_REPO_TOKEN }}
+          path: sunschool-deployed-private
+
+      - name: Sync files with rsync
+        run: |
+          rsync -av --delete \
+            --exclude='.git' \
+            --exclude='__pycache__' \
+            --exclude='.env' \
+            --exclude='admin-credentials.txt' \
+            --exclude='node_modules' \
+            --exclude='app/main.py' \
+            sunschool/app/ sunschool-deployed-private/app/
+
+          rsync -av --delete \
+            --exclude='.git' \
+            --exclude='__pycache__' \
+            --exclude='node_modules' \
+            sunschool/static/ sunschool-deployed-private/static/
+
+          rsync -av --delete \
+            --exclude='.git' \
+            --exclude='__pycache__' \
+            --exclude='node_modules' \
+            sunschool/tests/ sunschool-deployed-private/tests/
+
+          # Sync individual root files
+          cp sunschool/Dockerfile sunschool-deployed-private/Dockerfile
+          cp sunschool/requirements.txt sunschool-deployed-private/requirements.txt
+          cp sunschool/pyproject.toml sunschool-deployed-private/pyproject.toml
+          cp sunschool/railway.json sunschool-deployed-private/railway.json
+
+      - name: Commit and push changes
+        working-directory: sunschool-deployed-private
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes to sync."
+            exit 0
+          fi
+
+          COMMIT_SHA=$(cd ../sunschool && git rev-parse --short HEAD)
+          git commit -m "sync: update from sunschool OSS @ ${COMMIT_SHA}"
+          git push origin main

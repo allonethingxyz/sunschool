@@ -1,7 +1,7 @@
 """
 004_age_graph_schema.py — Initialize Apache AGE graph schema for Sunschool.
 
-Sets up the AGE extension, creates the 'sunschool' graph with all node labels,
+Sets up the AGE extension, creates the 'sunschool_graph' graph with all node labels,
 creates the relational prompt_audit table, and inserts the default MVP tutor
 Character node.
 
@@ -37,9 +37,9 @@ CREATE_GRAPH_SQL = """
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM ag_catalog.ag_graph WHERE name = 'sunschool'
+        SELECT 1 FROM ag_catalog.ag_graph WHERE name = 'sunschool_graph'
     ) THEN
-        PERFORM create_graph('sunschool');
+        PERFORM create_graph('sunschool_graph');
     END IF;
 END
 $$;
@@ -87,13 +87,13 @@ PROMPT_AUDIT_INDEXES = [
 # -- Step 6: Default Character node (MVP tutor) ---------------------------
 
 DEFAULT_CHARACTER_CYPHER = """
-SELECT * FROM cypher('sunschool', $$
-    MERGE (c:Character {id: 'default-tutor'})
+SELECT * FROM cypher('sunschool_graph', $$
+    MERGE (c:Character {id: 'sunny'})
     ON CREATE SET
         c.name = 'Sunny',
         c.era = 'modern',
         c.expertise = '["general"]',
-        c.personality_prompt = 'You are Sunny, a friendly and encouraging AI tutor...',
+        c.personality_prompt = 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
         c.knowledge_bounds = '[]',
         c.active = true
     RETURN c
@@ -111,11 +111,11 @@ def _create_label_if_not_exists(cur, label: str) -> None:
         BEGIN
             IF NOT EXISTS (
                 SELECT 1 FROM ag_catalog.ag_label
-                WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = 'sunschool')
+                WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = 'sunschool_graph')
                   AND name = '{label}'
                   AND kind = 'v'
             ) THEN
-                PERFORM ag_catalog.create_vlabel('sunschool', '{label}');
+                PERFORM ag_catalog.create_vlabel('sunschool_graph', '{label}');
             END IF;
         END
         $$;
@@ -144,9 +144,9 @@ def run_migration():
             logger.info("AGE loaded, search_path set.")
 
             # 3. Create graph
-            logger.info("=== Step 3: Creating 'sunschool' graph ===")
+            logger.info("=== Step 3: Creating 'sunschool_graph' graph ===")
             cur.execute(CREATE_GRAPH_SQL)
-            logger.info("sunschool graph ensured.")
+            logger.info("sunschool_graph graph ensured.")
 
             # 4. Create all node labels
             logger.info("=== Step 4: Creating node labels ===")

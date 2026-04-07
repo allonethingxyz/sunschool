@@ -120,6 +120,80 @@ async def run_migrations() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Admin: graph schema migration (005)
+# ---------------------------------------------------------------------------
+_GRAPH_NAME = "sunschool_graph"
+
+_ALL_NODE_LABELS = [
+    "Character", "Conversation", "Lesson", "Concept",
+    "Quiz", "Media", "Learner", "Gate", "User", "Standard",
+]
+
+
+@app.post("/api/admin/migrate-graph")
+async def migrate_graph():
+    """Add missing node labels and default Character to the AGE graph."""
+    import psycopg2
+
+    conn = psycopg2.connect(settings.database_url)
+    conn.autocommit = True
+    results = []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("LOAD 'age'; SET search_path = ag_catalog, \"$user\", public;")
+
+            cur.execute(
+                "SELECT 1 FROM ag_catalog.ag_graph WHERE name = %s", (_GRAPH_NAME,)
+            )
+            if not cur.fetchone():
+                return {"error": f"Graph '{_GRAPH_NAME}' does not exist"}
+
+            for label in _ALL_NODE_LABELS:
+                cur.execute(f"""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM ag_catalog.ag_label
+                            WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = '{_GRAPH_NAME}')
+                              AND name = '{label}' AND kind = 'v'
+                        ) THEN
+                            PERFORM ag_catalog.create_vlabel('{_GRAPH_NAME}', '{label}');
+                        END IF;
+                    END $$;
+                """)
+                results.append(f"Label '{label}' ensured")
+
+            cur.execute(f"""
+                SELECT * FROM cypher('{_GRAPH_NAME}', $$
+                    MERGE (c:Character {{id: 'sunny'}})
+                    ON CREATE SET
+                        c.name = 'Sunny',
+                        c.era = 'modern',
+                        c.expertise = '["general"]',
+                        c.personality_prompt = 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
+                        c.knowledge_bounds = '[]',
+                        c.clockchain_refs = '[]',
+                        c.active = true
+                    RETURN c
+                $$) AS (v agtype);
+            """)
+            results.append("Character 'sunny' ensured")
+
+            cur.execute(f"""
+                SELECT name FROM ag_catalog.ag_label
+                WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = '{_GRAPH_NAME}')
+                  AND kind = 'v'
+                ORDER BY name;
+            """)
+            existing = [r[0] for r in cur.fetchall()]
+            results.append(f"All labels: {existing}")
+    finally:
+        conn.close()
+
+    return {"ok": True, "results": results}
+
+
+# ---------------------------------------------------------------------------
 # Static files — serve the frontend SPA
 # ---------------------------------------------------------------------------
 app.mount("/static", StaticFiles(directory="static"), name="static")

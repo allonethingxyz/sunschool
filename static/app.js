@@ -284,10 +284,14 @@ async function fetchMastery(learnerId) {
   }
 }
 
-async function fetchAuditMessages(conversationId) {
+async function fetchAuditMessages(learnerId, promptType) {
   try {
-    const data = await apiGet(`/api/conversations/${conversationId}/messages?page=1&page_size=200`);
-    state.auditMessages = data.messages || [];
+    let url = `/api/audit/prompts?learner_id=${encodeURIComponent(learnerId)}&page=1&page_size=200`;
+    if (promptType) {
+      url += `&prompt_type=${encodeURIComponent(promptType)}`;
+    }
+    const data = await apiGet(url);
+    state.auditMessages = data.entries || [];
   } catch (err) {
     console.error('fetchAuditMessages:', err);
     state.auditMessages = [];
@@ -515,17 +519,21 @@ function renderParentDashboard() {
 }
 
 function renderAuditLog() {
-  const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
-  const conversationId = params.get('conversation') || state.currentConversationId;
-
   let filtered = state.auditMessages;
   if (state.auditFilter.role !== 'all') {
-    filtered = filtered.filter(m => m.role === state.auditFilter.role);
+    filtered = filtered.filter(m => m.prompt_type === state.auditFilter.role);
   }
   if (state.auditFilter.search) {
     const q = state.auditFilter.search.toLowerCase();
-    filtered = filtered.filter(m => m.content.toLowerCase().includes(q));
+    filtered = filtered.filter(m =>
+      (m.user_message || '').toLowerCase().includes(q) ||
+      (m.response_preview || '').toLowerCase().includes(q) ||
+      (m.system_message || '').toLowerCase().includes(q)
+    );
   }
+
+  // Collect unique prompt types for the filter dropdown
+  const promptTypes = [...new Set(state.auditMessages.map(m => m.prompt_type).filter(Boolean))];
 
   return `
     ${renderNavbar('/parent/audit')}
@@ -535,31 +543,33 @@ function renderAuditLog() {
 
       <div class="audit-filters">
         <select onchange="state.auditFilter.role=this.value;render()">
-          <option value="all" ${state.auditFilter.role === 'all' ? 'selected' : ''}>All Roles</option>
-          <option value="user" ${state.auditFilter.role === 'user' ? 'selected' : ''}>User</option>
-          <option value="assistant" ${state.auditFilter.role === 'assistant' ? 'selected' : ''}>Assistant</option>
-          <option value="system" ${state.auditFilter.role === 'system' ? 'selected' : ''}>System</option>
+          <option value="all" ${state.auditFilter.role === 'all' ? 'selected' : ''}>All Types</option>
+          ${promptTypes.map(t => `<option value="${escapeAttr(t)}" ${state.auditFilter.role === t ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}
         </select>
         <input
           type="text"
-          placeholder="Search messages..."
+          placeholder="Search prompts..."
           value="${escapeAttr(state.auditFilter.search)}"
           oninput="state.auditFilter.search=this.value;render()"
         />
       </div>
 
       ${filtered.length === 0
-        ? '<div class="empty-state"><p>No messages found.</p></div>'
+        ? '<div class="empty-state"><p>No prompt audit entries found.</p></div>'
         : `<table class="audit-table">
             <thead>
-              <tr><th>Time</th><th>Role</th><th>Content</th></tr>
+              <tr><th>Time</th><th>Type</th><th>Model</th><th>Prompt</th><th>Response</th><th>Tokens</th><th>Cost</th></tr>
             </thead>
             <tbody>
               ${filtered.map(m => `
                 <tr>
                   <td style="white-space:nowrap;">${m.created_at ? new Date(m.created_at).toLocaleString() : '-'}</td>
-                  <td><span class="role-badge ${m.role}">${m.role}</span></td>
-                  <td style="max-width:500px;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(m.content.slice(0, 300))}${m.content.length > 300 ? '...' : ''}</td>
+                  <td><span class="role-badge">${escapeHtml(m.prompt_type || '-')}</span></td>
+                  <td>${escapeHtml(m.model || '-')}</td>
+                  <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">${escapeHtml((m.user_message || '').slice(0, 200))}${(m.user_message || '').length > 200 ? '...' : ''}</td>
+                  <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">${escapeHtml((m.response_preview || '').slice(0, 200))}${(m.response_preview || '').length > 200 ? '...' : ''}</td>
+                  <td>${m.tokens_used != null ? m.tokens_used : '-'}</td>
+                  <td>${m.cost_estimate != null ? '$' + Number(m.cost_estimate).toFixed(4) : '-'}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -758,11 +768,10 @@ async function onRouteChange() {
 
   if (route === '/parent/audit' || route.startsWith('/parent/audit?')) {
     const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
-    const convId = params.get('conversation') || state.currentConversationId;
-    if (convId) {
-      await fetchAuditMessages(convId);
-    } else if (state.conversations.length > 0) {
-      await fetchAuditMessages(state.conversations[0].id);
+    const learnerId = params.get('learner') || state.currentLearnerId;
+    const promptType = params.get('prompt_type') || null;
+    if (learnerId) {
+      await fetchAuditMessages(learnerId, promptType);
     }
     render();
     return;

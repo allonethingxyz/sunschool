@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.db import get_connection
 from app.middleware.auth import CurrentUser
-from app.routes import conversations, mastery
+from app.routes import audit, conversations, mastery
 
 logger = logging.getLogger("sunschool")
 
@@ -40,6 +40,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # API routers
 # ---------------------------------------------------------------------------
+app.include_router(audit.router)
 app.include_router(conversations.router)
 app.include_router(mastery.router)
 
@@ -120,11 +121,11 @@ async def run_migrations() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Admin: graph schema migration (005)
+# Admin: graph schema migration
 # ---------------------------------------------------------------------------
-_GRAPH_NAME = "sunschool_graph"
+GRAPH_NAME = "sunschool_graph"
 
-_ALL_NODE_LABELS = [
+_MIGRATION_LABELS = [
     "Character", "Conversation", "Lesson", "Concept",
     "Quiz", "Media", "Learner", "Gate", "User", "Standard",
 ]
@@ -132,7 +133,7 @@ _ALL_NODE_LABELS = [
 
 @app.post("/api/admin/migrate-graph")
 async def migrate_graph():
-    """Add missing node labels and default Character to the AGE graph."""
+    """Run graph schema migration — add missing node labels and default Character."""
     import psycopg2
 
     conn = psycopg2.connect(settings.database_url)
@@ -142,57 +143,50 @@ async def migrate_graph():
         with conn.cursor() as cur:
             cur.execute("LOAD 'age'; SET search_path = ag_catalog, \"$user\", public;")
 
+            # Verify graph exists
             cur.execute(
-                "SELECT 1 FROM ag_catalog.ag_graph WHERE name = %s", (_GRAPH_NAME,)
+                "SELECT 1 FROM ag_catalog.ag_graph WHERE name = %s", (GRAPH_NAME,)
             )
             if not cur.fetchone():
-                return {"error": f"Graph '{_GRAPH_NAME}' does not exist"}
+                return {"error": f"Graph '{GRAPH_NAME}' does not exist"}
 
-            for label in _ALL_NODE_LABELS:
+            # Create all node labels
+            for label in _MIGRATION_LABELS:
                 cur.execute(f"""
                     DO $$
                     BEGIN
                         IF NOT EXISTS (
                             SELECT 1 FROM ag_catalog.ag_label
-                            WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = '{_GRAPH_NAME}')
+                            WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = '{GRAPH_NAME}')
                               AND name = '{label}' AND kind = 'v'
                         ) THEN
-                            PERFORM ag_catalog.create_vlabel('{_GRAPH_NAME}', '{label}');
+                            PERFORM ag_catalog.create_vlabel('{GRAPH_NAME}', '{label}');
                         END IF;
                     END $$;
                 """)
                 results.append(f"Label '{label}' ensured")
 
-            # Check if Sunny character exists
+            # Create default Sunny character
             cur.execute(f"""
-                SELECT * FROM cypher('{_GRAPH_NAME}', $$
-                    MATCH (c:Character {{id: 'sunny'}})
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MERGE (c:Character {{id: 'sunny'}})
+                    ON CREATE SET
+                        c.name = 'Sunny',
+                        c.era = 'modern',
+                        c.expertise = '["general"]',
+                        c.personality_prompt = 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
+                        c.knowledge_bounds = '[]',
+                        c.clockchain_refs = '[]',
+                        c.active = true
                     RETURN c
                 $$) AS (v agtype);
             """)
-            if not cur.fetchone():
-                cur.execute(f"""
-                    SELECT * FROM cypher('{_GRAPH_NAME}', $$
-                        CREATE (c:Character {{
-                            id: 'sunny',
-                            name: 'Sunny',
-                            era: 'modern',
-                            expertise: '["general"]',
-                            personality_prompt: 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
-                            knowledge_bounds: '[]',
-                            clockchain_refs: '[]',
-                            active: true
-                        }})
-                        RETURN c
-                    $$) AS (v agtype);
-                """)
-                results.append("Character 'sunny' created")
-            else:
-                results.append("Character 'sunny' already exists")
+            results.append("Character 'sunny' ensured")
 
+            # List all labels for verification
             cur.execute(f"""
                 SELECT name FROM ag_catalog.ag_label
-                WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = '{_GRAPH_NAME}')
+                WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = '{GRAPH_NAME}')
                   AND kind = 'v'
                 ORDER BY name;
             """)

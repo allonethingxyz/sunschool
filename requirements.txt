@@ -1,4 +1,5 @@
 # Pinned production dependencies — keep in sync with pyproject.toml
+# v2: Firebase removed, Google OAuth only
 fastapi==0.115.12
 uvicorn[standard]==0.34.2
 psycopg2-binary==2.9.10

@@ -102,8 +102,10 @@ async def get_learner_points(learner_id: str) -> PointsResponse:
     try:
         data = await get_points(learner_id)
     except ValueError:
-        # New user — no learner node yet, return zero points
-        return PointsResponse(learner_id=learner_id, name="", points=0)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Learner {learner_id} not found",
+        )
     except Exception:
         logger.exception("Error fetching points for learner %s", learner_id)
         raise HTTPException(
@@ -135,8 +137,10 @@ async def get_learner_mastery(learner_id: str) -> MasteryResponse:
     try:
         data = await get_mastery(learner_id)
     except ValueError:
-        # New user — no mastery data yet
-        return MasteryResponse(learner_id=learner_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Learner {learner_id} not found",
+        )
     except Exception:
         logger.exception("Error fetching mastery for learner %s", learner_id)
         raise HTTPException(

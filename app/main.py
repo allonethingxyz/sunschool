@@ -107,6 +107,45 @@ CREATE TABLE IF NOT EXISTS parent_guidelines (
 );
 """
 
+CONVERSATION_MESSAGES_DDL = """
+CREATE TABLE IF NOT EXISTS conversation_messages (
+    id UUID PRIMARY KEY,
+    conversation_id UUID NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+    content TEXT NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+"""
+
+CONVERSATION_MESSAGES_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_conv_msg_conversation ON conversation_messages (conversation_id);",
+    "CREATE INDEX IF NOT EXISTS idx_conv_msg_created ON conversation_messages (conversation_id, created_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_conv_msg_role ON conversation_messages (conversation_id, role);",
+]
+
+PROMPT_AUDIT_DDL = """
+CREATE TABLE IF NOT EXISTS prompt_audit (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    learner_id TEXT,
+    conversation_id TEXT,
+    prompt_type TEXT,
+    system_message TEXT,
+    user_message TEXT,
+    model TEXT,
+    response_preview TEXT,
+    tokens_used INT,
+    cost_estimate DECIMAL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+"""
+
+PROMPT_AUDIT_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_prompt_audit_learner ON prompt_audit (learner_id);",
+    "CREATE INDEX IF NOT EXISTS idx_prompt_audit_conversation ON prompt_audit (conversation_id);",
+    "CREATE INDEX IF NOT EXISTS idx_prompt_audit_created ON prompt_audit (created_at);",
+]
+
 
 @app.post("/api/admin/migrate")
 async def run_migrations() -> dict:
@@ -116,6 +155,18 @@ async def run_migrations() -> dict:
         with conn.cursor() as cur:
             cur.execute(PARENT_GUIDELINES_DDL)
             results.append("parent_guidelines table ensured")
+
+            cur.execute(CONVERSATION_MESSAGES_DDL)
+            results.append("conversation_messages table ensured")
+            for idx_sql in CONVERSATION_MESSAGES_INDEXES:
+                cur.execute(idx_sql)
+            results.append("conversation_messages indexes ensured")
+
+            cur.execute(PROMPT_AUDIT_DDL)
+            results.append("prompt_audit table ensured")
+            for idx_sql in PROMPT_AUDIT_INDEXES:
+                cur.execute(idx_sql)
+            results.append("prompt_audit indexes ensured")
         conn.commit()
     return {"ok": True, "migrations": results}
 

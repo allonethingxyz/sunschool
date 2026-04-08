@@ -192,7 +192,7 @@ _MIGRATION_LABELS = [
 
 @app.post("/api/admin/migrate-graph")
 async def migrate_graph():
-    """Run graph schema migration — add missing node labels and default Character."""
+    """Run graph schema migration — create extension, graph, labels, and default Character."""
     import psycopg2
 
     conn = psycopg2.connect(settings.database_url)
@@ -200,9 +200,23 @@ async def migrate_graph():
     results = []
     try:
         with conn.cursor() as cur:
+            # Ensure AGE extension exists
+            cur.execute("CREATE EXTENSION IF NOT EXISTS age;")
+            results.append("AGE extension ensured")
+
             cur.execute("LOAD 'age'; SET search_path = ag_catalog, \"$user\", public;")
 
-            # Verify graph exists
+            # Create graph if it doesn't exist
+            cur.execute(
+                "SELECT 1 FROM ag_catalog.ag_graph WHERE name = %s", (GRAPH_NAME,)
+            )
+            if not cur.fetchone():
+                cur.execute(f"SELECT create_graph('{GRAPH_NAME}');")
+                results.append(f"Graph '{GRAPH_NAME}' created")
+            else:
+                results.append(f"Graph '{GRAPH_NAME}' already exists")
+
+            # Verify graph exists (for the label creation below)
             cur.execute(
                 "SELECT 1 FROM ag_catalog.ag_graph WHERE name = %s", (GRAPH_NAME,)
             )

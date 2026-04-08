@@ -48,14 +48,28 @@ async def _ensure_user_and_learner(user) -> str:
 
     async with get_connection() as conn:
         with conn.cursor() as cur:
-            # MERGE User node
+            # Ensure User node exists (MATCH or CREATE — AGE MERGE can be unreliable)
             cur.execute(f"""
                 SELECT * FROM cypher('{GRAPH_NAME}', $$
-                    MERGE (u:User {{uid: '{uid}'}})
-                    SET u.email = '{email}', u.name = '{name}'
+                    MATCH (u:User {{uid: '{uid}'}})
                     RETURN u.uid
                 $$) AS (uid agtype);
             """)
+            if not cur.fetchone():
+                cur.execute(f"""
+                    SELECT * FROM cypher('{GRAPH_NAME}', $$
+                        CREATE (u:User {{uid: '{uid}', email: '{email}', name: '{name}'}})
+                        RETURN u.uid
+                    $$) AS (uid agtype);
+                """)
+            else:
+                cur.execute(f"""
+                    SELECT * FROM cypher('{GRAPH_NAME}', $$
+                        MATCH (u:User {{uid: '{uid}'}})
+                        SET u.email = '{email}', u.name = '{name}'
+                        RETURN u.uid
+                    $$) AS (uid agtype);
+                """)
 
             # Check if Learner exists
             cur.execute(f"""

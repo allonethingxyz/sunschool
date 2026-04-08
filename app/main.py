@@ -239,22 +239,30 @@ async def migrate_graph():
                 """)
                 results.append(f"Label '{label}' ensured")
 
-            # Create default Sunny character
+            # Create default Sunny character (if not exists)
             cur.execute(f"""
                 SELECT * FROM cypher('{GRAPH_NAME}', $$
-                    MERGE (c:Character {{id: 'sunny'}})
-                    ON CREATE SET
-                        c.name = 'Sunny',
-                        c.era = 'modern',
-                        c.expertise = '["general"]',
-                        c.personality_prompt = 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
-                        c.knowledge_bounds = '[]',
-                        c.clockchain_refs = '[]',
-                        c.active = true
-                    RETURN c
-                $$) AS (v agtype);
+                    MATCH (c:Character {{id: 'sunny'}})
+                    RETURN c.id
+                $$) AS (id agtype);
             """)
-            results.append("Character 'sunny' ensured")
+            if not cur.fetchone():
+                cur.execute(f"""
+                    SELECT * FROM cypher('{GRAPH_NAME}', $$
+                        CREATE (c:Character {{
+                            id: 'sunny',
+                            name: 'Sunny',
+                            era: 'modern',
+                            expertise: '["general"]',
+                            personality_prompt: 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
+                            active: true
+                        }})
+                        RETURN c.id
+                    $$) AS (id agtype);
+                """)
+                results.append("Character 'sunny' created")
+            else:
+                results.append("Character 'sunny' already exists")
 
             # List all labels for verification
             cur.execute(f"""

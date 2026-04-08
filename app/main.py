@@ -338,12 +338,7 @@ async def reset_user(body: dict) -> dict:
             """)
             results.append("user deleted")
 
-            # Delete conversation messages
-            cur.execute(
-                "DELETE FROM conversation_messages WHERE conversation_id IN "
-                "(SELECT conversation_id FROM prompt_audit WHERE learner_id = %s)",
-                (uid,),
-            )
+            # Delete relational data
             cur.execute("DELETE FROM prompt_audit WHERE learner_id = %s", (uid,))
             cur.execute("DELETE FROM parent_guidelines WHERE user_uid = %s", (uid,))
             results.append("relational data deleted")

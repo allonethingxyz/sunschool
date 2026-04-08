@@ -350,13 +350,23 @@ function googleIcon() {
 }
 
 function renderLogin() {
-  // Render the Google Sign-In button into the container after DOM update
+  // Render the Google Sign-In button after DOM update
   requestAnimationFrame(() => {
     const btnContainer = document.getElementById('g-signin-btn');
-    if (btnContainer && authReady && typeof google !== 'undefined') {
+    if (btnContainer && authReady && typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+      // Ensure GSI is initialized before rendering
+      if (!window._gsiInitDone) {
+        google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: handleCredentialResponse,
+          auto_select: true,
+        });
+        window._gsiInitDone = true;
+      }
       google.accounts.id.renderButton(btnContainer, {
         theme: 'outline',
         size: 'large',
+        width: 300,
         text: 'signin_with',
         shape: 'rectangular',
       });
@@ -366,13 +376,9 @@ function renderLogin() {
   return `
     <div class="login-page">
       <div class="login-card">
-        <h1>Sunschool</h1>
+        <h1>&#9728; Sunschool</h1>
         <p>Learn anything with your AI tutor</p>
-        <div id="g-signin-btn" style="display:flex;justify-content:center;margin-top:1rem;"></div>
-        <button class="google-btn" onclick="signInWithGoogle()" style="margin-top:0.5rem;">
-          ${googleIcon()}
-          Sign in with Google
-        </button>
+        <div id="g-signin-btn" style="display:flex;justify-content:center;margin-top:1.5rem;min-height:44px;"></div>
       </div>
     </div>
   `;
@@ -797,20 +803,26 @@ async function onRouteChange() {
 async function init() {
   await initAuth();
 
-  // Initialize Google Sign-In once the GSI library is loaded
-  function initGoogleSignIn() {
-    if (typeof google !== 'undefined' && google.accounts && authReady) {
-      google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: handleCredentialResponse,
-        auto_select: true,
-      });
-    } else {
-      // GSI library not yet loaded, retry shortly
-      setTimeout(initGoogleSignIn, 100);
+  // Wait for GSI library to load, then initialize (up to 5s)
+  await new Promise(resolve => {
+    let attempts = 0;
+    function tryInit() {
+      if (typeof google !== 'undefined' && google.accounts && google.accounts.id && authReady && googleClientId) {
+        google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: handleCredentialResponse,
+          auto_select: true,
+        });
+        window._gsiInitDone = true;
+        resolve();
+      } else if (attempts++ < 50) {
+        setTimeout(tryInit, 100);
+      } else {
+        resolve(); // give up, render anyway
+      }
     }
-  }
-  initGoogleSignIn();
+    tryInit();
+  });
 
   // Hash-based routing
   window.addEventListener('hashchange', onRouteChange);

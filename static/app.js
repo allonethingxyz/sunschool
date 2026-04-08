@@ -107,6 +107,16 @@ function signOut() {
   }
   sessionStorage.clear();
   _currentUser = null;
+  // Reset learner state
+  state.learners = [];
+  state.learnersLoaded = false;
+  state.onboardingChecked = false;
+  state.needsOnboarding = false;
+  state.currentLearnerId = null;
+  state.conversations = [];
+  state.currentConversationId = null;
+  state.messages = [];
+  state.points = 0;
   navigate('#/');
 }
 
@@ -120,6 +130,10 @@ const state = {
   loading: false,
   currentConversationId: null,
   currentLearnerId: null,
+  learners: [],           // child learners for this parent
+  learnersLoaded: false,  // whether we've fetched learners yet
+  onboardingChecked: false, // whether we've called /api/onboarding/status
+  needsOnboarding: false,   // true if user has no children yet
   auditMessages: [],
   auditFilter: { role: 'all', search: '' },
   mastery: [],
@@ -323,6 +337,122 @@ async function saveGuidelines(text) {
 }
 
 // ---------------------------------------------------------------------------
+// Onboarding
+// ---------------------------------------------------------------------------
+async function checkOnboardingStatus() {
+  try {
+    const data = await apiGet('/api/onboarding/status');
+    state.needsOnboarding = data.needs_onboarding;
+    state.onboardingChecked = true;
+    // Also populate learners from this response
+    if (data.learners && data.learners.length > 0) {
+      state.learners = data.learners.map(l => ({
+        learner_id: l.id,
+        name: l.name,
+        grade_level: l.grade_level,
+      }));
+      state.learnersLoaded = true;
+      // Restore or set selected learner
+      const stored = sessionStorage.getItem('selected_learner_id');
+      if (stored && state.learners.some(l => l.learner_id === stored)) {
+        state.currentLearnerId = stored;
+      } else {
+        state.currentLearnerId = state.learners[0].learner_id;
+        sessionStorage.setItem('selected_learner_id', state.currentLearnerId);
+      }
+    } else {
+      state.learners = [];
+      state.learnersLoaded = true;
+    }
+  } catch (err) {
+    console.error('checkOnboardingStatus:', err);
+    state.onboardingChecked = true;
+    state.needsOnboarding = false;
+  }
+}
+
+async function submitOnboarding(children) {
+  // children: [{name: string, grade_level: int}]
+  try {
+    const data = await apiPost('/api/onboarding/setup', { children });
+    // Update state with new learners
+    state.learners = data.learners.map(l => ({
+      learner_id: l.id,
+      name: l.name,
+      grade_level: l.grade_level,
+    }));
+    state.learnersLoaded = true;
+    state.needsOnboarding = false;
+    // Select first learner and load their conversation
+    const first = data.learners[0];
+    state.currentLearnerId = first.id;
+    sessionStorage.setItem('selected_learner_id', first.id);
+    // Pre-set conversation so chat loads immediately
+    state.currentConversationId = first.conversation_id;
+    return data;
+  } catch (err) {
+    console.error('submitOnboarding:', err);
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Learner management
+// ---------------------------------------------------------------------------
+async function fetchLearners() {
+  try {
+    const data = await apiGet('/api/learners');
+    state.learners = data.learners || [];
+    state.learnersLoaded = true;
+
+    // Restore selected learner from sessionStorage
+    const stored = sessionStorage.getItem('selected_learner_id');
+    if (stored && state.learners.some(l => l.learner_id === stored)) {
+      state.currentLearnerId = stored;
+    } else if (state.learners.length > 0) {
+      // Default to first child
+      state.currentLearnerId = state.learners[0].learner_id;
+      sessionStorage.setItem('selected_learner_id', state.currentLearnerId);
+    }
+    // If no children, currentLearnerId stays null — setup flow will trigger
+  } catch (err) {
+    console.error('fetchLearners:', err);
+    state.learners = [];
+    state.learnersLoaded = true;
+  }
+}
+
+async function createLearner(name, gradeLevel) {
+  try {
+    const data = await apiPost('/api/learners', {
+      name: name,
+      grade_level: gradeLevel,
+    });
+    // Add to local state
+    state.learners.push(data);
+    // Select the new learner
+    state.currentLearnerId = data.learner_id;
+    sessionStorage.setItem('selected_learner_id', data.learner_id);
+    return data;
+  } catch (err) {
+    console.error('createLearner:', err);
+    throw err;
+  }
+}
+
+function selectLearner(learnerId) {
+  state.currentLearnerId = learnerId;
+  sessionStorage.setItem('selected_learner_id', learnerId);
+  // Reset conversation state for the new learner
+  state.conversations = [];
+  state.currentConversationId = null;
+  state.messages = [];
+  state.points = 0;
+  // Re-trigger route to reload data
+  onRouteChange();
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 function navigate(hash) {
@@ -350,23 +480,13 @@ function googleIcon() {
 }
 
 function renderLogin() {
-  // Render the Google Sign-In button after DOM update
+  // Render the Google Sign-In button into the container after DOM update
   requestAnimationFrame(() => {
     const btnContainer = document.getElementById('g-signin-btn');
-    if (btnContainer && authReady && typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-      // Ensure GSI is initialized before rendering
-      if (!window._gsiInitDone) {
-        google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: handleCredentialResponse,
-          auto_select: true,
-        });
-        window._gsiInitDone = true;
-      }
+    if (btnContainer && authReady && typeof google !== 'undefined') {
       google.accounts.id.renderButton(btnContainer, {
         theme: 'outline',
         size: 'large',
-        width: 300,
         text: 'signin_with',
         shape: 'rectangular',
       });
@@ -376,21 +496,94 @@ function renderLogin() {
   return `
     <div class="login-page">
       <div class="login-card">
-        <h1>&#9728; Sunschool</h1>
+        <h1>Sunschool</h1>
         <p>Learn anything with your AI tutor</p>
-        <div id="g-signin-btn" style="display:flex;justify-content:center;margin-top:1.5rem;min-height:44px;"></div>
+        <div id="g-signin-btn" style="display:flex;justify-content:center;margin-top:1rem;"></div>
+        <button class="google-btn" onclick="signInWithGoogle()" style="margin-top:0.5rem;">
+          ${googleIcon()}
+          Sign in with Google
+        </button>
       </div>
     </div>
   `;
 }
 
+function renderOnboarding() {
+  const gradeOptions = [
+    { value: 0, label: 'Kindergarten' },
+    { value: 1, label: 'Grade 1' },
+    { value: 2, label: 'Grade 2' },
+    { value: 3, label: 'Grade 3' },
+    { value: 4, label: 'Grade 4' },
+    { value: 5, label: 'Grade 5' },
+    { value: 6, label: 'Grade 6' },
+    { value: 7, label: 'Grade 7' },
+    { value: 8, label: 'Grade 8' },
+    { value: 9, label: 'Grade 9' },
+    { value: 10, label: 'Grade 10' },
+    { value: 11, label: 'Grade 11' },
+    { value: 12, label: 'Grade 12' },
+  ];
+
+  return `
+    <div class="login-page" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);">
+      <div class="login-card" style="max-width:480px;">
+        <h1>Welcome to Sunschool!</h1>
+        <p style="margin-bottom:1.5rem;">Tell us about your learner so Sunny can personalize the experience.</p>
+        <div id="onboarding-children" style="text-align:left;">
+          <div class="onboarding-child-form" data-index="0" style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem;padding:1rem;background:rgba(255,255,255,0.1);border-radius:var(--radius);">
+            <div>
+              <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;color:#fff;">Child's Name</label>
+              <input type="text" class="onboarding-name" placeholder="e.g. Emma" maxlength="100" style="width:100%;padding:.5rem .75rem;border:1px solid rgba(255,255,255,0.3);border-radius:var(--radius);font-size:.875rem;" />
+            </div>
+            <div>
+              <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;color:#fff;">Grade Level</label>
+              <select class="onboarding-grade" style="width:100%;padding:.5rem .75rem;border:1px solid rgba(255,255,255,0.3);border-radius:var(--radius);font-size:.875rem;">
+                ${gradeOptions.map(g => `<option value="${g.value}">${g.label}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-direction:column;align-items:center;">
+          <button class="btn-outline" onclick="addOnboardingChild()" style="font-size:.85rem;color:#fff;border-color:rgba(255,255,255,0.5);width:100%;">+ Add another child</button>
+          <button class="btn-primary" id="onboarding-submit" onclick="handleOnboardingSubmit()" style="margin-top:.5rem;width:100%;font-size:1rem;padding:.75rem;">Get Started</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// Legacy alias — kept for the add-learner flow when children already exist
+function renderLearnerSetup() {
+  return renderOnboarding();
+}
+
 function renderNavbar(activeRoute) {
   const user = currentUser();
   const displayName = user?.name || user?.email || 'User';
+
+  // Learner selector dropdown
+  let learnerSelector = '';
+  if (state.learners.length > 0) {
+    const currentLearner = state.learners.find(l => l.learner_id === state.currentLearnerId);
+    const currentName = currentLearner ? currentLearner.name : 'Select learner';
+    learnerSelector = `
+      <select class="learner-selector" onchange="selectLearner(this.value)" title="Switch learner">
+        ${state.learners.map(l => `
+          <option value="${escapeAttr(l.learner_id)}" ${l.learner_id === state.currentLearnerId ? 'selected' : ''}>
+            ${escapeHtml(l.name)} (Grade ${l.grade_level})
+          </option>
+        `).join('')}
+      </select>
+      <button class="btn-outline" onclick="navigate('#/add-learner')" title="Add another learner" style="font-size:.75rem;padding:.25rem .5rem;">+ Add</button>
+    `;
+  }
+
   return `
     <nav class="navbar">
       <a href="#/chat" class="navbar-brand">Sunschool</a>
       <div class="navbar-links">
+        ${learnerSelector}
         <a href="#/chat" class="${activeRoute === '/chat' ? 'active' : ''}">Chat</a>
         <a href="#/parent" class="${activeRoute.startsWith('/parent') ? 'active' : ''}">Parent</a>
         <span class="points-badge" title="Points">&#11088; ${state.points}</span>
@@ -623,6 +816,31 @@ function renderProgress(learnerId) {
   `;
 }
 
+function renderAddLearner() {
+  return `
+    ${renderNavbar('/add-learner')}
+    <div class="dashboard">
+      <h2>Add a Learner</h2>
+      <a href="#/chat" style="font-size:.85rem;color:var(--primary);margin-bottom:1rem;display:inline-block;">&larr; Back to Chat</a>
+      <div class="card">
+        <div style="display:flex;flex-direction:column;gap:.75rem;">
+          <div>
+            <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;">Name</label>
+            <input type="text" id="add-learner-name" placeholder="Child's name" maxlength="100" />
+          </div>
+          <div>
+            <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;">Grade Level</label>
+            <select id="add-learner-grade" style="width:100%;padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--radius);font-size:.875rem;">
+              ${[...Array(13).keys()].map(g => `<option value="${g}" ${g === 5 ? 'selected' : ''}>Grade ${g}${g === 0 ? ' (Kindergarten)' : ''}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn-primary" onclick="handleAddLearner()">Add Learner</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderSpinner(msg = 'Loading...') {
   return `<div class="spinner">${msg}</div>`;
 }
@@ -666,8 +884,89 @@ window.handleSaveGuidelines = function () {
   if (textarea) saveGuidelines(textarea.value);
 };
 
+window.handleSetupLearner = async function () {
+  // Legacy — redirect to onboarding submit
+  window.handleOnboardingSubmit();
+};
+
+window.addOnboardingChild = function () {
+  const container = document.getElementById('onboarding-children');
+  if (!container) return;
+  const count = container.querySelectorAll('.onboarding-child-form').length;
+  if (count >= 10) { alert('Maximum 10 children.'); return; }
+  const gradeOptions = [...Array(13).keys()].map(g =>
+    `<option value="${g}">${g === 0 ? 'Kindergarten' : 'Grade ' + g}</option>`
+  ).join('');
+  const div = document.createElement('div');
+  div.className = 'onboarding-child-form';
+  div.setAttribute('data-index', count);
+  div.style.cssText = 'display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem;padding:1rem;background:rgba(255,255,255,0.1);border-radius:var(--radius);position:relative;';
+  div.innerHTML = `
+    <button onclick="this.parentElement.remove()" style="position:absolute;top:.5rem;right:.5rem;background:none;border:none;color:#fff;cursor:pointer;font-size:1.1rem;" title="Remove">&times;</button>
+    <div>
+      <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;color:#fff;">Child's Name</label>
+      <input type="text" class="onboarding-name" placeholder="e.g. Liam" maxlength="100" style="width:100%;padding:.5rem .75rem;border:1px solid rgba(255,255,255,0.3);border-radius:var(--radius);font-size:.875rem;" />
+    </div>
+    <div>
+      <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.25rem;color:#fff;">Grade Level</label>
+      <select class="onboarding-grade" style="width:100%;padding:.5rem .75rem;border:1px solid rgba(255,255,255,0.3);border-radius:var(--radius);font-size:.875rem;">
+        ${gradeOptions}
+      </select>
+    </div>
+  `;
+  container.appendChild(div);
+};
+
+window.handleOnboardingSubmit = async function () {
+  const forms = document.querySelectorAll('.onboarding-child-form');
+  const children = [];
+  for (const form of forms) {
+    const nameInput = form.querySelector('.onboarding-name');
+    const gradeSelect = form.querySelector('.onboarding-grade');
+    if (!nameInput || !gradeSelect) continue;
+    const name = nameInput.value.trim();
+    const grade = parseInt(gradeSelect.value, 10);
+    if (!name) continue;
+    children.push({ name, grade_level: grade });
+  }
+  if (children.length === 0) {
+    alert('Please enter at least one child\'s name.');
+    return;
+  }
+  const btn = document.getElementById('onboarding-submit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Setting up...'; }
+  try {
+    await submitOnboarding(children);
+    // Fetch the conversation messages so Sunny's greeting appears
+    if (state.currentConversationId) {
+      await fetchMessages(state.currentConversationId);
+    }
+    navigate('#/chat');
+  } catch (err) {
+    alert('Something went wrong. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Get Started'; }
+  }
+};
+
+window.handleAddLearner = async function () {
+  const nameInput = document.getElementById('add-learner-name');
+  const gradeSelect = document.getElementById('add-learner-grade');
+  if (!nameInput || !gradeSelect) return;
+  const name = nameInput.value.trim();
+  const grade = parseInt(gradeSelect.value, 10);
+  if (!name) { alert('Please enter a name.'); return; }
+  try {
+    await createLearner(name, grade);
+    navigate('#/chat');
+  } catch (err) {
+    alert('Failed to add learner. Please try again.');
+  }
+};
+
+window.selectLearner = selectLearner;
 window.signInWithGoogle = signInWithGoogle;
 window.signOut = signOut;
+window.navigate = navigate;
 
 // ---------------------------------------------------------------------------
 // Router & render
@@ -691,6 +990,23 @@ async function render() {
 
   if (route === '/' || route === '') {
     app.innerHTML = renderLogin();
+    return;
+  }
+
+  // Show onboarding if user needs it
+  if (user && state.onboardingChecked && state.needsOnboarding
+      && route !== '/onboarding' && route !== '/add-learner' && route !== '/setup') {
+    navigate('#/onboarding');
+    return;
+  }
+
+  if (route === '/onboarding') {
+    app.innerHTML = renderOnboarding();
+    return;
+  }
+
+  if (route === '/add-learner') {
+    app.innerHTML = renderAddLearner();
     return;
   }
 
@@ -742,18 +1058,47 @@ async function onRouteChange() {
     return;
   }
 
-  // Determine learner ID from Google JWT sub claim (unique user ID)
+  // Check onboarding status on first load (also populates learners)
+  if (!state.onboardingChecked) {
+    await checkOnboardingStatus();
+  }
+
+  // If onboarding needed, redirect (render handles the redirect)
+  if (state.needsOnboarding && route !== '/onboarding' && route !== '/add-learner' && route !== '/setup') {
+    render();
+    return;
+  }
+
+  // If we have the onboarding route, just render it
+  if (route === '/onboarding') {
+    render();
+    return;
+  }
+
+  // Fallback: if no learner selected but we have children, pick the first
+  if (!state.currentLearnerId && state.learners.length > 0) {
+    state.currentLearnerId = state.learners[0].learner_id;
+    sessionStorage.setItem('selected_learner_id', state.currentLearnerId);
+  }
+
+  // Legacy fallback: if still no learner (shouldn't happen with setup flow),
+  // use the user's own uid as a self-learner
   if (!state.currentLearnerId) {
     state.currentLearnerId = user.sub || user.email;
   }
 
   if (route === '/chat') {
-    if (!state.currentConversationId && state.conversations.length === 0) {
+    // Load conversations if we don't have any yet
+    if (state.conversations.length === 0) {
       await fetchConversations(state.currentLearnerId);
-      if (state.conversations.length > 0) {
-        state.currentConversationId = state.conversations[0].id;
-        await fetchMessages(state.currentConversationId);
-      }
+    }
+    // Select first conversation if none selected
+    if (!state.currentConversationId && state.conversations.length > 0) {
+      state.currentConversationId = state.conversations[0].id;
+    }
+    // Load messages if we have a conversation but no messages yet
+    if (state.currentConversationId && state.messages.length === 0) {
+      await fetchMessages(state.currentConversationId);
     }
     await fetchPoints(state.currentLearnerId);
     render();
@@ -783,6 +1128,11 @@ async function onRouteChange() {
     return;
   }
 
+  if (route === '/add-learner') {
+    render();
+    return;
+  }
+
   const progressMatch = route.match(/^\/parent\/progress\/(.+)$/);
   if (progressMatch) {
     const learnerId = progressMatch[1];
@@ -803,26 +1153,20 @@ async function onRouteChange() {
 async function init() {
   await initAuth();
 
-  // Wait for GSI library to load, then initialize (up to 5s)
-  await new Promise(resolve => {
-    let attempts = 0;
-    function tryInit() {
-      if (typeof google !== 'undefined' && google.accounts && google.accounts.id && authReady && googleClientId) {
-        google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: handleCredentialResponse,
-          auto_select: true,
-        });
-        window._gsiInitDone = true;
-        resolve();
-      } else if (attempts++ < 50) {
-        setTimeout(tryInit, 100);
-      } else {
-        resolve(); // give up, render anyway
-      }
+  // Initialize Google Sign-In once the GSI library is loaded
+  function initGoogleSignIn() {
+    if (typeof google !== 'undefined' && google.accounts && authReady) {
+      google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleCredentialResponse,
+        auto_select: true,
+      });
+    } else {
+      // GSI library not yet loaded, retry shortly
+      setTimeout(initGoogleSignIn, 100);
     }
-    tryInit();
-  });
+  }
+  initGoogleSignIn();
 
   // Hash-based routing
   window.addEventListener('hashchange', onRouteChange);

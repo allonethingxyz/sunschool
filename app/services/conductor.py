@@ -185,6 +185,20 @@ class ConductorService:
         # 5. Detect quiz in response
         quiz_detected, quiz_data = self._detect_quiz(llm_response.content)
 
+        # 5b. Strip raw quiz markup from display content so it doesn't
+        #     show as plain text — the frontend renders quiz buttons instead.
+        display_content = llm_response.content
+        if quiz_detected and quiz_data:
+            # Strip QUIZ: pipe-delimited lines (replace with single newline)
+            display_content = re.sub(
+                r"\n?QUIZ:\s*.+?(?:\n|$)", "\n", display_content, flags=re.IGNORECASE
+            )
+            # Strip ```quiz JSON blocks
+            display_content = re.sub(
+                r"\n?```quiz\s*\n?.*?\n?```\n?", "\n", display_content, flags=re.DOTALL
+            )
+            display_content = display_content.strip()
+
         # 6. Store assistant message
         assistant_msg_id = str(uuid.uuid4())
         msg_metadata: dict[str, Any] = {}
@@ -195,7 +209,7 @@ class ConductorService:
             conversation_id,
             assistant_msg_id,
             "assistant",
-            llm_response.content,
+            display_content,
             metadata=msg_metadata,
         )
 
@@ -220,7 +234,7 @@ class ConductorService:
 
         return ConductorResponse(
             message_id=assistant_msg_id,
-            content=llm_response.content,
+            content=display_content,
             role="assistant",
             quiz_detected=quiz_detected,
             quiz_data=quiz_data,
@@ -539,39 +553,72 @@ class ConductorService:
             conversation_summary=context.summary,
             subject=context.subject,
             learner_name=context.learner_name,
+            mastery_context=context.mastery_context,
+            parent_guidelines=context.parent_guidelines,
         )
 
         base_prompt = build_system_prompt(prompt_ctx)
 
-        # Append mastery context
-        if context.mastery_context:
-            base_prompt += f"\n\n## Learner's Current Mastery\n{context.mastery_context}\n"
-            base_prompt += (
-                "Adapt your teaching based on these mastery levels. "
-                "Focus more on concepts marked 'needs work' and challenge "
-                "on concepts marked 'mastered'.\n"
-            )
-
-        # Append parent guidelines
-        if context.parent_guidelines:
-            base_prompt += (
-                f"\n\n## Parent Guidelines\n{context.parent_guidelines}\n"
-                "Follow these guidelines set by the learner's parent.\n"
-            )
-
-        # Append quiz detection instruction
-        base_prompt += (
-            "\n\n## Quiz Detection\n"
-            "When you include a quiz question in your response, format it as:\n"
-            "```quiz\n"
-            '{"question": "...", "options": ["A", "B", "C", "D"], '
-            '"correct_index": 0, "explanation": "...", '
-            '"concepts": ["concept1", "concept2"]}\n'
-            "```\n"
-            "This allows the system to detect and score quiz questions automatically.\n"
-        )
+        # Add SEIAR phase emphasis based on message count
+        msg_count = len(context.recent_messages)
+        phase_instruction = self._get_seiar_phase_instruction(msg_count)
+        if phase_instruction:
+            base_prompt += f"\n\n{phase_instruction}"
 
         return base_prompt
+
+    @staticmethod
+    def _get_seiar_phase_instruction(msg_count: int) -> str:
+        """Return an instruction emphasizing the current SEIAR phase.
+
+        Phase mapping based on message count in the conversation:
+        - Messages 1-2:  S (Storytelling) — introduce topic through narrative
+        - Messages 3-4:  E (Examples) — concrete examples
+        - Messages 5-6:  I (Interaction) — let kid explore
+        - Messages 7-8:  A (Assessment) — quiz time
+        - Messages 9+:   R (Refinement) — correct and deepen
+        """
+        if msg_count <= 2:
+            phase = "S (Storytelling)"
+            guidance = (
+                "You are in the STORYTELLING phase. Introduce the topic through an "
+                "engaging narrative, story, or real-world scenario. Hook the learner's "
+                "attention and set the context. Do NOT quiz yet."
+            )
+        elif msg_count <= 4:
+            phase = "E (Examples)"
+            guidance = (
+                "You are in the EXAMPLES phase. Provide concrete examples, visual "
+                "descriptions, and analogies. Build on the story to show how the "
+                "concept works in practice. Do NOT quiz yet."
+            )
+        elif msg_count <= 6:
+            phase = "I (Interaction)"
+            guidance = (
+                "You are in the INTERACTION phase. Invite the learner to respond, "
+                "ask questions, explore, and think. Create a genuine dialogue — "
+                "pause and give space to engage. Do NOT quiz yet."
+            )
+        elif msg_count <= 8:
+            phase = "A (Assessment)"
+            guidance = (
+                "You are in the ASSESSMENT phase. Now is the time to ask a quiz "
+                "question! Weave it naturally into the conversation. You MUST include "
+                "a quiz question in your response using the QUIZ: format described above."
+            )
+        else:
+            phase = "R (Refinement)"
+            guidance = (
+                "You are in the REFINEMENT phase. Correct any misconceptions gently. "
+                "Revisit ideas the learner struggled with. Deepen understanding by "
+                "connecting to what they already know. You may include additional "
+                "quiz questions using the QUIZ: format if appropriate."
+            )
+
+        return (
+            f"## Current SEIAR Phase: {phase}\n\n"
+            f"{guidance}"
+        )
 
     def _build_user_prompt(
         self, context: ConversationContext, user_message: str
@@ -597,20 +644,52 @@ class ConductorService:
     def _detect_quiz(self, content: str) -> tuple[bool, dict[str, Any] | None]:
         """Detect quiz questions in LLM response content.
 
-        Looks for ```quiz ... ``` blocks with JSON quiz data.
-        Also detects common quiz patterns like numbered questions with options.
+        Supports multiple quiz formats:
+        1. QUIZ: question | option_a | option_b | option_c | correct_answer
+        2. ```quiz { JSON } ``` blocks
+        3. Heuristic detection for numbered/lettered question patterns
         """
-        # Check for explicit quiz blocks
-        quiz_pattern = re.compile(r"```quiz\s*\n?(.*?)\n?```", re.DOTALL)
-        match = quiz_pattern.search(content)
+        # 1. Check for QUIZ: pipe-delimited format (preferred — from prompt_templates)
+        quiz_line_pattern = re.compile(
+            r"QUIZ:\s*(.+?)(?:\n|$)", re.IGNORECASE
+        )
+        match = quiz_line_pattern.search(content)
+        if match:
+            parts = [p.strip() for p in match.group(1).split("|")]
+            if len(parts) >= 4:
+                question = parts[0]
+                options = parts[1:-1]
+                correct_answer = parts[-1]
+                quiz_data = {
+                    "question": question,
+                    "options": options,
+                    "correct_answer": correct_answer,
+                    "expected_answer": correct_answer,
+                    "concepts": [],
+                }
+                return True, quiz_data
+
+        # 2. Check for explicit ```quiz JSON blocks (legacy support)
+        quiz_block_pattern = re.compile(r"```quiz\s*\n?(.*?)\n?```", re.DOTALL)
+        match = quiz_block_pattern.search(content)
         if match:
             try:
                 quiz_data = json.loads(match.group(1).strip())
+                # Normalize: ensure correct_answer and expected_answer exist
+                if "options" in quiz_data and "correct_index" in quiz_data:
+                    idx = quiz_data["correct_index"]
+                    if 0 <= idx < len(quiz_data["options"]):
+                        quiz_data.setdefault(
+                            "correct_answer", quiz_data["options"][idx]
+                        )
+                        quiz_data.setdefault(
+                            "expected_answer", quiz_data["options"][idx]
+                        )
                 return True, quiz_data
             except json.JSONDecodeError:
                 logger.warning("Found quiz block but failed to parse JSON")
 
-        # Heuristic detection: look for question + numbered/lettered options
+        # 3. Heuristic detection: question + numbered/lettered options
         question_pattern = re.compile(
             r"(?:^|\n)\s*(?:\*\*)?(?:Question|Q)\s*(?:\d+)?[:.]\s*(?:\*\*)?\s*(.+?)(?:\n)"
             r"(?:\s*[A-Da-d1-4][.)]\s*.+\n?){2,4}",

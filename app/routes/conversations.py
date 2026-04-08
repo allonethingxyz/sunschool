@@ -48,28 +48,14 @@ async def _ensure_user_and_learner(user) -> str:
 
     async with get_connection() as conn:
         with conn.cursor() as cur:
-            # Ensure User node exists (MATCH or CREATE — AGE MERGE can be unreliable)
+            # MERGE User node
             cur.execute(f"""
                 SELECT * FROM cypher('{GRAPH_NAME}', $$
-                    MATCH (u:User {{uid: '{uid}'}})
+                    MERGE (u:User {{uid: '{uid}'}})
+                    SET u.email = '{email}', u.name = '{name}'
                     RETURN u.uid
                 $$) AS (uid agtype);
             """)
-            if not cur.fetchone():
-                cur.execute(f"""
-                    SELECT * FROM cypher('{GRAPH_NAME}', $$
-                        CREATE (u:User {{uid: '{uid}', email: '{email}', name: '{name}'}})
-                        RETURN u.uid
-                    $$) AS (uid agtype);
-                """)
-            else:
-                cur.execute(f"""
-                    SELECT * FROM cypher('{GRAPH_NAME}', $$
-                        MATCH (u:User {{uid: '{uid}'}})
-                        SET u.email = '{email}', u.name = '{name}'
-                        RETURN u.uid
-                    $$) AS (uid agtype);
-                """)
 
             # Check if Learner exists
             cur.execute(f"""
@@ -81,14 +67,15 @@ async def _ensure_user_and_learner(user) -> str:
             learner_row = cur.fetchone()
 
             if not learner_row:
-                # Create Learner node with defaults
+                # Create Learner node with defaults (self-learner fallback)
                 cur.execute(f"""
                     SELECT * FROM cypher('{GRAPH_NAME}', $$
                         CREATE (l:Learner {{
                             id: '{uid}',
                             name: '{name}',
                             grade_level: 5,
-                            points: 0
+                            points: 0,
+                            parent_uid: '{uid}'
                         }})
                         RETURN l.id
                     $$) AS (id agtype);
@@ -251,8 +238,10 @@ async def _verify_learner_access(user_uid: str, conversation_id: str) -> dict[st
 def _validate_ai_content(content: str, grade_level: int = 5) -> None:
     """Validate AI-generated content before returning to client.
 
-    Runs safety and quality checks.  Raises 502 if content fails validation
-    so the client gets a clear signal rather than unsafe/bad content.
+    Runs safety, readability, and quality checks.  Raises 502 if content
+    fails safety validation so the client gets a clear signal rather than
+    unsafe/bad content.  Readability and quality issues are logged as
+    warnings (the conductor already retries on readability failures).
     """
     safety = content_validator.check_safety(content)
     if not safety.safe:
@@ -265,6 +254,17 @@ def _validate_ai_content(content: str, grade_level: int = 5) -> None:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI response failed content safety validation",
         )
+
+    # Readability / grade-appropriateness check (defense-in-depth;
+    # conductor already validates and retries, but this catches edge cases)
+    readability = content_validator.check_readability(content, grade_level)
+    if not readability.is_valid:
+        logger.warning(
+            "AI response readability issues (grade=%d): %s",
+            grade_level,
+            "; ".join(readability.issues),
+        )
+        # Logged but still served — conductor already retried with stricter prompt
 
     quality = content_validator.check_quality(content)
     if not quality.is_valid:
@@ -611,48 +611,6 @@ async def list_conversations(
                 summary=_parse_agtype(row[9]),
             )
         )
-
-    # Auto-create a default conversation if the learner has none
-    if not conversations:
-        import uuid
-        from datetime import datetime, timezone
-
-        conv_id = str(uuid.uuid4())
-        now_iso = datetime.now(timezone.utc).isoformat()
-        esc_lid = _escape_cypher_string(learner_id)
-        async with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                    SELECT * FROM cypher('{GRAPH_NAME}', $$
-                        CREATE (c:Conversation {{
-                            id: '{conv_id}',
-                            learner_id: '{esc_lid}',
-                            subject: 'General',
-                            current_concept: '',
-                            character_name: 'Sunny',
-                            character_personality: 'Friendly and encouraging AI tutor',
-                            summary: '',
-                            status: 'active',
-                            started_at: '{now_iso}',
-                            last_active: '{now_iso}',
-                            message_count: 0
-                        }})
-                        RETURN c.id
-                    $$) AS (id agtype);
-                """)
-            conn.commit()
-        conversations.append(ConversationSummary(
-            id=conv_id,
-            learner_id=learner_id,
-            subject="General",
-            current_concept=None,
-            character_name="Sunny",
-            status="active",
-            started_at=now_iso,
-            last_active=now_iso,
-            message_count=0,
-            summary=None,
-        ))
 
     return conversations
 

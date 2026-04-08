@@ -166,6 +166,21 @@ input:focus, textarea:focus { border-color: var(--primary); }
   color: var(--text-muted);
 }
 
+/* ── Learner selector ────────────────────────────────────────── */
+.learner-selector {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .25rem .5rem;
+  font-size: .8rem;
+  font-weight: 500;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+  max-width: 160px;
+}
+.learner-selector:focus { border-color: var(--primary); }
+
 /* ── Points badge ────────────────────────────────────────────── */
 .points-badge {
   display: inline-flex;

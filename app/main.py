@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.db import get_connection
 from app.middleware.auth import CurrentUser
-from app.routes import audit, conversations, mastery
+from app.routes import audit, conversations, learners, mastery, onboarding
 
 logger = logging.getLogger("sunschool")
 
@@ -50,6 +50,8 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 app.include_router(audit.router)
 app.include_router(conversations.router)
+app.include_router(learners.router)
+app.include_router(onboarding.router)
 app.include_router(mastery.router)
 
 

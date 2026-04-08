@@ -281,6 +281,78 @@ async def migrate_graph():
     return {"ok": True, "results": results}
 
 
+@app.post("/api/admin/reset-user")
+async def reset_user(body: dict) -> dict:
+    """Delete all graph nodes and conversation data for a user (by Google sub UID)."""
+    import psycopg2
+
+    uid = body.get("uid", "")
+    if not uid:
+        return {"error": "uid required"}
+
+    conn = psycopg2.connect(settings.database_url)
+    conn.autocommit = True
+    results = []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("LOAD 'age'; SET search_path = ag_catalog, \"$user\", public;")
+
+            # Delete conversations for this user's learners
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (u:User {{uid: '{uid}'}})-[:HAS_CHILD]->(l:Learner)
+                    MATCH (c:Conversation {{learner_id: l.id}})
+                    DETACH DELETE c
+                    RETURN count(c)
+                $$) AS (count agtype);
+            """)
+            results.append("conversations deleted")
+
+            # Delete learners
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (u:User {{uid: '{uid}'}})-[:HAS_CHILD]->(l:Learner)
+                    DETACH DELETE l
+                    RETURN count(l)
+                $$) AS (count agtype);
+            """)
+            results.append("learners deleted")
+
+            # Delete self-learner (uid == learner_id)
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (l:Learner {{id: '{uid}'}})
+                    DETACH DELETE l
+                    RETURN count(l)
+                $$) AS (count agtype);
+            """)
+            results.append("self-learner deleted")
+
+            # Delete user node
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (u:User {{uid: '{uid}'}})
+                    DETACH DELETE u
+                    RETURN count(u)
+                $$) AS (count agtype);
+            """)
+            results.append("user deleted")
+
+            # Delete conversation messages
+            cur.execute(
+                "DELETE FROM conversation_messages WHERE conversation_id IN "
+                "(SELECT conversation_id FROM prompt_audit WHERE learner_id = %s)",
+                (uid,),
+            )
+            cur.execute("DELETE FROM prompt_audit WHERE learner_id = %s", (uid,))
+            cur.execute("DELETE FROM parent_guidelines WHERE user_uid = %s", (uid,))
+            results.append("relational data deleted")
+    finally:
+        conn.close()
+
+    return {"ok": True, "uid": uid, "results": results}
+
+
 # ---------------------------------------------------------------------------
 # Static files — serve the frontend SPA
 # ---------------------------------------------------------------------------

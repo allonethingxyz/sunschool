@@ -45,7 +45,7 @@ class Tier(str, enum.Enum):
 
 # Model slugs per tier
 _TIER_MODELS: dict[Tier, str] = {
-    Tier.FREE: "google/gemini-2.0-flash-001",
+    Tier.FREE: "anthropic/claude-sonnet-4-20250514",
     Tier.PAID: "anthropic/claude-sonnet-4-20250514",
 }
 

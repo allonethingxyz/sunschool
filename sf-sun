@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Sunschool stoneforge wrapper — pins STONEFORGE_ROOT to this repo so `sf` operates
+# on the Sunschool workspace regardless of where it is invoked from.
+#
+# Usage:
+#   ./sf-sun task list
+#   STONEFORGE_ACTOR=el-wru5 ./sf-sun plan list
+#
+# The repo root that contains .stoneforge/ for Sunschool is this script's directory.
+
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export STONEFORGE_ROOT="$HERE"
+exec sf "$@"

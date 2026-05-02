@@ -1,0 +1,5 @@
+# Dev / CI dependencies — keep in sync with pyproject.toml [project.optional-dependencies.dev]
+ruff>=0.4,<1
+mypy>=1.10,<2
+pytest>=8.1,<9
+pytest-asyncio>=0.23,<1

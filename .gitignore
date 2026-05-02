@@ -1,15 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Node / Playwright
 node_modules/
 dist/
+test-results/
+playwright-report/
+e2e/.auth/
+
+# Environment
 .env
 .env.*
 !.env.example
+
+# Editor / OS
 .DS_Store
 *.swp
 *.swo
 *~
 .idea/
 .vscode/
+
+# Claude / agent runtime
 .claude/
 CLAUDE.md
 admin-credentials.txt
-__pycache__/
+
+# Stoneforge runtime state (db, worktrees, logs, sync exports)
+.stoneforge/.worktrees/
+.stoneforge/logs/
+.stoneforge/sync/
+.stoneforge/stoneforge.db*
+.stoneforge/daemon-state.json

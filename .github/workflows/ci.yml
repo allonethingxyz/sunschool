@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Required repository secrets for E2E tests:
+#   SUNSCHOOL_DATABASE_URL   — PostgreSQL+AGE connection string (Railway)
+#   OPENROUTER_API_KEY       — OpenRouter key (only needed for @llm-tagged tests)
+
+jobs:
+  lint-type-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Type-check with mypy
+        run: mypy app
+
+      - name: Run unit tests
+        run: pytest -m "not integration and not db" --tb=short -q
+
+  e2e:
+    needs: lint-type-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Start server
+        run: uvicorn app.main:app --port 8000 &
+        env:
+          SUNSCHOOL_ENVIRONMENT: development
+          SUNSCHOOL_DATABASE_URL: ${{ secrets.SUNSCHOOL_DATABASE_URL }}
+          SUNSCHOOL_OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Wait for server
+        run: timeout 30 bash -c 'until curl -s http://localhost:8000/health; do sleep 1; done'
+
+      - name: Run E2E tests (skip LLM-dependent if no API key)
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "No OPENROUTER_API_KEY — skipping @llm tests"
+            npx playwright test --project=chromium --grep-invert "@llm"
+          else
+            npx playwright test --project=chromium
+          fi
+        env:
+          SUNSCHOOL_DATABASE_URL: ${{ secrets.SUNSCHOOL_DATABASE_URL }}
+          SUNSCHOOL_OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/

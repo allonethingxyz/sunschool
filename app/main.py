@@ -1,0 +1,364 @@
+"""Sunschool FastAPI application entry point.
+
+Mounts the API routers and serves the static frontend.
+Run with: uvicorn app.main:app --reload
+"""
+
+from __future__ import annotations
+
+import logging
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from app.config import settings
+from app.db import get_connection
+from app.middleware.auth import CurrentUser
+from app.routes import audit, conversations, learners, mastery, onboarding
+
+logger = logging.getLogger("sunschool")
+
+
+app = FastAPI(
+    title="Sunschool",
+    description="AI tutoring platform for kids",
+    version="0.2.0",
+)
+
+
+@app.get("/health")
+async def health() -> dict:
+    """Health check for Railway."""
+    return {"status": "ok", "version": "0.2.0"}
+
+
+# ---------------------------------------------------------------------------
+# CORS
+# ---------------------------------------------------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------------------------------------------------
+# API routers
+# ---------------------------------------------------------------------------
+app.include_router(audit.router)
+app.include_router(conversations.router)
+app.include_router(learners.router)
+app.include_router(onboarding.router)
+app.include_router(mastery.router)
+
+
+# ---------------------------------------------------------------------------
+# Auth config endpoint (so the frontend can initialize Google Sign-In)
+# ---------------------------------------------------------------------------
+@app.get("/api/config/auth")
+async def auth_config() -> dict:
+    """Return the auth config for the frontend."""
+    return {
+        "clientId": settings.google_oauth_client_id,
+        "provider": "google",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Parent guidelines endpoints (persisted to DB, authenticated)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/parent/guidelines")
+async def get_guidelines(user: CurrentUser) -> dict:
+    """Get the parent-set content guidelines for the authenticated user."""
+    async with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT guidelines FROM parent_guidelines WHERE user_uid = %s",
+                (user.uid,),
+            )
+            row = cur.fetchone()
+    return {"guidelines": row[0] if row else ""}
+
+
+@app.put("/api/parent/guidelines")
+async def update_guidelines(body: dict, user: CurrentUser) -> dict:
+    """Update the parent-set content guidelines for the authenticated user."""
+    guidelines_text = body.get("guidelines", "")
+    async with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO parent_guidelines (user_uid, guidelines, updated_at)
+                VALUES (%s, %s, now())
+                ON CONFLICT (user_uid)
+                DO UPDATE SET guidelines = EXCLUDED.guidelines,
+                              updated_at = now()
+                """,
+                (user.uid, guidelines_text),
+            )
+        conn.commit()
+    return {"ok": True, "guidelines": guidelines_text}
+
+
+# ---------------------------------------------------------------------------
+# Admin: run migrations
+# ---------------------------------------------------------------------------
+
+PARENT_GUIDELINES_DDL = """
+CREATE TABLE IF NOT EXISTS parent_guidelines (
+    user_uid TEXT PRIMARY KEY,
+    guidelines TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+"""
+
+CONVERSATION_MESSAGES_DDL = """
+CREATE TABLE IF NOT EXISTS conversation_messages (
+    id UUID PRIMARY KEY,
+    conversation_id UUID NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+    content TEXT NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+"""
+
+CONVERSATION_MESSAGES_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_conv_msg_conversation ON conversation_messages (conversation_id);",
+    "CREATE INDEX IF NOT EXISTS idx_conv_msg_created ON conversation_messages (conversation_id, created_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_conv_msg_role ON conversation_messages (conversation_id, role);",
+]
+
+PROMPT_AUDIT_DDL = """
+CREATE TABLE IF NOT EXISTS prompt_audit (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    learner_id TEXT,
+    conversation_id TEXT,
+    prompt_type TEXT,
+    system_message TEXT,
+    user_message TEXT,
+    model TEXT,
+    response_preview TEXT,
+    tokens_used INT,
+    cost_estimate DECIMAL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+"""
+
+PROMPT_AUDIT_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_prompt_audit_learner ON prompt_audit (learner_id);",
+    "CREATE INDEX IF NOT EXISTS idx_prompt_audit_conversation ON prompt_audit (conversation_id);",
+    "CREATE INDEX IF NOT EXISTS idx_prompt_audit_created ON prompt_audit (created_at);",
+]
+
+
+@app.post("/api/admin/migrate")
+async def run_migrations() -> dict:
+    """Run all pending DDL migrations."""
+    results: list[str] = []
+    async with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(PARENT_GUIDELINES_DDL)
+            results.append("parent_guidelines table ensured")
+
+            cur.execute(CONVERSATION_MESSAGES_DDL)
+            results.append("conversation_messages table ensured")
+            for idx_sql in CONVERSATION_MESSAGES_INDEXES:
+                cur.execute(idx_sql)
+            results.append("conversation_messages indexes ensured")
+
+            cur.execute(PROMPT_AUDIT_DDL)
+            results.append("prompt_audit table ensured")
+            for idx_sql in PROMPT_AUDIT_INDEXES:
+                cur.execute(idx_sql)
+            results.append("prompt_audit indexes ensured")
+        conn.commit()
+    return {"ok": True, "migrations": results}
+
+
+# ---------------------------------------------------------------------------
+# Admin: graph schema migration
+# ---------------------------------------------------------------------------
+GRAPH_NAME = "sunschool_graph"
+
+_MIGRATION_LABELS = [
+    "Character", "Conversation", "Lesson", "Concept",
+    "Quiz", "Media", "Learner", "Gate", "User", "Standard",
+]
+
+
+@app.post("/api/admin/migrate-graph")
+async def migrate_graph():
+    """Run graph schema migration — create extension, graph, labels, and default Character."""
+    import psycopg2
+
+    conn = psycopg2.connect(settings.database_url)
+    conn.autocommit = True
+    results = []
+    try:
+        with conn.cursor() as cur:
+            # Ensure AGE extension exists
+            cur.execute("CREATE EXTENSION IF NOT EXISTS age;")
+            results.append("AGE extension ensured")
+
+            cur.execute("LOAD 'age'; SET search_path = ag_catalog, \"$user\", public;")
+
+            # Create graph if it doesn't exist
+            cur.execute(
+                "SELECT 1 FROM ag_catalog.ag_graph WHERE name = %s", (GRAPH_NAME,)
+            )
+            if not cur.fetchone():
+                cur.execute(f"SELECT create_graph('{GRAPH_NAME}');")
+                results.append(f"Graph '{GRAPH_NAME}' created")
+            else:
+                results.append(f"Graph '{GRAPH_NAME}' already exists")
+
+            # Verify graph exists (for the label creation below)
+            cur.execute(
+                "SELECT 1 FROM ag_catalog.ag_graph WHERE name = %s", (GRAPH_NAME,)
+            )
+            if not cur.fetchone():
+                return {"error": f"Graph '{GRAPH_NAME}' does not exist"}
+
+            # Create all node labels
+            for label in _MIGRATION_LABELS:
+                cur.execute(f"""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM ag_catalog.ag_label
+                            WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = '{GRAPH_NAME}')
+                              AND name = '{label}' AND kind = 'v'
+                        ) THEN
+                            PERFORM ag_catalog.create_vlabel('{GRAPH_NAME}', '{label}');
+                        END IF;
+                    END $$;
+                """)
+                results.append(f"Label '{label}' ensured")
+
+            # Create default Sunny character (if not exists)
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (c:Character {{id: 'sunny'}})
+                    RETURN c.id
+                $$) AS (id agtype);
+            """)
+            if not cur.fetchone():
+                cur.execute(f"""
+                    SELECT * FROM cypher('{GRAPH_NAME}', $$
+                        CREATE (c:Character {{
+                            id: 'sunny',
+                            name: 'Sunny',
+                            era: 'modern',
+                            expertise: '["general"]',
+                            personality_prompt: 'You are Sunny, a friendly and encouraging AI tutor who loves helping kids learn. You are patient, use simple language, and make learning fun with examples and questions.',
+                            active: true
+                        }})
+                        RETURN c.id
+                    $$) AS (id agtype);
+                """)
+                results.append("Character 'sunny' created")
+            else:
+                results.append("Character 'sunny' already exists")
+
+            # List all labels for verification
+            cur.execute(f"""
+                SELECT name FROM ag_catalog.ag_label
+                WHERE graph = (SELECT graphid FROM ag_catalog.ag_graph WHERE name = '{GRAPH_NAME}')
+                  AND kind = 'v'
+                ORDER BY name;
+            """)
+            existing = [r[0] for r in cur.fetchall()]
+            results.append(f"All labels: {existing}")
+    finally:
+        conn.close()
+
+    return {"ok": True, "results": results}
+
+
+@app.post("/api/admin/reset-user")
+async def reset_user(body: dict) -> dict:
+    """Delete all graph nodes and conversation data for a user (by Google sub UID)."""
+    import psycopg2
+
+    uid = body.get("uid", "")
+    if not uid:
+        return {"error": "uid required"}
+
+    conn = psycopg2.connect(settings.database_url)
+    conn.autocommit = True
+    results = []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("LOAD 'age'; SET search_path = ag_catalog, \"$user\", public;")
+
+            # Delete conversations for this user's learners
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (u:User {{uid: '{uid}'}})-[:HAS_CHILD]->(l:Learner)
+                    MATCH (c:Conversation {{learner_id: l.id}})
+                    DETACH DELETE c
+                    RETURN count(c)
+                $$) AS (count agtype);
+            """)
+            results.append("conversations deleted")
+
+            # Delete learners
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (u:User {{uid: '{uid}'}})-[:HAS_CHILD]->(l:Learner)
+                    DETACH DELETE l
+                    RETURN count(l)
+                $$) AS (count agtype);
+            """)
+            results.append("learners deleted")
+
+            # Delete self-learner (uid == learner_id)
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (l:Learner {{id: '{uid}'}})
+                    DETACH DELETE l
+                    RETURN count(l)
+                $$) AS (count agtype);
+            """)
+            results.append("self-learner deleted")
+
+            # Delete user node
+            cur.execute(f"""
+                SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (u:User {{uid: '{uid}'}})
+                    DETACH DELETE u
+                    RETURN count(u)
+                $$) AS (count agtype);
+            """)
+            results.append("user deleted")
+
+            # Delete relational data
+            cur.execute("DELETE FROM prompt_audit WHERE learner_id = %s", (uid,))
+            cur.execute("DELETE FROM parent_guidelines WHERE user_uid = %s", (uid,))
+            results.append("relational data deleted")
+    finally:
+        conn.close()
+
+    return {"ok": True, "uid": uid, "results": results}
+
+
+# ---------------------------------------------------------------------------
+# Static files — serve the frontend SPA
+# ---------------------------------------------------------------------------
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/")
+async def index():
+    """Serve the SPA index.html for the root path."""
+    return FileResponse("static/index.html")
+
+
+# NOTE: No catch-all route. SPA uses hash-based routing (#/chat, #/parent).
+# A catch-all /{path:path} would swallow all /api/* routes. Do not add one.
